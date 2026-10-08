@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 340" width="100%" height="100%">
+    <defs>
+        <linearGradient id="pipe-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#080c1d"/>
+            <stop offset="100%" stop-color="#0a122c"/>
+        </linearGradient>
+        <linearGradient id="beam-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#38bdf8"/>
+            <stop offset="50%" stop-color="#818cf8"/>
+            <stop offset="100%" stop-color="#34d399"/>
+        </linearGradient>
+        <filter id="p-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="5"/>
+        </filter>
+        <filter id="node-shadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="8"/>
+        </filter>
+        <style>
+            @keyframes packetTravel {
+                0% { stroke-dashoffset: 120; }
+                100% { stroke-dashoffset: 0; }
+            }
+            @keyframes pulseStep {
+                0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px #38bdf8); }
+                50% { transform: scale(1.04); filter: drop-shadow(0 0 12px #818cf8); }
+            }
+            @keyframes scanSweep {
+                0% { transform: translateY(-20px); opacity: 0.2; }
+                50% { opacity: 0.9; }
+                100% { transform: translateY(20px); opacity: 0.2; }
+            }
+            .data-cable { stroke: #1e293b; stroke-width: 6; stroke-linecap: round; }
+            .data-pulse { stroke: url(#beam-grad); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 18 36; animation: packetTravel 2s linear infinite; }
+            .step-node { transform-origin: center; animation: pulseStep 4s ease-in-out infinite; }
+            .scan-line { animation: scanSweep 2.5s ease-in-out infinite; }
+            .mono-text { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; }
+            .heading { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-weight: 700; }
+        </style>
+    </defs>
+
+    <rect width="1000" height="340" rx="14" fill="url(#pipe-bg)" stroke="#1e293b" stroke-width="1.5"/>
+
+    <!-- Title Bar -->
+    <text x="40" y="42" fill="#f8fafc" font-size="18" class="heading">Multi-Step Execution Pipeline</text>
+    <text x="40" y="60" fill="#64748b" font-size="12" class="mono-text">Isolated Temporary Workspace • Zero-Telemetry Intermediate Streaming</text>
+    <g transform="translate(780, 32)">
+        <rect width="180" height="26" rx="13" fill="#0f172a" stroke="#10b981" stroke-width="1"/>
+        <circle cx="796" cy="45" r="4" fill="#10b981"/>
+        <text x="810" y="49" fill="#10b981" font-size="11" class="heading">WORKFLOW RUNNER: IDLE</text>
+    </g>
+
+    <!-- Main Connecting Energy Conduits -->
+    <g>
+        <!-- Segment 1 -> 2 -->
+        <path d="M 180,180 L 370,180" class="data-cable"/>
+        <path d="M 180,180 L 370,180" class="data-pulse"/>
+        <!-- Segment 2 -> 3 -->
+        <path d="M 470,180 L 630,180" class="data-cable"/>
+        <path d="M 470,180 L 630,180" class="data-pulse"/>
+        <!-- Segment 3 -> 4 -->
+        <path d="M 730,180 L 870,180" class="data-cable"/>
+        <path d="M 730,180 L 870,180" class="data-pulse"/>
+    </g>
+
+    <!-- STAGE 1: INGESTION -->
+    <g transform="translate(130, 180)">
+        <ellipse cx="0" cy="40" rx="45" ry="14" fill="#0284c7" opacity="0.3" filter="url(#node-shadow)"/>
+        
+    <g opacity="1.0">
+        <ellipse cx="0" cy="40.0" rx="36.8" ry="11.2" fill="#0284c7" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 0.0,-32.0 L 27.7,-16.0 L 0.0,0.0 L -27.7,-16.0 Z" fill="#38bdf8" stroke="#7dd3fc" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L -27.7,-16.0 L -27.7,16.0 L 0.0,32.0 Z" fill="#0369a1" stroke="#7dd3fc" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L 0.0,32.0 L 27.7,16.0 L 27.7,-16.0 Z" fill="#0284c7" stroke="#7dd3fc" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+        <!-- Document tag -->
+        <rect x="-35" y="48" width="70" height="20" rx="10" fill="#0369a1" stroke="#38bdf8" stroke-width="1"/>
+        <text x="0" y="62" fill="#ffffff" font-size="10" text-anchor="middle" class="mono-text">RAW INPUT</text>
+        <text x="0" y="-45" fill="#38bdf8" font-size="12" font-weight="bold" text-anchor="middle" class="heading">01. INGEST</text>
+        <text x="0" y="-32" fill="#94a3b8" font-size="10" text-anchor="middle" class="mono-text">MIME Auto-Detect</text>
+    </g>
+
+    <!-- STAGE 2: PROCESSING ENGINE CORE -->
+    <g transform="translate(420, 180)">
+        <ellipse cx="0" cy="48" rx="55" ry="16" fill="#818cf8" opacity="0.35" filter="url(#node-shadow)"/>
+        
+    <g opacity="1.0">
+        <ellipse cx="0" cy="52.5" rx="48.3" ry="14.7" fill="#0284c7" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 0.0,-42.0 L 36.4,-21.0 L 0.0,0.0 L -36.4,-21.0 Z" fill="#a855f7" stroke="#c084fc" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L -36.4,-21.0 L -36.4,21.0 L 0.0,42.0 Z" fill="#6b21a8" stroke="#c084fc" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L 0.0,42.0 L 36.4,21.0 L 36.4,-21.0 Z" fill="#7e22ce" stroke="#c084fc" stroke-width="1.5" stroke-linejoin="round"/>
+    </g>
+        <!-- Engine gear rotating -->
+        <circle cx="0" cy="0" r="14" fill="none" stroke="#ffffff" stroke-width="2" stroke-dasharray="6 4" opacity="0.8"/>
+        <circle cx="0" cy="0" r="5" fill="#ffffff"/>
+        
+        <rect x="-48" y="58" width="96" height="20" rx="10" fill="#4c1d95" stroke="#a855f7" stroke-width="1"/>
+        <text x="0" y="72" fill="#ffffff" font-size="10" text-anchor="middle" class="mono-text">TRANSFORM</text>
+        <text x="0" y="-55" fill="#c084fc" font-size="12" font-weight="bold" text-anchor="middle" class="heading">02. ENGINE CORE</text>
+        <text x="0" y="-42" fill="#94a3b8" font-size="10" text-anchor="middle" class="mono-text">FFmpeg • Pandoc • LO</text>
+    </g>
+
+    <!-- STAGE 3: PRIVACY & OCR SCANNER -->
+    <g transform="translate(680, 180)">
+        <ellipse cx="0" cy="40" rx="45" ry="14" fill="#059669" opacity="0.3" filter="url(#node-shadow)"/>
+        
+    <g opacity="1.0">
+        <ellipse cx="0" cy="42.5" rx="39.099999999999994" ry="11.899999999999999" fill="#0284c7" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 0.0,-34.0 L 29.4,-17.0 L 0.0,0.0 L -29.4,-17.0 Z" fill="#34d399" stroke="#6ee7b7" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L -29.4,-17.0 L -29.4,17.0 L 0.0,34.0 Z" fill="#047857" stroke="#6ee7b7" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L 0.0,34.0 L 29.4,17.0 L 29.4,-17.0 Z" fill="#059669" stroke="#6ee7b7" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+        <!-- Laser Scanner Bar inside -->
+        <line x1="-18" y1="0" x2="18" y2="0" stroke="#ffffff" stroke-width="2" class="scan-line" filter="url(#p-glow)"/>
+        
+        <rect x="-42" y="50" width="84" height="20" rx="10" fill="#065f46" stroke="#34d399" stroke-width="1"/>
+        <text x="0" y="64" fill="#ffffff" font-size="10" text-anchor="middle" class="mono-text">EXIF SANITIZE</text>
+        <text x="0" y="-47" fill="#34d399" font-size="12" font-weight="bold" text-anchor="middle" class="heading">03. INSPECT</text>
+        <text x="0" y="-34" fill="#94a3b8" font-size="10" text-anchor="middle" class="mono-text">SHA-256 • OCR Text</text>
+    </g>
+
+    <!-- STAGE 4: ARTIFACT DISPATCH & ARCHIVE -->
+    <g transform="translate(900, 180)">
+        <ellipse cx="0" cy="45" rx="48" ry="15" fill="#ea580c" opacity="0.3" filter="url(#node-shadow)"/>
+        
+    <g opacity="1.0">
+        <ellipse cx="0" cy="45.0" rx="41.4" ry="12.6" fill="#0284c7" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 0.0,-36.0 L 31.2,-18.0 L 0.0,0.0 L -31.2,-18.0 Z" fill="#fb923c" stroke="#fdba74" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L -31.2,-18.0 L -31.2,18.0 L 0.0,36.0 Z" fill="#c2410c" stroke="#fdba74" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L 0.0,36.0 L 31.2,18.0 L 31.2,-18.0 Z" fill="#ea580c" stroke="#fdba74" stroke-width="1.2" stroke-linejoin="round"/>
+    </g>
+        <!-- Checkmark Glyph -->
+        <polyline points="-10,2 -2,10 12,-6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+        
+        <rect x="-45" y="52" width="90" height="20" rx="10" fill="#9a3412" stroke="#fb923c" stroke-width="1"/>
+        <text x="0" y="66" fill="#ffffff" font-size="10" text-anchor="middle" class="mono-text">ZIP ARCHIVE</text>
+        <text x="0" y="-49" fill="#fb923c" font-size="12" font-weight="bold" text-anchor="middle" class="heading">04. DISPATCH</text>
+        <text x="0" y="-36" fill="#94a3b8" font-size="10" text-anchor="middle" class="mono-text">Outputs Ready</text>
+    </g>
+
+    <!-- Progress Flow Footer -->
+    <g transform="translate(40, 300)">
+        <text x="0" y="16" fill="#64748b" font-size="11" class="mono-text">STEP EXECUTION: ISOLATED SUBPROCESS &gt;&gt; REAL-TIME WEBSOCKET PROGRESS (0-100%) &gt;&gt; CLEANUP TMPDIR</text>
+    </g>
+</svg>

@@ -21,4 +21,5 @@ storage/thumbnails/*
 !storage/outputs/.gitkeep
 !storage/temp/.gitkeep
 !storage/thumbnails/.gitkeep
-
+# Test files
+test/

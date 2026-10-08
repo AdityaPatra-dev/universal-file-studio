@@ -5,6 +5,13 @@ from pathlib import Path
 
 # Add backend directory to sys.path
 root_dir = Path(__file__).resolve().parent
+
+# Auto-detect and re-exec with virtualenv python if available
+if sys.prefix == sys.base_prefix:
+    venv_python = root_dir / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        os.execv(str(venv_python), [str(venv_python)] + sys.argv)
+
 backend_dir = root_dir / "backend"
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
@@ -13,3 +20,4 @@ from app.cli.main import cli_main
 
 if __name__ == "__main__":
     cli_main()
+
