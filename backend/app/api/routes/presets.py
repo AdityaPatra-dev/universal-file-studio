@@ -59,11 +59,27 @@ BUILTIN_PRESETS = [
         "is_default": True
     },
     {
-        "name": "eBook Compressed PDF",
+        "name": "Compress PDF (eBook 150 DPI)",
         "description": "Compress PDF for smooth viewing and email sharing",
         "operation": "pdf_compress",
         "engine": "ghostscript",
         "parameters": {"quality": "ebook"},
+        "is_default": True
+    },
+    {
+        "name": "eBook (EPUB) to PDF",
+        "description": "Convert EPUB eBook to beautifully formatted PDF document",
+        "operation": "document_convert",
+        "engine": "auto",
+        "parameters": {"format": "pdf"},
+        "is_default": True
+    },
+    {
+        "name": "eBook (EPUB) to Word DOCX",
+        "description": "Convert EPUB eBook to editable Word document",
+        "operation": "document_convert",
+        "engine": "pandoc",
+        "parameters": {"format": "docx"},
         "is_default": True
     },
     {

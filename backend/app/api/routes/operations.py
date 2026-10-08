@@ -162,6 +162,16 @@ async def list_operations() -> List[Dict[str, Any]]:
             {"name": "format", "type": "select", "options": ["txt", "html", "md"], "default": "txt"}
         ]
     })
+    ops.append({
+        "id": "ebook_convert",
+        "name": "Convert eBook (EPUB)",
+        "engine": "pandoc",
+        "category": "document",
+        "description": "Convert EPUB eBook to PDF, DOCX, HTML, or Markdown",
+        "parameters": [
+            {"name": "format", "type": "select", "options": ["pdf", "docx", "html", "md", "txt", "odt"], "default": "pdf"}
+        ]
+    })
 
     # Advanced Utilities (Phase 5)
     ops.append({

@@ -106,6 +106,8 @@ class ProcessorRegistry:
             "convert_markdown": document_processor,
             "text_convert": document_processor,
             "convert_text": document_processor,
+            "ebook_convert": document_processor,
+            "convert_ebook": document_processor,
 
             # Phase 5: Advanced (OCR, Metadata, Hashing)
             "ocr_image": ocr_processor,

@@ -89,3 +89,48 @@ async def test_processor_registry_document_dispatch(temp_workdir, tmp_path):
     assert res.success is True
     assert os.path.exists(out_file)
     assert out_file.endswith(".html")
+
+@pytest.mark.anyio
+async def test_ebook_epub_conversion(temp_workdir, tmp_path):
+    # Create a small valid test EPUB using pandoc if available
+    md_file = tmp_path / "chapter.md"
+    md_file.write_text("# Chapter 1\n\nOnce upon a time in Universal File Studio.\n", encoding="utf-8")
+    epub_file = tmp_path / "book.epub"
+
+    # Compile a quick epub
+    res_epub = await pandoc_engine.convert(
+        input_path=str(md_file),
+        output_path=str(epub_file),
+        format_from="markdown",
+        format_to="epub"
+    )
+    if not res_epub.success or not epub_file.exists():
+        pytest.skip("Pandoc cannot compile test EPUB on this system.")
+
+    # Test EPUB -> DOCX
+    out_docx, res_docx = await document_processor.process(
+        operation="document_convert",
+        input_path=str(epub_file),
+        output_dir=temp_workdir,
+        job_id="job_epub_docx_001",
+        parameters={"format": "docx"}
+    )
+    assert res_docx.success is True
+    assert os.path.exists(out_docx)
+    assert out_docx.endswith(".docx")
+    assert os.path.getsize(out_docx) > 500
+
+    # Test EPUB -> PDF (two-stage Pandoc -> LibreOffice -> PDF)
+    if libreoffice_engine.is_installed():
+        out_pdf, res_pdf = await document_processor.process(
+            operation="document_convert",
+            input_path=str(epub_file),
+            output_dir=temp_workdir,
+            job_id="job_epub_pdf_001",
+            parameters={"format": "pdf"}
+        )
+        assert res_pdf.success is True
+        assert os.path.exists(out_pdf)
+        assert out_pdf.endswith(".pdf")
+        assert os.path.getsize(out_pdf) > 500
+
