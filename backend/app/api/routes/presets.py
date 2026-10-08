@@ -83,6 +83,22 @@ BUILTIN_PRESETS = [
         "is_default": True
     },
     {
+        "name": "Comic / Manga (ZIP to PDF)",
+        "description": "Extract images from ZIP/CBZ and compile into ordered PDF book",
+        "operation": "archive_to_pdf",
+        "engine": "imagemagick",
+        "parameters": {"quality": 85, "compress": "jpeg"},
+        "is_default": True
+    },
+    {
+        "name": "Merge Images to PDF Book",
+        "description": "Combine multiple images into a single PDF document in sequence",
+        "operation": "images_to_pdf",
+        "engine": "imagemagick",
+        "parameters": {"quality": 85, "compress": "jpeg"},
+        "is_default": True
+    },
+    {
         "name": "Office Document to PDF",
         "description": "Convert Word / LibreOffice document to standard PDF",
         "operation": "document_convert",
@@ -144,16 +160,20 @@ BUILTIN_PRESETS = [
 async def list_presets(db: AsyncSession = Depends(get_db)):
     stmt = select(Preset).order_by(Preset.id)
     res = await db.execute(stmt)
-    presets = res.scalars().all()
+    presets = list(res.scalars().all())
 
-    if not presets:
-        # Populate defaults
-        for bp in BUILTIN_PRESETS:
+    existing_names = {p.name for p in presets}
+    added = False
+    for bp in BUILTIN_PRESETS:
+        if bp["name"] not in existing_names:
             db.add(Preset(**bp))
+            added = True
+
+    if added:
         await db.commit()
         stmt = select(Preset).order_by(Preset.id)
         res = await db.execute(stmt)
-        presets = res.scalars().all()
+        presets = list(res.scalars().all())
 
     return presets
 

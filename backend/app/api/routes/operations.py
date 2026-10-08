@@ -108,6 +108,28 @@ async def list_operations() -> List[Dict[str, Any]]:
                 {"name": "format", "type": "select", "options": ["zip", "7z"], "default": "zip"}
             ]
         })
+        ops.append({
+            "id": "archive_to_pdf",
+            "name": "Archive to Single PDF (Comic / Manga)",
+            "engine": "imagemagick",
+            "category": "archive",
+            "description": "Extract images from ZIP/CBZ and compile into ordered PDF document",
+            "parameters": [
+                {"name": "quality", "type": "number", "default": 85, "min": 20, "max": 100},
+                {"name": "compress", "type": "select", "options": ["jpeg", "deflate"], "default": "jpeg"}
+            ]
+        })
+        ops.append({
+            "id": "images_to_pdf",
+            "name": "Merge Images to PDF",
+            "engine": "imagemagick",
+            "category": "image",
+            "description": "Combine multiple images into a single PDF document in sequence",
+            "parameters": [
+                {"name": "quality", "type": "number", "default": 85, "min": 20, "max": 100},
+                {"name": "compress", "type": "select", "options": ["jpeg", "deflate"], "default": "jpeg"}
+            ]
+        })
 
     if registry.is_installed("libreoffice"):
         ops.append({

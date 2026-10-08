@@ -17,11 +17,11 @@ class ArchiveProcessor(BaseProcessor):
     ) -> Tuple[str, ProcessResult]:
         in_p = Path(input_path)
         out_d = Path(output_dir)
+        password = parameters.get("password")
 
         # 1. Archive Extract
         if operation in ["archive_extract", "extract_archive"]:
             extract_dir = str(out_d / f"{in_p.stem}_extracted_{job_id[:8]}")
-            password = parameters.get("password")
             res = await sevenzip_engine.extract(input_path, extract_dir, password=password)
             return extract_dir, res
 
@@ -29,8 +29,11 @@ class ArchiveProcessor(BaseProcessor):
         elif operation in ["archive_create", "create_archive"]:
             fmt = str(parameters.get("format", "zip")).lower().lstrip(".")
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.{fmt}")
-            password = parameters.get("password")
-            res = await sevenzip_engine.create(out_file, [input_path], password=password)
+            if in_p.is_dir():
+                items = [str(p) for p in in_p.glob("*")]
+                res = await sevenzip_engine.create(out_file, items or [input_path], password=password)
+            else:
+                res = await sevenzip_engine.create(out_file, [input_path], password=password)
             return out_file, res
 
         # 3. Archive Test

@@ -101,3 +101,55 @@ async def test_pipeline_execution_api(client):
     job_data = exec_res.json()
     assert job_data["operation"] == "pipeline_execute"
     assert job_data["status"] in ["pending", "queued", "running", "completed"]
+
+@pytest.mark.anyio
+async def test_pipeline_runner_zip_to_webp_to_pdf_chain(temp_workdir, tmp_path):
+    import zipfile
+    import subprocess
+
+    # Create 2 simple test images using magick or raw bytes
+    img1 = tmp_path / "page_001.png"
+    img2 = tmp_path / "page_002.png"
+    subprocess.run(["magick", "-size", "100x100", "xc:red", str(img1)], check=True)
+    subprocess.run(["magick", "-size", "100x100", "xc:blue", str(img2)], check=True)
+
+    # Package into a test ZIP
+    zip_path = tmp_path / "manga_test.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(img1, arcname="001.png")
+        zf.write(img2, arcname="002.png")
+
+    # Execute chain: ZIP -> extract -> batch convert to WebP -> compile into single PDF
+    steps = [
+        {"operation": "archive_extract", "parameters": {}},
+        {"operation": "image_convert", "parameters": {"format": "webp", "quality": 85}},
+        {"operation": "images_to_pdf", "parameters": {"quality": 85, "compress": "jpeg"}}
+    ]
+
+    out_file, res = await pipeline_runner.execute_chain(
+        input_path=str(zip_path),
+        steps=steps,
+        output_dir=temp_workdir,
+        job_id="manga_chain_test"
+    )
+
+    assert res.success is True
+    assert out_file.endswith(".pdf")
+    assert os.path.exists(out_file)
+    assert os.path.getsize(out_file) > 500
+
+    # Test direct archive_to_pdf as well
+    direct_steps = [
+        {"operation": "archive_to_pdf", "parameters": {"quality": 85, "compress": "jpeg"}}
+    ]
+    direct_out, direct_res = await pipeline_runner.execute_chain(
+        input_path=str(zip_path),
+        steps=direct_steps,
+        output_dir=temp_workdir,
+        job_id="manga_direct_test"
+    )
+    assert direct_res.success is True
+    assert direct_out.endswith(".pdf")
+    assert os.path.exists(direct_out)
+    assert os.path.getsize(direct_out) > 500
+

@@ -1,3 +1,7 @@
+import os
+import re
+import tempfile
+import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 from app.processors.base import BaseProcessor
@@ -19,8 +23,12 @@ class PdfProcessor(BaseProcessor):
         in_p = Path(input_path)
         out_d = Path(output_dir)
 
-        # 1. PDF to Images
-        if operation in ["pdf_to_images", "pdf_to_image"]:
+        # 1. Images / Archive to Single PDF (e.g. Manga, Comic, Document scans)
+        if operation in ["images_to_pdf", "archive_to_pdf", "cbz_to_pdf", "merge_to_pdf"]:
+            return await self._convert_images_or_archive_to_pdf(in_p, out_d, job_id, parameters)
+
+        # 2. PDF to Images
+        elif operation in ["pdf_to_images", "pdf_to_image"]:
             fmt = str(parameters.get("format", "png")).lower().lstrip(".")
             dpi = int(parameters.get("dpi", 150))
             out_prefix = str(out_d / f"{in_p.stem}_{job_id[:8]}_page")
@@ -28,20 +36,20 @@ class PdfProcessor(BaseProcessor):
             first_page = f"{out_prefix}-1.{fmt}"
             return first_page, res
 
-        # 2. PDF to Text
+        # 3. PDF to Text
         elif operation in ["pdf_to_text", "pdf_extract_text"]:
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.txt")
             res = await poppler_engine.pdf_to_text(input_path, out_file)
             return out_file, res
 
-        # 3. PDF Compress / Optimize
+        # 4. PDF Compress / Optimize
         elif operation in ["pdf_compress", "pdf_optimize"]:
             quality = str(parameters.get("quality", "ebook"))
             out_file = str(out_d / f"{in_p.stem}_optimized_{job_id[:8]}.pdf")
             res = await ghostscript_engine.compress(input_path, out_file, quality_setting=quality)
             return out_file, res
 
-        # 4. PDF Rotate Pages
+        # 5. PDF Rotate Pages
         elif operation in ["pdf_rotate_pages", "rotate_pdf"]:
             angle = int(parameters.get("angle", 90))
             pages = str(parameters.get("pages", "1-z"))
@@ -54,7 +62,7 @@ class PdfProcessor(BaseProcessor):
                 res = await ghostscript_engine.execute(cmd)
             return out_file, res
 
-        # 5. PDF Extract Pages
+        # 6. PDF Extract Pages
         elif operation in ["pdf_extract_pages", "extract_pdf_pages"]:
             pages = str(parameters.get("pages", "1"))
             out_file = str(out_d / f"{in_p.stem}_extracted_{job_id[:8]}.pdf")
@@ -70,5 +78,80 @@ class PdfProcessor(BaseProcessor):
         res = await ghostscript_engine.optimize(input_path, out_file)
         return out_file, res
 
-pdf_processor = PdfProcessor()
+    async def _convert_images_or_archive_to_pdf(
+        self,
+        in_p: Path,
+        out_d: Path,
+        job_id: str,
+        parameters: Dict[str, Any]
+    ) -> Tuple[str, ProcessResult]:
+        from app.engines.wrappers.sevenzip import sevenzip_engine
+        from app.engines.wrappers.imagemagick import imagemagick_engine
 
+        out_d.mkdir(parents=True, exist_ok=True)
+        out_pdf = str(out_d / f"{in_p.stem}_{job_id[:8]}.pdf")
+        quality = int(parameters.get("quality", 85))
+        compress_type = str(parameters.get("compress", "jpeg")).lower()
+
+        img_exts = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".bmp", ".tiff", ".gif"}
+        temp_dir: Optional[Path] = None
+
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
+
+        try:
+            # Case A: Input is an archive (ZIP, CBZ, 7Z, RAR, TAR)
+            archive_exts = {".zip", ".cbz", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz"}
+            if in_p.suffix.lower() in archive_exts or (in_p.is_file() and in_p.suffix.lower() not in img_exts):
+                temp_dir = Path(tempfile.mkdtemp(prefix="ufs_zip2pdf_"))
+                extract_res = await sevenzip_engine.extract(str(in_p), str(temp_dir))
+                if not extract_res.success:
+                    return out_pdf, extract_res
+                image_files = [p for p in temp_dir.rglob("*") if p.suffix.lower() in img_exts]
+            # Case B: Input is a directory containing images
+            elif in_p.is_dir():
+                image_files = [p for p in in_p.rglob("*") if p.suffix.lower() in img_exts]
+            # Case C: Input is a single image file
+            else:
+                image_files = [in_p]
+
+            if not image_files:
+                return out_pdf, ProcessResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="No supported image files found to compile into PDF.",
+                    success=False,
+                    command=["magick", "images_to_pdf"]
+                )
+
+            image_files.sort(key=natural_sort_key)
+
+            # Write file list to avoid command line length limits
+            list_file_dir = Path(tempfile.mkdtemp(prefix="ufs_imglist_"))
+            list_file = list_file_dir / "images.txt"
+            with open(list_file, "w", encoding="utf-8") as f:
+                for img_p in image_files:
+                    f.write(f"{img_p.resolve().as_posix()}\n")
+
+            # Invoke ImageMagick with @list_file
+            magick_bin = imagemagick_engine._get_bin()
+            cmd = [
+                magick_bin,
+                f"@{list_file.resolve().as_posix()}",
+                "-compress", compress_type,
+                "-quality", str(quality),
+                out_pdf
+            ]
+
+            res = await imagemagick_engine.execute(cmd, timeout=600)
+            shutil.rmtree(list_file_dir, ignore_errors=True)
+
+            if res.success and os.path.exists(out_pdf):
+                return out_pdf, res
+            else:
+                return out_pdf, res
+        finally:
+            if temp_dir and temp_dir.exists():
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+pdf_processor = PdfProcessor()

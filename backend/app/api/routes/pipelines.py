@@ -47,6 +47,31 @@ BUILTIN_PIPELINES = [
             {"operation": "extract_audio", "parameters": {"format": "mp3", "bitrate": 192}},
             {"operation": "strip_metadata", "parameters": {}}
         ]
+    },
+    {
+        "name": "Comic / Manga: ZIP to WebP to PDF",
+        "description": "Extract image archive, optimize all pages into WebP, and compile into a single ordered PDF book",
+        "steps": [
+            {"operation": "archive_extract", "parameters": {}},
+            {"operation": "image_convert", "parameters": {"format": "webp", "quality": 85}},
+            {"operation": "images_to_pdf", "parameters": {"quality": 85, "compress": "jpeg"}}
+        ]
+    },
+    {
+        "name": "Archive to Single PDF Book",
+        "description": "Extract scanned images or comic book from ZIP/CBZ and compile directly into PDF",
+        "steps": [
+            {"operation": "archive_to_pdf", "parameters": {"quality": 85, "compress": "jpeg"}}
+        ]
+    },
+    {
+        "name": "ZIP to WebP Compressed Archive",
+        "description": "Extract image archive, compress all pages into modern WebP format, and repackage into ZIP",
+        "steps": [
+            {"operation": "archive_extract", "parameters": {}},
+            {"operation": "image_convert", "parameters": {"format": "webp", "quality": 80}},
+            {"operation": "archive_create", "parameters": {"format": "zip"}}
+        ]
     }
 ]
 
@@ -55,15 +80,20 @@ BUILTIN_PIPELINES = [
 async def list_pipelines(db: AsyncSession = Depends(get_db)):
     stmt = select(Pipeline).order_by(Pipeline.id)
     res = await db.execute(stmt)
-    pipelines = res.scalars().all()
+    pipelines = list(res.scalars().all())
 
-    if not pipelines:
-        for bp in BUILTIN_PIPELINES:
+    existing_names = {p.name for p in pipelines}
+    added = False
+    for bp in BUILTIN_PIPELINES:
+        if bp["name"] not in existing_names:
             db.add(Pipeline(**bp))
+            added = True
+
+    if added:
         await db.commit()
         stmt = select(Pipeline).order_by(Pipeline.id)
         res = await db.execute(stmt)
-        pipelines = res.scalars().all()
+        pipelines = list(res.scalars().all())
 
     return pipelines
 

@@ -83,6 +83,10 @@ class ProcessorRegistry:
             "pdf_optimize": pdf_processor,
             "pdf_rotate_pages": pdf_processor,
             "pdf_extract_pages": pdf_processor,
+            "images_to_pdf": pdf_processor,
+            "archive_to_pdf": pdf_processor,
+            "cbz_to_pdf": pdf_processor,
+            "merge_to_pdf": pdf_processor,
 
             # Archive
             "archive_create": archive_processor,
