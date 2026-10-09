@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+*.db
+.pytest_cache/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+
+# Local Storage Runtime Data
+storage/uploads/*
+storage/outputs/*
+storage/temp/*
+storage/thumbnails/*
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+!storage/temp/.gitkeep
+!storage/thumbnails/.gitkeep
+
