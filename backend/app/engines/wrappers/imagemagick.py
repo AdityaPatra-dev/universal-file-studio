@@ -90,3 +90,4 @@ class ImageMagickEngine(BaseEngine):
         return last_res
 
 imagemagick_engine = ImageMagickEngine()
+

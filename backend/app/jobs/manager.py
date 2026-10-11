@@ -15,18 +15,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.job import Job, JobStatus
 from app.models.file_record import FileRecord
-from app.engines.wrappers import (
-    ffmpeg_engine,
-    imagemagick_engine,
-    sevenzip_engine,
-    poppler_engine,
-    ghostscript_engine,
-    libreoffice_engine,
-    qpdf_engine,
-    pandoc_engine,
-    tesseract_engine,
-    ProcessResult
-)
+from app.processors.registry import processor_registry
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -118,7 +107,7 @@ class JobManager:
             file_rec = f_res.scalar_one_or_none()
 
         try:
-            # Execute operation using Core Engine Wrappers
+            # Execute operation using Processor Registry
             out_path, cmd_str, stdout_str, stderr_str = await self._run_operation(
                 job_id=job.id,
                 operation=job.operation,
@@ -186,147 +175,41 @@ class JobManager:
         file_rec: Optional[FileRecord]
     ) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
-        Routes and executes operations through typed engine wrappers.
+        Routes and executes operations through processor registry.
         Returns: (output_path, command_executed, stdout, stderr)
         """
-        in_p = Path(input_path)
-        out_dir = Path(settings.OUTPUT_DIR)
-        target_fmt = (parameters.get("format") or parameters.get("to") or "converted").lower()
+        out_dir = settings.OUTPUT_DIR
 
+        # Progress tracking callback
         async def set_progress(p: float):
             async with AsyncSessionLocal() as s:
                 await s.execute(update(Job).where(Job.id == job_id).values(progress_percent=p))
                 await s.commit()
 
-        await set_progress(20.0)
+        await set_progress(35.0)
 
-        # 1. Video & Audio via FFmpegEngine
-        if operation in ["video_convert", "convert_video", "compress_video", "audio_convert", "extract_audio", "trim_video", "crop_video", "resize_video"]:
-            ext = f".{target_fmt}" if not target_fmt.startswith(".") else target_fmt
-            if operation == "extract_audio" and ext in [".converted", ""]:
-                ext = ".mp3"
-            out_file = str(out_dir / f"{in_p.stem}_{job_id[:8]}{ext}")
+        f_info = {
+            "mime_type": file_rec.mime_type if file_rec else None,
+            "category": file_rec.category if file_rec else None,
+            "width": file_rec.width if file_rec else None,
+            "height": file_rec.height if file_rec else None,
+            "duration": file_rec.duration_seconds if file_rec else None,
+        }
 
-            await set_progress(40.0)
-            if operation == "extract_audio":
-                res = await ffmpeg_engine.extract_audio(str(in_p), out_file, audio_codec="libmp3lame" if ext == ".mp3" else "copy")
-            elif "compress" in operation:
-                crf = int(parameters.get("crf", 28))
-                res = await ffmpeg_engine.compress(str(in_p), out_file, crf=crf)
-            elif "trim" in operation and "start" in parameters:
-                res = await ffmpeg_engine.trim(str(in_p), out_file, start_time=str(parameters["start"]), end_time=parameters.get("end"))
-            elif "crop" in operation and "width" in parameters and "height" in parameters:
-                res = await ffmpeg_engine.crop(str(in_p), out_file, int(parameters["width"]), int(parameters["height"]))
-            elif "resize" in operation and "width" in parameters and "height" in parameters:
-                res = await ffmpeg_engine.resize(str(in_p), out_file, int(parameters["width"]), int(parameters["height"]))
-            else:
-                v_codec = "libx264" if ext in [".mp4", ".m4v"] else ("libvpx-vp9" if ext == ".webm" else None)
-                a_codec = "aac" if ext in [".mp4", ".m4v"] else ("libopus" if ext == ".webm" else None)
-                res = await ffmpeg_engine.convert(str(in_p), out_file, video_codec=v_codec, audio_codec=a_codec)
+        out_path, res = await processor_registry.dispatch(
+            operation=operation,
+            input_path=input_path,
+            output_dir=out_dir,
+            job_id=job_id,
+            parameters=parameters,
+            file_info=f_info
+        )
 
-            if not res.success:
-                raise RuntimeError(f"FFmpeg failed with returncode {res.returncode}: {res.stderr}")
+        if not res.success:
+            err_msg = res.stderr or res.stdout or f"Process failed with exit code {res.returncode}"
+            raise RuntimeError(err_msg)
 
-            await set_progress(95.0)
-            return out_file, res.command_str, res.stdout, res.stderr
-
-        # 2. Image via ImageMagickEngine
-        elif operation in ["image_convert", "convert_image", "resize_image", "compress_image", "rotate_image", "crop_image"]:
-            ext = f".{target_fmt}" if not target_fmt.startswith(".") else target_fmt
-            if ext in [".converted", ""]:
-                ext = ".webp"
-            out_file = str(out_dir / f"{in_p.stem}_{job_id[:8]}{ext}")
-
-            await set_progress(40.0)
-            if "resize" in operation and ("width" in parameters or "height" in parameters):
-                res = await imagemagick_engine.resize(str(in_p), out_file, width=parameters.get("width"), height=parameters.get("height"))
-            elif "compress" in operation or "quality" in parameters:
-                res = await imagemagick_engine.compress(str(in_p), out_file, quality=int(parameters.get("quality", 80)))
-            elif "rotate" in operation and "degrees" in parameters:
-                res = await imagemagick_engine.rotate(str(in_p), out_file, degrees=float(parameters["degrees"]))
-            elif "crop" in operation and "width" in parameters and "height" in parameters:
-                res = await imagemagick_engine.crop(str(in_p), out_file, int(parameters["width"]), int(parameters["height"]), int(parameters.get("x", 0)), int(parameters.get("y", 0)))
-            else:
-                res = await imagemagick_engine.convert(str(in_p), out_file)
-
-            if not res.success:
-                raise RuntimeError(f"ImageMagick failed with returncode {res.returncode}: {res.stderr}")
-
-            await set_progress(95.0)
-            return out_file, res.command_str, res.stdout, res.stderr
-
-        # 3. Archive via SevenZipEngine
-        elif operation in ["archive_extract", "extract_archive", "archive_create", "create_archive"]:
-            await set_progress(40.0)
-            if "extract" in operation:
-                extract_dir = str(out_dir / f"{in_p.stem}_{job_id[:8]}")
-                res = await sevenzip_engine.extract(str(in_p), extract_dir)
-                out_path = extract_dir
-            else:
-                ext = f".{target_fmt}" if not target_fmt.startswith(".") else target_fmt
-                if ext in [".converted", ""]:
-                    ext = ".zip"
-                out_file = str(out_dir / f"{in_p.stem}_{job_id[:8]}{ext}")
-                res = await sevenzip_engine.create(out_file, [str(in_p)], password=parameters.get("password"))
-                out_path = out_file
-
-            if not res.success:
-                raise RuntimeError(f"7-Zip failed with returncode {res.returncode}: {res.stdout}")
-
-            await set_progress(95.0)
-            return out_path, res.command_str, res.stdout, res.stderr
-
-        # 4. PDF via PopplerEngine or GhostscriptEngine
-        elif operation in ["pdf_to_images", "pdf_to_text", "pdf_compress", "pdf_optimize"]:
-            await set_progress(40.0)
-            if operation == "pdf_to_images":
-                out_prefix = str(out_dir / f"{in_p.stem}_{job_id[:8]}_page")
-                fmt = target_fmt if target_fmt not in ["converted", ""] else "png"
-                res = await poppler_engine.pdf_to_image(str(in_p), out_prefix, format=fmt)
-                out_path = f"{out_prefix}-1.{fmt}"
-            elif operation == "pdf_to_text":
-                out_file = str(out_dir / f"{in_p.stem}_{job_id[:8]}.txt")
-                res = await poppler_engine.pdf_to_text(str(in_p), out_file)
-                out_path = out_file
-            else:  # pdf_compress or pdf_optimize
-                out_file = str(out_dir / f"{in_p.stem}_{job_id[:8]}.pdf")
-                quality = parameters.get("quality", "ebook")
-                res = await ghostscript_engine.compress(str(in_p), out_file, quality_setting=quality)
-                out_path = out_file
-
-            if not res.success:
-                raise RuntimeError(f"PDF operation failed with returncode {res.returncode}: {res.stderr}")
-
-            await set_progress(95.0)
-            return out_path, res.command_str, res.stdout, res.stderr
-
-        # 5. Document conversion via LibreOfficeEngine
-        elif operation in ["document_convert", "convert_document"]:
-            fmt = target_fmt if target_fmt not in ["converted", ""] else "pdf"
-            await set_progress(40.0)
-            res = await libreoffice_engine.convert(str(in_p), str(out_dir), format=fmt)
-
-            if not res.success:
-                raise RuntimeError(f"LibreOffice failed: {res.stderr}")
-
-            expected_out = out_dir / f"{in_p.stem}.{fmt}"
-            renamed_out = out_dir / f"{in_p.stem}_{job_id[:8]}.{fmt}"
-            if expected_out.exists():
-                expected_out.rename(renamed_out)
-
-            await set_progress(95.0)
-            return str(renamed_out), res.command_str, res.stdout, res.stderr
-
-        # 6. Fallback Pass-through
-        else:
-            ext = f".{target_fmt}" if target_fmt not in ["converted", ""] else in_p.suffix
-            out_file = str(out_dir / f"{in_p.stem}_{job_id[:8]}{ext}")
-            
-            await set_progress(50.0)
-            await asyncio.sleep(0.5)
-            with open(in_p, "rb") as src, open(out_file, "wb") as dst:
-                dst.write(src.read())
-
-            return out_file, f"ufs_processor --op {operation} {in_p.name}", "Operation processed successfully.", ""
+        await set_progress(95.0)
+        return out_path, res.command_str, res.stdout, res.stderr
 
 job_manager = JobManager()

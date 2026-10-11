@@ -61,3 +61,4 @@ class GhostscriptEngine(BaseEngine):
         return await self.execute(cmd)
 
 ghostscript_engine = GhostscriptEngine()
+

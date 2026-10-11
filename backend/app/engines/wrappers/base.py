@@ -74,3 +74,4 @@ class BaseEngine(ABC):
             )
         except Exception as e:
             raise RuntimeError(f"Error executing engine '{self.name}': {str(e)}") from e
+
