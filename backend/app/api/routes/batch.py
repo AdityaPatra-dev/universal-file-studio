@@ -152,3 +152,4 @@ async def batch_archive(payload: BatchArchiveRequest, db: AsyncSession = Depends
         "files_count": len(paths),
         "command": res_proc.command_str
     }
+

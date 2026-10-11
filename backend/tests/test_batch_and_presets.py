@@ -54,3 +54,4 @@ async def test_batch_archive_api(client):
     arc_data = archive_res.json()
     assert arc_data["success"] is True
     assert arc_data["files_count"] == 2
+

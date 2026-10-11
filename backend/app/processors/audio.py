@@ -85,3 +85,4 @@ class AudioProcessor(BaseProcessor):
         return out_file, res
 
 audio_processor = AudioProcessor()
+

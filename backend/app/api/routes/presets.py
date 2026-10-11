@@ -110,3 +110,4 @@ async def delete_preset(preset_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(p)
     await db.commit()
     return {"success": True, "message": f"Preset {preset_id} deleted"}
+

@@ -44,3 +44,4 @@ class ArchiveProcessor(BaseProcessor):
         return out_file, res
 
 archive_processor = ArchiveProcessor()
+

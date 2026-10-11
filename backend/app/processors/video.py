@@ -134,3 +134,4 @@ class VideoProcessor(BaseProcessor):
         return out_file, res
 
 video_processor = VideoProcessor()
+

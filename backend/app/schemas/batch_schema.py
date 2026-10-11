@@ -20,3 +20,4 @@ class BatchResultResponse(BaseModel):
     total_requested: int
     jobs_created: List[Dict[str, Any]]
     skipped_files: List[Dict[str, Any]] = []
+

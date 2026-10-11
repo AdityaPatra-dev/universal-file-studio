@@ -71,3 +71,4 @@ class PdfProcessor(BaseProcessor):
         return out_file, res
 
 pdf_processor = PdfProcessor()
+

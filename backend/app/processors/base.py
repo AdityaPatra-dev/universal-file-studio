@@ -19,3 +19,4 @@ class BaseProcessor(ABC):
         Returns: (output_path, ProcessResult)
         """
         pass
+

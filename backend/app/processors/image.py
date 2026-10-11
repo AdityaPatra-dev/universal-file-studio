@@ -85,3 +85,4 @@ class ImageProcessor(BaseProcessor):
         return out_file, res
 
 image_processor = ImageProcessor()
+
