@@ -4,6 +4,7 @@ import { Sidebar, TabType } from './components/layout/Sidebar';
 import { FileDropZone } from './components/files/FileDropZone';
 import { FileList } from './components/files/FileList';
 import { FileProcessModal } from './components/files/FileProcessModal';
+import { BatchProcessModal } from './components/files/BatchProcessModal';
 import { JobList } from './components/jobs/JobList';
 import { EngineManager } from './components/system/EngineManager';
 import { Diagnostics } from './components/system/Diagnostics';
@@ -23,6 +24,15 @@ export function App() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedFileForProcess, setSelectedFileForProcess] = useState<FileRecord | null>(null);
+  const [batchModal, setBatchModal] = useState<{
+    isOpen: boolean;
+    files: FileRecord[];
+    mode: 'convert' | 'compress' | 'archive';
+  }>({
+    isOpen: false,
+    files: [],
+    mode: 'convert',
+  });
 
   // Load all initial data
   const loadData = useCallback(async () => {
@@ -95,6 +105,23 @@ export function App() {
     } catch (err) {
       alert('Failed to delete file');
     }
+  };
+
+  const handleBatchDelete = async (ids: number[]) => {
+    try {
+      await Promise.all(ids.map(id => api.deleteFile(id)));
+      setFiles(prev => prev.filter(f => !ids.includes(f.id)));
+    } catch (err) {
+      alert('Failed to delete some files');
+    }
+  };
+
+  const handleBatchAction = (selectedFiles: FileRecord[], mode: 'convert' | 'compress' | 'archive') => {
+    setBatchModal({
+      isOpen: true,
+      files: selectedFiles,
+      mode,
+    });
   };
 
   const handleDownloadFile = (id: number) => {
@@ -211,6 +238,8 @@ export function App() {
                   onSelectFileForProcess={setSelectedFileForProcess}
                   onDeleteFile={handleDeleteFile}
                   onDownloadFile={handleDownloadFile}
+                  onBatchAction={handleBatchAction}
+                  onBatchDelete={handleBatchDelete}
                 />
               </div>
             )}
@@ -263,6 +292,20 @@ export function App() {
           setCurrentTab('jobs');
         }}
       />
+
+      {/* Batch Process Modal */}
+      {batchModal.isOpen && (
+        <BatchProcessModal
+          files={batchModal.files}
+          initialMode={batchModal.mode}
+          onClose={() => setBatchModal({ isOpen: false, files: [], mode: 'convert' })}
+          onBatchStarted={async () => {
+            const updatedJobs = await api.listJobs();
+            setJobs(updatedJobs);
+            setCurrentTab('jobs');
+          }}
+        />
+      )}
     </div>
   );
 }

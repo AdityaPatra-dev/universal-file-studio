@@ -1,4 +1,4 @@
-import { FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, AppSetting } from '../types/api';
+import { FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, Preset, AppSetting } from '../types/api';
 
 const API_BASE = 'http://127.0.0.1:8000/api/v1';
 
@@ -97,6 +97,54 @@ export const api = {
     return `${API_BASE}/jobs/${id}/download`;
   },
 
+  // Batch Operations
+  async batchConvert(fileIds: number[], targetFormat: string, parameters: Record<string, any> = {}): Promise<any> {
+    const res = await fetch(`${API_BASE}/batch/convert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_ids: fileIds, target_format: targetFormat, parameters }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async batchCompress(fileIds: number[], qualityOrCrf?: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/batch/compress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_ids: fileIds, quality_or_crf: qualityOrCrf }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async batchArchive(fileIds: number[], archiveFormat: string = 'zip', archiveName?: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/batch/archive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_ids: fileIds, archive_format: archiveFormat, archive_name: archiveName }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // Presets
+  async listPresets(): Promise<Preset[]> {
+    const res = await fetch(`${API_BASE}/presets`);
+    if (!res.ok) throw new Error('Failed to fetch presets');
+    return res.json();
+  },
+
+  async createPreset(preset: Partial<Preset>): Promise<Preset> {
+    const res = await fetch(`${API_BASE}/presets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(preset),
+    });
+    if (!res.ok) throw new Error('Failed to create preset');
+    return res.json();
+  },
+
   // Operations
   async listOperations(): Promise<Operation[]> {
     const res = await fetch(`${API_BASE}/operations`);
@@ -151,4 +199,3 @@ export const api = {
     return res.json();
   }
 };
-

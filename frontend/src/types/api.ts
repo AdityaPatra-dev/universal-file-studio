@@ -92,6 +92,17 @@ export interface Operation {
   parameters?: OperationParam[];
 }
 
+export interface Preset {
+  id: number;
+  name: string;
+  description: string;
+  operation: string;
+  engine: string;
+  parameters: Record<string, any>;
+  is_default: boolean;
+  created_at: string;
+}
+
 export interface AppSetting {
   key: string;
   value: string;

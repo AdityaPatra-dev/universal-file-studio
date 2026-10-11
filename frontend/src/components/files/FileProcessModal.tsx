@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Play, Sliders, CheckCircle, Info, Sparkles } from 'lucide-react';
-import { FileRecord, Operation } from '../../types/api';
+import { FileRecord, Operation, Preset } from '../../types/api';
 import { api } from '../../services/api';
 import { formatBytes, formatDuration } from '../../utils/format';
 
@@ -16,6 +16,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
   onJobStarted,
 }) => {
   const [operations, setOperations] = useState<Operation[]>([]);
+  const [presets, setPresets] = useState<Preset[]>([]);
   const [selectedOp, setSelectedOp] = useState<Operation | null>(null);
   const [params, setParams] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,7 +38,21 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
         }
       })
       .catch((err) => setError('Failed to load available operations for this file.'));
+
+    api.listPresets()
+      .then(setPresets)
+      .catch(() => {});
   }, [file]);
+
+  const handleApplyPreset = (preset: Preset) => {
+    const matchingOp = operations.find(
+      (op) => op.id === preset.operation || op.id.includes(preset.operation) || preset.operation.includes(op.id)
+    );
+    if (matchingOp) {
+      setSelectedOp(matchingOp);
+    }
+    setParams(prev => ({ ...prev, ...(preset.parameters || {}) }));
+  };
 
   const handleSelectOp = (op: Operation) => {
     setSelectedOp(op);
@@ -121,6 +136,38 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Presets Quick Selector */}
+          {presets.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <label className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-brand-400" />
+                  Quick Presets
+                </label>
+                <span className="text-[10px] text-slate-500">Click to autofill parameters</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    onClick={() => handleApplyPreset(preset)}
+                    className="p-3 rounded-xl border border-surface-800 bg-surface-800/30 hover:bg-surface-800/80 hover:border-brand-500/50 text-left transition-all group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-xs text-slate-200 group-hover:text-brand-300">
+                        {preset.name}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface-900 text-slate-400">
+                        {preset.engine}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">{preset.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Operation Selector */}
           <div>
