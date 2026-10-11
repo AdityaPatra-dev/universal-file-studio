@@ -10,7 +10,14 @@ from app.config import settings, PROJECT_ROOT
 from app.database import init_db
 from app.engines.manager import EngineManager
 from app.jobs.manager import job_manager
-from app.api.routes import files_router, jobs_router, operations_router, system_router
+from app.api.routes import (
+    files_router,
+    jobs_router,
+    operations_router,
+    system_router,
+    batch_router,
+    presets_router
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,6 +59,8 @@ app.include_router(files_router, prefix=settings.API_V1_STR)
 app.include_router(jobs_router, prefix=settings.API_V1_STR)
 app.include_router(operations_router, prefix=settings.API_V1_STR)
 app.include_router(system_router, prefix=settings.API_V1_STR)
+app.include_router(batch_router, prefix=settings.API_V1_STR)
+app.include_router(presets_router, prefix=settings.API_V1_STR)
 
 # API Info
 @app.get("/api/info")
@@ -75,4 +84,3 @@ if frontend_dist.exists():
         if file_candidate.is_file():
             return FileResponse(file_candidate)
         return FileResponse(frontend_dist / "index.html")
-
