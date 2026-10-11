@@ -114,3 +114,4 @@ async def test_sevenzip_wrapper_operations(temp_dir):
     ext_res = await sevenzip_engine.extract(archive_path, extract_dir)
     assert ext_res.success is True
     assert os.path.exists(os.path.join(extract_dir, "hello.txt"))
+
