@@ -4,6 +4,7 @@ from app.processors.audio import AudioProcessor, audio_processor
 from app.processors.image import ImageProcessor, image_processor
 from app.processors.pdf import PdfProcessor, pdf_processor
 from app.processors.archive import ArchiveProcessor, archive_processor
+from app.processors.document import DocumentProcessor, document_processor
 from app.processors.registry import ProcessorRegistry, processor_registry
 
 __all__ = [
@@ -13,6 +14,6 @@ __all__ = [
     "ImageProcessor", "image_processor",
     "PdfProcessor", "pdf_processor",
     "ArchiveProcessor", "archive_processor",
+    "DocumentProcessor", "document_processor",
     "ProcessorRegistry", "processor_registry",
 ]
-

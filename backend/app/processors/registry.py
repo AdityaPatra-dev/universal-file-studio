@@ -6,7 +6,7 @@ from app.processors.audio import audio_processor
 from app.processors.image import image_processor
 from app.processors.pdf import pdf_processor
 from app.processors.archive import archive_processor
-from app.engines.wrappers.libreoffice import libreoffice_engine
+from app.processors.document import document_processor
 from app.engines.wrappers.base import ProcessResult
 
 class ProcessorRegistry:
@@ -87,6 +87,22 @@ class ProcessorRegistry:
             "archive_extract": archive_processor,
             "extract_archive": archive_processor,
             "archive_test": archive_processor,
+
+            # Documents & Office
+            "document_convert": document_processor,
+            "convert_document": document_processor,
+            "docx_to_pdf": document_processor,
+            "pdf_to_docx": document_processor,
+            "spreadsheet_convert": document_processor,
+            "convert_spreadsheet": document_processor,
+            "excel_to_csv": document_processor,
+            "presentation_convert": document_processor,
+            "convert_presentation": document_processor,
+            "ppt_to_pdf": document_processor,
+            "markdown_convert": document_processor,
+            "convert_markdown": document_processor,
+            "text_convert": document_processor,
+            "convert_text": document_processor,
         }
 
     async def dispatch(
@@ -98,27 +114,20 @@ class ProcessorRegistry:
         parameters: Dict[str, Any],
         file_info: Optional[Dict[str, Any]] = None
     ) -> Tuple[str, ProcessResult]:
+        out_dir_path = Path(output_dir)
         processor = self._processors.get(operation.lower())
         if processor:
-            return await processor.process(operation, input_path, output_dir, job_id, parameters, file_info)
+            return await processor.process(operation, input_path, out_dir_path, job_id, parameters, file_info)
 
-        # Document fallback via LibreOffice
-        if "document" in operation or "office" in operation:
-            target_fmt = str(parameters.get("format", "pdf")).lower()
-            res = await libreoffice_engine.convert(input_path, output_dir, format=target_fmt)
-            in_p = Path(input_path)
-            renamed = Path(output_dir) / f"{in_p.stem}_{job_id[:8]}.{target_fmt}"
-            expected = Path(output_dir) / f"{in_p.stem}.{target_fmt}"
-            if expected.exists():
-                expected.rename(renamed)
-            return str(renamed), res
+        # Fallback to document processor for any other doc operations
+        if any(term in operation for term in ["doc", "sheet", "slide", "presentation", "office"]):
+            return await document_processor.process(operation, input_path, out_dir_path, job_id, parameters, file_info)
 
         # Generic copy fallback
         in_p = Path(input_path)
-        out_f = str(Path(output_dir) / f"{in_p.stem}_{job_id[:8]}{in_p.suffix}")
+        out_f = str(out_dir_path / f"{in_p.stem}_{job_id[:8]}{in_p.suffix}")
         with open(in_p, "rb") as s, open(out_f, "wb") as d:
             d.write(s.read())
         return out_f, ProcessResult(0, "Pass-through copy completed.", "", True, ["ufs_copy", input_path, out_f])
 
 processor_registry = ProcessorRegistry()
-
