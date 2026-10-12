@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   FileVideo, FileAudio, FileImage, FileText, Archive, File, 
   Trash2, Download, Sparkles, CheckSquare, Square, MinusSquare,
-  Layers, Minimize2, FileArchive, X
+  Layers, Minimize2, FileArchive, X, FileSpreadsheet, Presentation, FileCode
 } from 'lucide-react';
 import { FileRecord } from '../../types/api';
 import { formatBytes, formatDate } from '../../utils/format';
@@ -34,8 +34,11 @@ export const FileList: React.FC<FileListProps> = ({
     { id: 'audio', label: 'Audio' },
     { id: 'image', label: 'Image' },
     { id: 'pdf', label: 'PDF' },
-    { id: 'archive', label: 'Archive' },
     { id: 'document', label: 'Document' },
+    { id: 'spreadsheet', label: 'Spreadsheet' },
+    { id: 'presentation', label: 'Presentation' },
+    { id: 'text', label: 'Text/Notes' },
+    { id: 'archive', label: 'Archive' },
   ];
 
   const filteredFiles = files.filter((f) => {
@@ -50,7 +53,11 @@ export const FileList: React.FC<FileListProps> = ({
       case 'audio': return <FileAudio className="h-5 w-5 text-amber-400" />;
       case 'image': return <FileImage className="h-5 w-5 text-emerald-400" />;
       case 'pdf': return <FileText className="h-5 w-5 text-rose-400" />;
-      case 'archive': return <Archive className="h-5 w-5 text-blue-400" />;
+      case 'document': return <FileText className="h-5 w-5 text-blue-400" />;
+      case 'spreadsheet': return <FileSpreadsheet className="h-5 w-5 text-emerald-400" />;
+      case 'presentation': return <Presentation className="h-5 w-5 text-amber-400" />;
+      case 'text': return <FileCode className="h-5 w-5 text-cyan-400" />;
+      case 'archive': return <Archive className="h-5 w-5 text-indigo-400" />;
       default: return <File className="h-5 w-5 text-slate-400" />;
     }
   };

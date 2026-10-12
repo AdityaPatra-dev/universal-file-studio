@@ -72,3 +72,32 @@ async def test_file_upload_and_job_lifecycle(client):
     assert get_job_res.status_code == 200
     assert get_job_res.json()["id"] == job_id
 
+@pytest.mark.anyio
+async def test_document_conversion_api(client):
+    # 1. Upload markdown file
+    md_content = b"# Document Header\n\nTesting document API pipeline."
+    files = {"files": ("test_doc.md", md_content, "text/markdown")}
+    upload_res = await client.post("/api/v1/files/upload", files=files)
+    assert upload_res.status_code == 200
+    uploaded_files = upload_res.json()
+    assert len(uploaded_files) == 1
+    file_id = uploaded_files[0]["id"]
+
+    # 2. Check operations
+    ops_res = await client.get(f"/api/v1/operations/file/{file_id}")
+    assert ops_res.status_code == 200
+    ops = ops_res.json()
+    assert any("markdown" in op["id"] or "document" in op["id"] for op in ops)
+
+    # 3. Create document conversion job
+    job_payload = {
+        "file_id": file_id,
+        "operation": "markdown_convert",
+        "parameters": {"format": "html"}
+    }
+    job_res = await client.post("/api/v1/jobs", json=job_payload)
+    assert job_res.status_code == 200
+    job_data = job_res.json()
+    assert job_data["status"] in ["pending", "queued", "running", "completed"]
+
+

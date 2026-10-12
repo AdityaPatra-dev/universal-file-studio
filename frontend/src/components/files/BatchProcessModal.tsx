@@ -130,7 +130,7 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
                   Target Format
                 </label>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {['mp4', 'webm', 'mp3', 'wav', 'webp', 'png', 'jpg', 'pdf', 'zip'].map((fmt) => (
+                  {['mp4', 'webm', 'mp3', 'wav', 'webp', 'png', 'jpg', 'pdf', 'docx', 'csv', 'xlsx', 'html', 'txt', 'md', 'zip'].map((fmt) => (
                     <button
                       key={fmt}
                       onClick={() => setTargetFormat(fmt)}
