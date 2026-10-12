@@ -65,6 +65,38 @@ BUILTIN_PRESETS = [
         "engine": "ghostscript",
         "parameters": {"quality": "ebook"},
         "is_default": True
+    },
+    {
+        "name": "Office Document to PDF",
+        "description": "Convert Word / LibreOffice document to standard PDF",
+        "operation": "document_convert",
+        "engine": "libreoffice",
+        "parameters": {"format": "pdf"},
+        "is_default": True
+    },
+    {
+        "name": "Spreadsheet to CSV",
+        "description": "Extract raw tabular data from Excel/ODS spreadsheet",
+        "operation": "spreadsheet_convert",
+        "engine": "libreoffice",
+        "parameters": {"format": "csv"},
+        "is_default": True
+    },
+    {
+        "name": "Presentation to PDF Slides",
+        "description": "Convert PowerPoint / Impress slides to PDF handout",
+        "operation": "presentation_convert",
+        "engine": "libreoffice",
+        "parameters": {"format": "pdf"},
+        "is_default": True
+    },
+    {
+        "name": "Markdown to Clean HTML",
+        "description": "Compile markdown formatting into semantic HTML document",
+        "operation": "markdown_convert",
+        "engine": "pandoc",
+        "parameters": {"format": "html"},
+        "is_default": True
     }
 ]
 

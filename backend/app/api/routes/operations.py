@@ -112,14 +112,56 @@ async def list_operations() -> List[Dict[str, Any]]:
     if registry.is_installed("libreoffice"):
         ops.append({
             "id": "document_convert",
-            "name": "Convert Document to PDF",
+            "name": "Convert Document",
             "engine": "libreoffice",
             "category": "document",
-            "description": "Convert office documents to standard PDF",
+            "description": "Convert office documents to PDF, DOCX, ODT, TXT, or HTML",
             "parameters": [
-                {"name": "format", "type": "select", "options": ["pdf"], "default": "pdf"}
+                {"name": "format", "type": "select", "options": ["pdf", "docx", "odt", "rtf", "txt", "html"], "default": "pdf"}
             ]
         })
+        ops.append({
+            "id": "spreadsheet_convert",
+            "name": "Convert Spreadsheet",
+            "engine": "libreoffice",
+            "category": "spreadsheet",
+            "description": "Convert spreadsheets to CSV, PDF, XLSX, or ODS",
+            "parameters": [
+                {"name": "format", "type": "select", "options": ["csv", "pdf", "xlsx", "ods"], "default": "csv"}
+            ]
+        })
+        ops.append({
+            "id": "presentation_convert",
+            "name": "Convert Presentation",
+            "engine": "libreoffice",
+            "category": "presentation",
+            "description": "Convert presentation slides to PDF, PPTX, or ODP",
+            "parameters": [
+                {"name": "format", "type": "select", "options": ["pdf", "pptx", "odp"], "default": "pdf"}
+            ]
+        })
+
+    # Text / Markdown operations
+    ops.append({
+        "id": "markdown_convert",
+        "name": "Convert Markdown",
+        "engine": "pandoc",
+        "category": "text",
+        "description": "Convert Markdown document to HTML, PDF, or TXT",
+        "parameters": [
+            {"name": "format", "type": "select", "options": ["html", "pdf", "txt", "docx"], "default": "html"}
+        ]
+    })
+    ops.append({
+        "id": "text_convert",
+        "name": "Convert Text Format",
+        "engine": "pandoc",
+        "category": "text",
+        "description": "Convert text and markup formats",
+        "parameters": [
+            {"name": "format", "type": "select", "options": ["txt", "html", "md"], "default": "txt"}
+        ]
+    })
 
     return ops
 
@@ -132,10 +174,15 @@ async def get_file_operations(file_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="File not found")
 
     all_ops = await list_operations()
-    # Filter operations matching file category or general
-    matching = [
-        op for op in all_ops 
-        if op.get("category") == file_rec.category or op.get("category") == "general"
-    ]
-    return matching
+    cat = file_rec.category
 
+    # Match category or allow cross-document operations
+    matching = []
+    for op in all_ops:
+        op_cat = op.get("category")
+        if op_cat == cat or op_cat == "general":
+            matching.append(op)
+        elif cat in ["document", "text"] and op_cat in ["document", "text"]:
+            matching.append(op)
+
+    return matching

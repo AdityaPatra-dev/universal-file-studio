@@ -41,6 +41,11 @@ class FileDetector:
             "application/vnd.oasis.opendocument.spreadsheet", 
             "text/csv"
         ],
+        "presentation": [
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.oasis.opendocument.presentation"
+        ],
         "data": ["application/json", "application/xml", "text/yaml", "application/toml"],
         "text": ["text/plain", "text/markdown", "text/html"]
     }
@@ -53,6 +58,7 @@ class FileDetector:
         "zip": "archive", "7z": "archive", "tar": "archive", "gz": "archive", "bz2": "archive", "xz": "archive", "rar": "archive",
         "doc": "document", "docx": "document", "odt": "document", "rtf": "document", "epub": "document",
         "xls": "spreadsheet", "xlsx": "spreadsheet", "ods": "spreadsheet", "csv": "spreadsheet",
+        "ppt": "presentation", "pptx": "presentation", "odp": "presentation",
         "json": "data", "xml": "data", "yaml": "data", "yml": "data", "toml": "data",
         "txt": "text", "md": "text", "html": "text"
     }
