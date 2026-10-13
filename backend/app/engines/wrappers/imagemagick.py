@@ -89,5 +89,9 @@ class ImageMagickEngine(BaseEngine):
 
         return last_res
 
+    async def strip_metadata(self, input_path: str, output_path: str) -> ProcessResult:
+        cmd = [self._get_bin(), input_path, "-strip", output_path]
+        return await self.execute(cmd)
+
 imagemagick_engine = ImageMagickEngine()
 

@@ -256,4 +256,13 @@ class FFmpegEngine(BaseEngine):
             ]
         return await self.execute(cmd)
 
+    async def strip_metadata(self, input_path: str, output_path: str) -> ProcessResult:
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-map_metadata", "-1",
+            "-c", "copy",
+            output_path
+        ]
+        return await self.execute(cmd)
+
 ffmpeg_engine = FFmpegEngine()
