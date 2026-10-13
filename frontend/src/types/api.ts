@@ -110,3 +110,23 @@ export interface AppSetting {
   category: string;
   description: string;
 }
+
+export interface FileHashesResponse {
+  file_id: number;
+  filename: string;
+  size_bytes: number;
+  sha256: string;
+  md5: string;
+  sha1: string;
+  sha512: string;
+  crc32: string;
+}
+
+export interface FileMetadataResponse {
+  file_id: number;
+  filename: string;
+  mime_type: string;
+  category: string;
+  metadata: Record<string, any>;
+}
+

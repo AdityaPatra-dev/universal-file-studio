@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   FileVideo, FileAudio, FileImage, FileText, Archive, File, 
   Trash2, Download, Sparkles, CheckSquare, Square, MinusSquare,
-  Layers, Minimize2, FileArchive, X, FileSpreadsheet, Presentation, FileCode
+  Layers, Minimize2, FileArchive, X, FileSpreadsheet, Presentation, FileCode,
+  ShieldCheck
 } from 'lucide-react';
 import { FileRecord } from '../../types/api';
 import { formatBytes, formatDate } from '../../utils/format';
@@ -12,6 +13,7 @@ interface FileListProps {
   onSelectFileForProcess: (file: FileRecord) => void;
   onDeleteFile: (fileId: number) => void;
   onDownloadFile: (fileId: number) => void;
+  onInspectFile?: (file: FileRecord) => void;
   onBatchAction?: (selectedFiles: FileRecord[], mode: 'convert' | 'compress' | 'archive') => void;
   onBatchDelete?: (selectedIds: number[]) => void;
 }
@@ -21,6 +23,7 @@ export const FileList: React.FC<FileListProps> = ({
   onSelectFileForProcess,
   onDeleteFile,
   onDownloadFile,
+  onInspectFile,
   onBatchAction,
   onBatchDelete,
 }) => {
@@ -206,6 +209,15 @@ export const FileList: React.FC<FileListProps> = ({
                           <Sparkles className="h-3 w-3" />
                           <span>Process</span>
                         </button>
+                        {onInspectFile && (
+                          <button
+                            onClick={() => onInspectFile(file)}
+                            className="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-brand-300 transition-colors"
+                            title="Inspect checksums, EXIF, and security metadata"
+                          >
+                            <ShieldCheck className="h-3.5 w-3.5 text-brand-400" />
+                          </button>
+                        )}
                         <button
                           onClick={() => onDownloadFile(file.id)}
                           className="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 transition-colors"

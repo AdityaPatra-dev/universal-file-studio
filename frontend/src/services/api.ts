@@ -1,4 +1,7 @@
-import { FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, Preset, AppSetting } from '../types/api';
+import { 
+  FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, 
+  Preset, AppSetting, FileHashesResponse, FileMetadataResponse 
+} from '../types/api';
 
 const API_BASE = 'http://127.0.0.1:8000/api/v1';
 
@@ -197,5 +200,19 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to update setting');
     return res.json();
+  },
+
+  // Advanced Utilities (Phase 5)
+  async getFileHashes(fileId: number): Promise<FileHashesResponse> {
+    const res = await fetch(`${API_BASE}/files/${fileId}/hash`);
+    if (!res.ok) throw new Error('Failed to compute file hashes');
+    return res.json();
+  },
+
+  async getFileMetadata(fileId: number): Promise<FileMetadataResponse> {
+    const res = await fetch(`${API_BASE}/files/${fileId}/metadata`);
+    if (!res.ok) throw new Error('Failed to extract deep metadata');
+    return res.json();
   }
 };
+

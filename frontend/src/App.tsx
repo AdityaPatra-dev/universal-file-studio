@@ -5,6 +5,7 @@ import { FileDropZone } from './components/files/FileDropZone';
 import { FileList } from './components/files/FileList';
 import { FileProcessModal } from './components/files/FileProcessModal';
 import { BatchProcessModal } from './components/files/BatchProcessModal';
+import { FileInspectorModal } from './components/files/FileInspectorModal';
 import { JobList } from './components/jobs/JobList';
 import { EngineManager } from './components/system/EngineManager';
 import { Diagnostics } from './components/system/Diagnostics';
@@ -24,6 +25,7 @@ export function App() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedFileForProcess, setSelectedFileForProcess] = useState<FileRecord | null>(null);
+  const [inspectingFile, setInspectingFile] = useState<FileRecord | null>(null);
   const [batchModal, setBatchModal] = useState<{
     isOpen: boolean;
     files: FileRecord[];
@@ -124,6 +126,27 @@ export function App() {
     });
   };
 
+  const handleInspectFile = (file: FileRecord) => {
+    setInspectingFile(file);
+  };
+
+  const handleTriggerStripMetadata = async (file: FileRecord) => {
+    try {
+      await api.createJob({
+        file_id: file.id,
+        operation: 'strip_metadata',
+        engine_used: 'imagemagick',
+        parameters: {},
+      });
+      setInspectingFile(null);
+      const updatedJobs = await api.listJobs();
+      setJobs(updatedJobs);
+      setCurrentTab('jobs');
+    } catch (err: any) {
+      alert(`Failed to start metadata sanitization: ${err.message}`);
+    }
+  };
+
   const handleDownloadFile = (id: number) => {
     window.open(api.getFileDownloadUrl(id), '_blank');
   };
@@ -221,6 +244,7 @@ export function App() {
                       onSelectFileForProcess={setSelectedFileForProcess}
                       onDeleteFile={handleDeleteFile}
                       onDownloadFile={handleDownloadFile}
+                      onInspectFile={handleInspectFile}
                     />
                   </div>
                 )}
@@ -238,6 +262,7 @@ export function App() {
                   onSelectFileForProcess={setSelectedFileForProcess}
                   onDeleteFile={handleDeleteFile}
                   onDownloadFile={handleDownloadFile}
+                  onInspectFile={handleInspectFile}
                   onBatchAction={handleBatchAction}
                   onBatchDelete={handleBatchDelete}
                 />
@@ -304,6 +329,15 @@ export function App() {
             setJobs(updatedJobs);
             setCurrentTab('jobs');
           }}
+        />
+      )}
+
+      {/* Advanced File Inspector Modal */}
+      {inspectingFile && (
+        <FileInspectorModal
+          file={inspectingFile}
+          onClose={() => setInspectingFile(null)}
+          onTriggerStripMetadata={handleTriggerStripMetadata}
         />
       )}
     </div>
