@@ -97,6 +97,30 @@ BUILTIN_PRESETS = [
         "engine": "pandoc",
         "parameters": {"format": "html"},
         "is_default": True
+    },
+    {
+        "name": "Privacy Clean (Strip Metadata)",
+        "description": "Sanitize media by removing all EXIF, GPS, camera, and author metadata",
+        "operation": "strip_metadata",
+        "engine": "imagemagick",
+        "parameters": {},
+        "is_default": True
+    },
+    {
+        "name": "Cryptographic Checksums (SHA-256)",
+        "description": "Compute verified cryptographic hashes and integrity manifest",
+        "operation": "file_hash",
+        "engine": "system",
+        "parameters": {"format": "txt"},
+        "is_default": True
+    },
+    {
+        "name": "OCR Extract Text",
+        "description": "Recognize and extract all textual characters into a text file",
+        "operation": "ocr_image",
+        "engine": "tesseract",
+        "parameters": {"language": "eng", "format": "txt"},
+        "is_default": True
     }
 ]
 

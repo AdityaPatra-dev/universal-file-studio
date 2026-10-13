@@ -163,6 +163,55 @@ async def list_operations() -> List[Dict[str, Any]]:
         ]
     })
 
+    # Advanced Utilities (Phase 5)
+    ops.append({
+        "id": "strip_metadata",
+        "name": "Strip Metadata (Privacy Clean)",
+        "engine": "imagemagick",
+        "category": "general",
+        "description": "Remove all EXIF, GPS, camera data, author info, and personal metadata",
+        "parameters": []
+    })
+    ops.append({
+        "id": "file_hash",
+        "name": "Calculate Checksums",
+        "engine": "system",
+        "category": "general",
+        "description": "Compute SHA-256, MD5, SHA-1, SHA-512, and CRC32 cryptographic digests",
+        "parameters": [
+            {"name": "format", "type": "select", "options": ["txt", "json"], "default": "txt"}
+        ]
+    })
+    ops.append({
+        "id": "inspect_metadata",
+        "name": "Inspect Deep Metadata",
+        "engine": "system",
+        "category": "general",
+        "description": "Extract full structural and codec metadata report into JSON",
+        "parameters": []
+    })
+    ops.append({
+        "id": "ocr_image",
+        "name": "OCR Extract Text",
+        "engine": "tesseract",
+        "category": "image",
+        "description": "Extract printed or handwritten text from image using OCR",
+        "parameters": [
+            {"name": "language", "type": "select", "options": ["eng", "fra", "deu", "spa"], "default": "eng"},
+            {"name": "format", "type": "select", "options": ["txt", "pdf"], "default": "txt"}
+        ]
+    })
+    ops.append({
+        "id": "ocr_pdf",
+        "name": "Extract PDF Text (OCR)",
+        "engine": "tesseract",
+        "category": "pdf",
+        "description": "Extract complete text from PDF document",
+        "parameters": [
+            {"name": "language", "type": "select", "options": ["eng", "fra", "deu", "spa"], "default": "eng"}
+        ]
+    })
+
     return ops
 
 @router.get("/file/{file_id}")

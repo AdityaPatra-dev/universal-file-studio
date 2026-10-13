@@ -200,3 +200,42 @@ async def analyze_file(file_id: int, db: AsyncSession = Depends(get_db)):
         available_operations=ops
     )
 
+@router.get("/{file_id}/hash")
+async def get_file_hashes(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Computes streaming SHA-256, MD5, SHA-1, SHA-512, and CRC32 digests."""
+    stmt = select(FileRecord).where(FileRecord.id == file_id)
+    res = await db.execute(stmt)
+    file_rec = res.scalar_one_or_none()
+    if not file_rec:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    from app.processors.hash import hash_processor
+    hashes = await hash_processor.compute_hashes(file_rec.upload_path)
+    return {
+        "file_id": file_rec.id,
+        "filename": file_rec.filename,
+        "size_bytes": file_rec.size_bytes,
+        **hashes
+    }
+
+@router.get("/{file_id}/metadata")
+async def get_file_deep_metadata(file_id: int, db: AsyncSession = Depends(get_db)):
+    """Inspects and returns deep structural, EXIF, and stream metadata."""
+    stmt = select(FileRecord).where(FileRecord.id == file_id)
+    res = await db.execute(stmt)
+    file_rec = res.scalar_one_or_none()
+    if not file_rec:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    from app.processors.metadata import metadata_processor
+    ext = Path(file_rec.upload_path).suffix.lower()
+    deep_meta = await metadata_processor.extract_deep_metadata(file_rec.upload_path, ext)
+    return {
+        "file_id": file_rec.id,
+        "filename": file_rec.filename,
+        "mime_type": file_rec.mime_type,
+        "category": file_rec.category,
+        "metadata": deep_meta
+    }
+
+
