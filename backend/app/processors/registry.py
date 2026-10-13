@@ -7,6 +7,9 @@ from app.processors.image import image_processor
 from app.processors.pdf import pdf_processor
 from app.processors.archive import archive_processor
 from app.processors.document import document_processor
+from app.processors.ocr import ocr_processor
+from app.processors.metadata import metadata_processor
+from app.processors.hash import hash_processor
 from app.engines.wrappers.base import ProcessResult
 
 class ProcessorRegistry:
@@ -69,8 +72,8 @@ class ProcessorRegistry:
             "compress_image": image_processor,
             "image_grayscale": image_processor,
             "grayscale_image": image_processor,
-            "image_strip_metadata": image_processor,
-            "strip_metadata": image_processor,
+            "image_strip_metadata": metadata_processor,
+            "strip_metadata": metadata_processor,
 
             # PDF
             "pdf_to_images": pdf_processor,
@@ -103,6 +106,23 @@ class ProcessorRegistry:
             "convert_markdown": document_processor,
             "text_convert": document_processor,
             "convert_text": document_processor,
+
+            # Phase 5: Advanced (OCR, Metadata, Hashing)
+            "ocr_image": ocr_processor,
+            "ocr_pdf": ocr_processor,
+            "extract_text_ocr": ocr_processor,
+
+            "video_strip_metadata": metadata_processor,
+            "audio_strip_metadata": metadata_processor,
+            "pdf_strip_metadata": metadata_processor,
+            "inspect_metadata": metadata_processor,
+            "metadata_inspect": metadata_processor,
+            "extract_metadata": metadata_processor,
+
+            "file_hash": hash_processor,
+            "hash_file": hash_processor,
+            "calculate_checksum": hash_processor,
+            "verify_checksum": hash_processor,
         }
 
     async def dispatch(
