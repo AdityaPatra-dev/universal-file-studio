@@ -16,7 +16,8 @@ from app.api.routes import (
     operations_router,
     system_router,
     batch_router,
-    presets_router
+    presets_router,
+    pipelines_router
 )
 
 @asynccontextmanager
@@ -61,6 +62,7 @@ app.include_router(operations_router, prefix=settings.API_V1_STR)
 app.include_router(system_router, prefix=settings.API_V1_STR)
 app.include_router(batch_router, prefix=settings.API_V1_STR)
 app.include_router(presets_router, prefix=settings.API_V1_STR)
+app.include_router(pipelines_router, prefix=settings.API_V1_STR)
 
 # API Info
 @app.get("/api/info")
