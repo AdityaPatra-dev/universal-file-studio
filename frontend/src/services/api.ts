@@ -1,6 +1,7 @@
 import { 
   FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, 
-  Preset, AppSetting, FileHashesResponse, FileMetadataResponse 
+  Preset, AppSetting, FileHashesResponse, FileMetadataResponse,
+  Pipeline, PipelineCreatePayload, PipelineUpdatePayload
 } from '../types/api';
 
 const API_BASE = 'http://127.0.0.1:8000/api/v1';
@@ -212,6 +213,57 @@ export const api = {
   async getFileMetadata(fileId: number): Promise<FileMetadataResponse> {
     const res = await fetch(`${API_BASE}/files/${fileId}/metadata`);
     if (!res.ok) throw new Error('Failed to extract deep metadata');
+    return res.json();
+  },
+
+  // Pipelines (Phase 6)
+  async listPipelines(): Promise<Pipeline[]> {
+    const res = await fetch(`${API_BASE}/pipelines`);
+    if (!res.ok) throw new Error('Failed to fetch pipelines');
+    return res.json();
+  },
+
+  async createPipeline(payload: PipelineCreatePayload): Promise<Pipeline> {
+    const res = await fetch(`${API_BASE}/pipelines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to create pipeline');
+    return res.json();
+  },
+
+  async getPipeline(id: number): Promise<Pipeline> {
+    const res = await fetch(`${API_BASE}/pipelines/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch pipeline');
+    return res.json();
+  },
+
+  async updatePipeline(id: number, payload: PipelineUpdatePayload): Promise<Pipeline> {
+    const res = await fetch(`${API_BASE}/pipelines/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to update pipeline');
+    return res.json();
+  },
+
+  async deletePipeline(id: number): Promise<any> {
+    const res = await fetch(`${API_BASE}/pipelines/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete pipeline');
+    return res.json();
+  },
+
+  async executePipeline(id: number, fileId: number, parameters: Record<string, any> = {}): Promise<Job> {
+    const res = await fetch(`${API_BASE}/pipelines/${id}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId, parameters }),
+    });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
 };

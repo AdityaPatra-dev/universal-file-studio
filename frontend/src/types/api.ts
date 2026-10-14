@@ -130,3 +130,31 @@ export interface FileMetadataResponse {
   metadata: Record<string, any>;
 }
 
+export interface PipelineStep {
+  name?: string;
+  operation: string;
+  engine?: string;
+  parameters: Record<string, any>;
+}
+
+export interface Pipeline {
+  id: number;
+  name: string;
+  description: string;
+  steps: PipelineStep[];
+  created_at: string;
+}
+
+export interface PipelineCreatePayload {
+  name: string;
+  description?: string;
+  steps: PipelineStep[];
+}
+
+export interface PipelineUpdatePayload {
+  name?: string;
+  description?: string;
+  steps?: PipelineStep[];
+}
+
+

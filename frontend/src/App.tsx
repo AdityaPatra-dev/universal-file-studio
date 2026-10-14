@@ -7,6 +7,7 @@ import { FileProcessModal } from './components/files/FileProcessModal';
 import { BatchProcessModal } from './components/files/BatchProcessModal';
 import { FileInspectorModal } from './components/files/FileInspectorModal';
 import { JobList } from './components/jobs/JobList';
+import { PipelineEditor } from './components/pipeline/PipelineEditor';
 import { EngineManager } from './components/system/EngineManager';
 import { Diagnostics } from './components/system/Diagnostics';
 import { SettingsView } from './components/system/SettingsView';
@@ -267,6 +268,17 @@ export function App() {
                   onBatchDelete={handleBatchDelete}
                 />
               </div>
+            )}
+
+            {currentTab === 'pipelines' && (
+              <PipelineEditor
+                files={files}
+                onJobStarted={async () => {
+                  const updatedJobs = await api.listJobs();
+                  setJobs(updatedJobs);
+                  setCurrentTab('jobs');
+                }}
+              />
             )}
 
             {currentTab === 'jobs' && (

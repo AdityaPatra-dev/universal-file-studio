@@ -1,8 +1,8 @@
 import React from 'react';
-import { UploadCloud, Files, ListOrdered, Wrench, Activity, Settings, CheckCircle2, XCircle } from 'lucide-react';
+import { UploadCloud, Files, ListOrdered, Wrench, Activity, Settings, GitMerge, CheckCircle2, XCircle } from 'lucide-react';
 import { EngineInfo } from '../../types/api';
 
-export type TabType = 'upload' | 'files' | 'jobs' | 'engines' | 'diagnostics' | 'settings';
+export type TabType = 'upload' | 'files' | 'pipelines' | 'jobs' | 'engines' | 'diagnostics' | 'settings';
 
 interface SidebarProps {
   currentTab: TabType;
@@ -24,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     { id: 'upload', label: 'Upload & Studio', icon: UploadCloud },
     { id: 'files', label: 'File Library', icon: Files, badge: filesCount > 0 ? filesCount : undefined },
+    { id: 'pipelines', label: 'Pipelines Studio', icon: GitMerge },
     { id: 'jobs', label: 'Job Queue & History', icon: ListOrdered, badge: jobsCount > 0 ? jobsCount : undefined },
     { 
       id: 'engines', 
