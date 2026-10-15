@@ -5,6 +5,8 @@ from app.api.routes.system import router as system_router
 from app.api.routes.batch import router as batch_router
 from app.api.routes.presets import router as presets_router
 from app.api.routes.pipelines import router as pipelines_router
+from app.api.routes.websocket import router as websocket_router
+from app.api.routes.developer import router as developer_router
 
 __all__ = [
     "files_router",
@@ -14,4 +16,6 @@ __all__ = [
     "batch_router",
     "presets_router",
     "pipelines_router",
+    "websocket_router",
+    "developer_router",
 ]

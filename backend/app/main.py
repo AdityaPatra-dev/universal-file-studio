@@ -17,8 +17,49 @@ from app.api.routes import (
     system_router,
     batch_router,
     presets_router,
-    pipelines_router
+    pipelines_router,
+    websocket_router,
+    developer_router
 )
+
+tags_metadata = [
+    {
+        "name": "files",
+        "description": "File upload, inspection, checksum calculation, and metadata sanitation.",
+    },
+    {
+        "name": "jobs",
+        "description": "Asynchronous background task lifecycle, job queue, cancellations, and logs.",
+    },
+    {
+        "name": "operations",
+        "description": "Available media and document processing profiles and dynamic parameter specs.",
+    },
+    {
+        "name": "batch",
+        "description": "Multi-file batch conversions, bulk compression, and unified ZIP archives.",
+    },
+    {
+        "name": "presets",
+        "description": "Configurable one-click operation configurations.",
+    },
+    {
+        "name": "pipelines",
+        "description": "Sequential multi-step workflow chaining and execution.",
+    },
+    {
+        "name": "websocket",
+        "description": "Real-time bi-directional progress streaming and job telemetry.",
+    },
+    {
+        "name": "developer",
+        "description": "Developer diagnostics, OpenAPI specs, and system telemetry.",
+    },
+    {
+        "name": "system",
+        "description": "Engine detection, system diagnostics, settings, and hardware telemetry.",
+    },
+]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -42,7 +83,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="Universal Local File Processing and Conversion Studio",
+    description="""
+# Universal File Studio (UFS) API
+**Local-First, Privacy-Focused File Processing Engine**
+
+- 100% localhost execution — files never leave your machine
+- Powered by FFmpeg, ImageMagick, 7-Zip, Poppler, LibreOffice, and Tesseract
+- Native asynchronous job queue with WebSocket real-time progress streaming
+- Standalone CLI interface (`ufs`)
+""",
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan
 )
 
@@ -56,6 +109,8 @@ app.add_middleware(
 )
 
 # Mount API Routers
+app.include_router(websocket_router)
+app.include_router(websocket_router, prefix=settings.API_V1_STR)
 app.include_router(files_router, prefix=settings.API_V1_STR)
 app.include_router(jobs_router, prefix=settings.API_V1_STR)
 app.include_router(operations_router, prefix=settings.API_V1_STR)
@@ -63,6 +118,7 @@ app.include_router(system_router, prefix=settings.API_V1_STR)
 app.include_router(batch_router, prefix=settings.API_V1_STR)
 app.include_router(presets_router, prefix=settings.API_V1_STR)
 app.include_router(pipelines_router, prefix=settings.API_V1_STR)
+app.include_router(developer_router, prefix=settings.API_V1_STR)
 
 # API Info
 @app.get("/api/info")
