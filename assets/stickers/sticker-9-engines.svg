@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="240" height="180">
+    <defs>
+        <linearGradient id="stk-eng-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#a855f7"/>
+            <stop offset="100%" stop-color="#3b0764"/>
+        </linearGradient>
+        <style>
+            @keyframes pulseEng {
+                0%, 100% { transform: scale(1) rotate(1deg); }
+                50% { transform: scale(1.04) rotate(-1deg); }
+            }
+            .stk-eng { transform-origin: center; animation: pulseEng 4s ease-in-out infinite; }
+        </style>
+    </defs>
+    <g class="stk-eng">
+        <polygon points="120,6 210,38 210,140 120,174 30,140 30,38" fill="#ffffff" filter="drop-shadow(0 8px 16px rgba(0,0,0,0.4))"/>
+        <polygon points="120,12 202,42 202,134 120,166 38,134 38,42" fill="url(#stk-eng-grad)"/>
+        <!-- Specular shine -->
+        <polygon points="120,16 198,44 120,90 42,44" fill="#ffffff" opacity="0.2"/>
+        <!-- Lightning bolt -->
+        <polygon points="124,48 102,82 118,82 114,106 138,72 122,72" fill="#fbbf24"/>
+        <text x="120" y="124" fill="#ffffff" font-size="12" font-weight="900" font-family="system-ui, sans-serif" text-anchor="middle">9 HYPER-ENGINES</text>
+        <text x="120" y="140" fill="#e9d5ff" font-size="9" font-weight="700" font-family="system-ui, sans-serif" text-anchor="middle">FFMPEG • PANDOC • GS</text>
+        <text x="120" y="152" fill="#c084fc" font-size="8" font-family="monospace" text-anchor="middle">NATIVE EXECUTION</text>
+    </g>
+</svg>

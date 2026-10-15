@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1050 260" width="100%" height="100%">
+    <defs>
+        <linearGradient id="eng-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#070a18"/>
+            <stop offset="100%" stop-color="#0b1126"/>
+        </linearGradient>
+        <filter id="eng-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="6"/>
+        </filter>
+        <style>
+            @keyframes bob {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-6px); }
+            }
+            .cube-group { transform-origin: center; animation: bob 4s ease-in-out infinite; }
+            .cube-group:nth-child(2) { animation-delay: 0.4s; }
+            .cube-group:nth-child(3) { animation-delay: 0.8s; }
+            .cube-group:nth-child(4) { animation-delay: 1.2s; }
+            .cube-group:nth-child(5) { animation-delay: 1.6s; }
+            .cube-group:nth-child(6) { animation-delay: 2.0s; }
+            .cube-group:nth-child(7) { animation-delay: 2.4s; }
+            .cube-group:nth-child(8) { animation-delay: 2.8s; }
+            .cube-group:nth-child(9) { animation-delay: 3.2s; }
+            .eng-title { font-family: system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 12px; }
+            .eng-sub { font-family: ui-monospace, monospace; font-size: 9.5px; fill: #94a3b8; }
+        </style>
+    </defs>
+
+    <rect width="1050" height="260" rx="14" fill="url(#eng-bg)" stroke="#1e293b" stroke-width="1.5"/>
+
+    <!-- Section Header -->
+    <text x="35" y="36" fill="#f8fafc" font-size="16" font-family="system-ui, sans-serif" font-weight="700">9 Production Engine Powerhouse</text>
+    <text x="35" y="52" fill="#64748b" font-size="11" font-family="ui-monospace, monospace">ALL ENGINES NATIVELY DETECTED &amp; EXECUTED LOCALLY</text>
+
+    <!-- Status Active Badge -->
+    <g transform="translate(860, 24)">
+        <rect width="150" height="26" rx="6" fill="#0f172a" stroke="#10b981" stroke-width="1"/>
+        <circle cx="876" cy="37" r="4" fill="#10b981"/>
+        <text x="890" y="41" fill="#10b981" font-size="11" font-family="system-ui, sans-serif" font-weight="600">9 / 9 ACTIVE</text>
+    </g>
+
+    <!-- 9 3D Isometric Engine Cubes -->
+    <g transform="translate(60, 140)">
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="0" cy="32.5" rx="29.9" ry="9.1" fill="#0369a1" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 0.0,-26.0 L 22.5,-13.0 L 0.0,0.0 L -22.5,-13.0 Z" fill="#38bdf8" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L -22.5,-13.0 L -22.5,13.0 L 0.0,26.0 Z" fill="#0369a1" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 0.0,0.0 L 0.0,26.0 L 22.5,13.0 L 22.5,-13.0 Z" fill="#0284c7" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="0" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="0" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">FFmpeg</text>
+            <text x="0" y="56" text-anchor="middle" class="eng-sub">Video & Audio</text>
+            <text x="0" y="70" text-anchor="middle" fill="#38bdf8" font-size="9px" font-family="monospace">v6 / v7</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="105" cy="32.5" rx="29.9" ry="9.1" fill="#047857" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 105.0,-26.0 L 127.5,-13.0 L 105.0,0.0 L 82.5,-13.0 Z" fill="#34d399" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 105.0,0.0 L 82.5,-13.0 L 82.5,13.0 L 105.0,26.0 Z" fill="#047857" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 105.0,0.0 L 105.0,26.0 L 127.5,13.0 L 127.5,-13.0 Z" fill="#059669" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="105" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="105" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">ImageMagick</text>
+            <text x="105" y="56" text-anchor="middle" class="eng-sub">Raster / Vector</text>
+            <text x="105" y="70" text-anchor="middle" fill="#34d399" font-size="9px" font-family="monospace">v7.1</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="210" cy="32.5" rx="29.9" ry="9.1" fill="#4338ca" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 210.0,-26.0 L 232.5,-13.0 L 210.0,0.0 L 187.5,-13.0 Z" fill="#818cf8" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 210.0,0.0 L 187.5,-13.0 L 187.5,13.0 L 210.0,26.0 Z" fill="#4338ca" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 210.0,0.0 L 210.0,26.0 L 232.5,13.0 L 232.5,-13.0 Z" fill="#4f46e5" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="210" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="210" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">7-Zip</text>
+            <text x="210" y="56" text-anchor="middle" class="eng-sub">Archive Engine</text>
+            <text x="210" y="70" text-anchor="middle" fill="#818cf8" font-size="9px" font-family="monospace">v24+</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="315" cy="32.5" rx="29.9" ry="9.1" fill="#be123c" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 315.0,-26.0 L 337.5,-13.0 L 315.0,0.0 L 292.5,-13.0 Z" fill="#fb7185" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 315.0,0.0 L 292.5,-13.0 L 292.5,13.0 L 315.0,26.0 Z" fill="#be123c" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 315.0,0.0 L 315.0,26.0 L 337.5,13.0 L 337.5,-13.0 Z" fill="#e11d48" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="315" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="315" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">Poppler</text>
+            <text x="315" y="56" text-anchor="middle" class="eng-sub">PDF Renderer</text>
+            <text x="315" y="70" text-anchor="middle" fill="#fb7185" font-size="9px" font-family="monospace">v24+</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="420" cy="32.5" rx="29.9" ry="9.1" fill="#9f1239" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 420.0,-26.0 L 442.5,-13.0 L 420.0,0.0 L 397.5,-13.0 Z" fill="#f43f5e" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 420.0,0.0 L 397.5,-13.0 L 397.5,13.0 L 420.0,26.0 Z" fill="#9f1239" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 420.0,0.0 L 420.0,26.0 L 442.5,13.0 L 442.5,-13.0 Z" fill="#be123c" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="420" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="420" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">Ghostscript</text>
+            <text x="420" y="56" text-anchor="middle" class="eng-sub">Postscript & PDF</text>
+            <text x="420" y="70" text-anchor="middle" fill="#f43f5e" font-size="9px" font-family="monospace">v10+</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="525" cy="32.5" rx="29.9" ry="9.1" fill="#6b21a8" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 525.0,-26.0 L 547.5,-13.0 L 525.0,0.0 L 502.5,-13.0 Z" fill="#a855f7" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 525.0,0.0 L 502.5,-13.0 L 502.5,13.0 L 525.0,26.0 Z" fill="#6b21a8" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 525.0,0.0 L 525.0,26.0 L 547.5,13.0 L 547.5,-13.0 Z" fill="#7e22ce" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="525" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="525" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">LibreOffice</text>
+            <text x="525" y="56" text-anchor="middle" class="eng-sub">Office Documents</text>
+            <text x="525" y="70" text-anchor="middle" fill="#a855f7" font-size="9px" font-family="monospace">v24+</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="630" cy="32.5" rx="29.9" ry="9.1" fill="#0e7490" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 630.0,-26.0 L 652.5,-13.0 L 630.0,0.0 L 607.5,-13.0 Z" fill="#06b6d4" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 630.0,0.0 L 607.5,-13.0 L 607.5,13.0 L 630.0,26.0 Z" fill="#0e7490" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 630.0,0.0 L 630.0,26.0 L 652.5,13.0 L 652.5,-13.0 Z" fill="#0891b2" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="630" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="630" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">Pandoc</text>
+            <text x="630" y="56" text-anchor="middle" class="eng-sub">Universal Markup</text>
+            <text x="630" y="70" text-anchor="middle" fill="#06b6d4" font-size="9px" font-family="monospace">v3.12+</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="735" cy="32.5" rx="29.9" ry="9.1" fill="#9d174d" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 735.0,-26.0 L 757.5,-13.0 L 735.0,0.0 L 712.5,-13.0 Z" fill="#ec4899" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 735.0,0.0 L 712.5,-13.0 L 712.5,13.0 L 735.0,26.0 Z" fill="#9d174d" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 735.0,0.0 L 735.0,26.0 L 757.5,13.0 L 757.5,-13.0 Z" fill="#be185d" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="735" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="735" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">QPDF</text>
+            <text x="735" y="56" text-anchor="middle" class="eng-sub">PDF Encryption</text>
+            <text x="735" y="70" text-anchor="middle" fill="#ec4899" font-size="9px" font-family="monospace">v12.4+</text>
+        </g>
+        <g class="cube-group">
+            
+    <g opacity="1.0">
+        <ellipse cx="840" cy="32.5" rx="29.9" ry="9.1" fill="#b45309" opacity="0.3" filter="url(#glow-blur)"/>
+        <path d="M 840.0,-26.0 L 862.5,-13.0 L 840.0,0.0 L 817.5,-13.0 Z" fill="#f59e0b" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 840.0,0.0 L 817.5,-13.0 L 817.5,13.0 L 840.0,26.0 Z" fill="#b45309" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M 840.0,0.0 L 840.0,26.0 L 862.5,13.0 L 862.5,-13.0 Z" fill="#d97706" stroke="#ffffff" stroke-width="0.8" stroke-linejoin="round"/>
+    </g>
+            <!-- Status Dot -->
+            <circle cx="840" cy="-34" r="3.5" fill="#10b981"/>
+            <!-- Engine Label -->
+            <text x="840" y="42" fill="#ffffff" text-anchor="middle" class="eng-title">Tesseract</text>
+            <text x="840" y="56" text-anchor="middle" class="eng-sub">Neural OCR</text>
+            <text x="840" y="70" text-anchor="middle" fill="#f59e0b" font-size="9px" font-family="monospace">v5.5+</text>
+        </g>
+    </g>
+</svg>

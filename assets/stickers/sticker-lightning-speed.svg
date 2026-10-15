@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="240" height="180">
+    <defs>
+        <linearGradient id="stk-ws-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#10b981"/>
+            <stop offset="100%" stop-color="#064e3b"/>
+        </linearGradient>
+        <style>
+            @keyframes pulseWs {
+                0%, 100% { transform: rotate(-2deg); }
+                50% { transform: rotate(1deg) scale(1.03); }
+            }
+            .stk-ws { transform-origin: center; animation: pulseWs 4.5s ease-in-out infinite; }
+        </style>
+    </defs>
+    <g class="stk-ws">
+        <circle cx="120" cy="90" r="82" fill="#ffffff" filter="drop-shadow(0 8px 16px rgba(0,0,0,0.4))"/>
+        <circle cx="120" cy="90" r="76" fill="url(#stk-ws-grad)"/>
+        <!-- Shine reflection -->
+        <path d="M 46,80 A 74,74 0 0,1 194,80 Z" fill="#ffffff" opacity="0.18"/>
+        <!-- Radar wave icon -->
+        <circle cx="120" cy="74" r="8" fill="#ffffff"/>
+        <path d="M 102,74 A 18,18 0 0,1 138,74" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 92,74 A 28,28 0 0,1 148,74" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+        <text x="120" y="116" fill="#ffffff" font-size="11" font-weight="900" font-family="system-ui, sans-serif" text-anchor="middle">LIVE WEBSOCKETS</text>
+        <text x="120" y="132" fill="#a7f3d0" font-size="9" font-weight="700" font-family="system-ui, sans-serif" text-anchor="middle">ZERO-POLLING EVENT BUS</text>
+        <text x="120" y="146" fill="#6ee7b7" font-size="8" font-family="monospace" text-anchor="middle">100% REACTIVE PUSH</text>
+    </g>
+</svg>

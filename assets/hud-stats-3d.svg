@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 160" width="100%" height="100%">
+    <defs>
+        <linearGradient id="hud-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#050814"/>
+            <stop offset="100%" stop-color="#0a1026"/>
+        </linearGradient>
+        <style>
+            .hud-card { fill: #0f172a; stroke: #1e293b; stroke-width: 1.2; rx: 10px; }
+            .hud-num { font-family: ui-monospace, monospace; font-size: 28px; font-weight: 800; }
+            .hud-lbl { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #94a3b8; letter-spacing: 0.05em; }
+        </style>
+    </defs>
+    <rect width="1000" height="160" rx="14" fill="url(#hud-bg)" stroke="#1e293b" stroke-width="1.5"/>
+
+    <g transform="translate(30, 24)">
+        <!-- Card 1: Cloud Ping -->
+        <g transform="translate(0, 0)">
+            <rect width="215" height="112" rx="10" fill="#0c1328" stroke="#38bdf8" stroke-width="1" opacity="0.9"/>
+            <text x="24" y="52" fill="#38bdf8" class="hud-num">0 ms</text>
+            <text x="24" y="78" class="hud-lbl">CLOUD LATENCY</text>
+            <text x="24" y="96" fill="#64748b" font-size="10" font-family="system-ui, sans-serif">100% On-Device Processing</text>
+        </g>
+        <!-- Card 2: Engines Online -->
+        <g transform="translate(242, 0)">
+            <rect width="215" height="112" rx="10" fill="#0c1328" stroke="#10b981" stroke-width="1" opacity="0.9"/>
+            <text x="24" y="52" fill="#10b981" class="hud-num">9 / 9</text>
+            <text x="24" y="78" class="hud-lbl">CLI ENGINES ACTIVE</text>
+            <text x="24" y="96" fill="#64748b" font-size="10" font-family="system-ui, sans-serif">FFmpeg, Pandoc, OCR &amp; LO</text>
+        </g>
+        <!-- Card 3: Formats Supported -->
+        <g transform="translate(484, 0)">
+            <rect width="215" height="112" rx="10" fill="#0c1328" stroke="#a855f7" stroke-width="1" opacity="0.9"/>
+            <text x="24" y="52" fill="#c084fc" class="hud-num">40+</text>
+            <text x="24" y="78" class="hud-lbl">FORMAT COMPATIBILITY</text>
+            <text x="24" y="96" fill="#64748b" font-size="10" font-family="system-ui, sans-serif">Video, Audio, Docs, Vector, Zip</text>
+        </g>
+        <!-- Card 4: Data Leak Risk -->
+        <g transform="translate(726, 0)">
+            <rect width="215" height="112" rx="10" fill="#0c1328" stroke="#f59e0b" stroke-width="1" opacity="0.9"/>
+            <text x="24" y="52" fill="#fbbf24" class="hud-num">0.00%</text>
+            <text x="24" y="78" class="hud-lbl">EXTERNAL DATA LEAK</text>
+            <text x="24" y="96" fill="#64748b" font-size="10" font-family="system-ui, sans-serif">Strict Path Traversal Guards</text>
+        </g>
+    </g>
+</svg>
