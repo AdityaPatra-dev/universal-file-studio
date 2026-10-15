@@ -35,7 +35,8 @@ class BaseEngine(ABC):
         timeout: Optional[int] = None
     ) -> ProcessResult:
         if not self.is_installed():
-            raise RuntimeError(
+            from app.exceptions import EngineNotInstalledError
+            raise EngineNotInstalledError(
                 f"Processing engine '{self.name}' is not installed on this system. "
                 f"Please install it using your system package manager."
             )
@@ -69,7 +70,8 @@ class BaseEngine(ABC):
                 process.kill()
             except Exception:
                 pass
-            raise TimeoutError(
+            from app.exceptions import SubprocessTimeoutError
+            raise SubprocessTimeoutError(
                 f"Engine '{self.name}' operation timed out after {actual_timeout} seconds."
             )
         except Exception as e:

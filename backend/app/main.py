@@ -1,13 +1,14 @@
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.config import settings, PROJECT_ROOT
 from app.database import init_db
+from app.exceptions import UFSBaseException
 from app.engines.manager import EngineManager
 from app.jobs.manager import job_manager
 from app.api.routes import (
@@ -107,6 +108,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Exception Handler for Standard Error Specification (Section 26)
+@app.exception_handler(UFSBaseException)
+async def ufs_exception_handler(request: Request, exc: UFSBaseException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.error_code, "message": exc.message}
+    )
 
 # Mount API Routers
 app.include_router(websocket_router)

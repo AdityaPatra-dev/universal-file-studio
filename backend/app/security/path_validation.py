@@ -54,7 +54,7 @@ def sanitize_filename(filename: str) -> str:
 def validate_safe_path(target_path: Union[str, Path], allowed_root: Union[str, Path]) -> Path:
     """
     Validates that target_path strictly resolves within allowed_root.
-    Raises ValueError if path traversal is detected.
+    Raises PathTraversalError if path traversal is detected.
     """
     target = Path(target_path).resolve()
     root = Path(allowed_root).resolve()
@@ -62,7 +62,8 @@ def validate_safe_path(target_path: Union[str, Path], allowed_root: Union[str, P
     try:
         target.relative_to(root)
     except ValueError:
-        raise ValueError(f"Path traversal detected! Path '{target}' is outside allowed root '{root}'.")
+        from app.exceptions import PathTraversalError
+        raise PathTraversalError(f"Path traversal detected! Path '{target}' is outside allowed root '{root}'.")
         
     return target
 
