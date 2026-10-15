@@ -26,16 +26,20 @@ async def test_engine_installation_checks():
     assert poppler_engine.is_installed() is True
     assert ghostscript_engine.is_installed() is True
     assert libreoffice_engine.is_installed() is True
-
-    # Engines not installed on host
-    assert pandoc_engine.is_installed() is False
-    assert tesseract_engine.is_installed() is False
+    assert pandoc_engine.is_installed() is True
+    assert tesseract_engine.is_installed() is True
 
 @pytest.mark.anyio
 async def test_uninstalled_engine_raises_clean_error():
     # Attempting to execute an uninstalled engine must fail gracefully
+    from app.engines.wrappers.base import BaseEngine
+    class MissingEngine(BaseEngine):
+        name = "mock_uninstalled_tool"
+
+    missing = MissingEngine()
+    assert missing.is_installed() is False
     with pytest.raises(RuntimeError) as exc_info:
-        await pandoc_engine.execute(["pandoc", "--version"])
+        await missing.execute(["mock_uninstalled_tool"])
     assert "not installed" in str(exc_info.value)
 
 @pytest.mark.anyio

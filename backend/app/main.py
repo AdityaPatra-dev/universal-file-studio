@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -147,6 +147,8 @@ if frontend_dist.exists():
     
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        if full_path.startswith("api") or full_path.startswith("ws"):
+            raise HTTPException(status_code=404, detail=f"API route not found: /{full_path}")
         file_candidate = frontend_dist / full_path
         if file_candidate.is_file():
             return FileResponse(file_candidate)

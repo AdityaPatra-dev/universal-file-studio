@@ -51,6 +51,7 @@ BUILTIN_PIPELINES = [
 ]
 
 @router.get("", response_model=List[PipelineResponse])
+@router.get("/", response_model=List[PipelineResponse])
 async def list_pipelines(db: AsyncSession = Depends(get_db)):
     stmt = select(Pipeline).order_by(Pipeline.id)
     res = await db.execute(stmt)
@@ -67,6 +68,7 @@ async def list_pipelines(db: AsyncSession = Depends(get_db)):
     return pipelines
 
 @router.post("", response_model=PipelineResponse)
+@router.post("/", response_model=PipelineResponse)
 async def create_pipeline(payload: PipelineCreate, db: AsyncSession = Depends(get_db)):
     p = Pipeline(
         name=payload.name,

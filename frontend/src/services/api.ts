@@ -5,7 +5,35 @@ import {
   DeveloperInfo
 } from '../types/api';
 
-const API_BASE = 'http://127.0.0.1:8000/api/v1';
+const getApiBase = (): string => {
+  if (typeof window !== 'undefined' && window.location.origin) {
+    if (window.location.port !== '5173') {
+      return `${window.location.origin}/api/v1`;
+    }
+  }
+  return 'http://127.0.0.1:8000/api/v1';
+};
+
+const API_BASE = getApiBase();
+
+async function parseResponse<T = any>(res: Response, fallbackErrMsg = 'Request failed'): Promise<T> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text);
+    if (!res.ok) {
+      throw new Error(data.message || data.detail || fallbackErrMsg);
+    }
+    return data;
+  } catch (err: any) {
+    if (!res.ok) {
+      if (text.startsWith('<!doctype') || text.startsWith('<html')) {
+        throw new Error(`${fallbackErrMsg}: Server returned HTML (${res.status}). Make sure the UFS backend is running.`);
+      }
+      throw new Error(`${fallbackErrMsg}: ${text.slice(0, 150)}`);
+    }
+    throw new Error(`Unexpected non-JSON response from server: ${text.slice(0, 100)}`);
+  }
+}
 
 export const api = {
   // Files
@@ -220,8 +248,7 @@ export const api = {
   // Pipelines (Phase 6)
   async listPipelines(): Promise<Pipeline[]> {
     const res = await fetch(`${API_BASE}/pipelines`);
-    if (!res.ok) throw new Error('Failed to fetch pipelines');
-    return res.json();
+    return parseResponse<Pipeline[]>(res, 'Failed to fetch pipelines');
   },
 
   async createPipeline(payload: PipelineCreatePayload): Promise<Pipeline> {
@@ -230,14 +257,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('Failed to create pipeline');
-    return res.json();
+    return parseResponse<Pipeline>(res, 'Failed to create pipeline');
   },
 
   async getPipeline(id: number): Promise<Pipeline> {
     const res = await fetch(`${API_BASE}/pipelines/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch pipeline');
-    return res.json();
+    return parseResponse<Pipeline>(res, 'Failed to fetch pipeline');
   },
 
   async updatePipeline(id: number, payload: PipelineUpdatePayload): Promise<Pipeline> {
@@ -246,16 +271,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('Failed to update pipeline');
-    return res.json();
+    return parseResponse<Pipeline>(res, 'Failed to update pipeline');
   },
 
   async deletePipeline(id: number): Promise<any> {
     const res = await fetch(`${API_BASE}/pipelines/${id}`, {
       method: 'DELETE',
     });
-    if (!res.ok) throw new Error('Failed to delete pipeline');
-    return res.json();
+    return parseResponse(res, 'Failed to delete pipeline');
   },
 
   async executePipeline(id: number, fileId: number, parameters: Record<string, any> = {}): Promise<Job> {
@@ -264,8 +287,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_id: fileId, parameters }),
     });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    return parseResponse<Job>(res, 'Failed to execute pipeline');
   },
 
   // Developer & Documentation
