@@ -1,7 +1,8 @@
 import { 
   FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, 
   Preset, AppSetting, FileHashesResponse, FileMetadataResponse,
-  Pipeline, PipelineCreatePayload, PipelineUpdatePayload
+  Pipeline, PipelineCreatePayload, PipelineUpdatePayload,
+  DeveloperInfo
 } from '../types/api';
 
 const API_BASE = 'http://127.0.0.1:8000/api/v1';
@@ -264,6 +265,27 @@ export const api = {
       body: JSON.stringify({ file_id: fileId, parameters }),
     });
     if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  // Developer & Documentation
+  async getDeveloperInfo(): Promise<DeveloperInfo> {
+    const res = await fetch(`${API_BASE}/developer/info`);
+    if (!res.ok) throw new Error('Failed to fetch developer diagnostics');
+    return res.json();
+  },
+
+  async triggerTestEvent(eventType = 'ping', message = 'Test broadcast'): Promise<any> {
+    const res = await fetch(`${API_BASE}/developer/test-event?event_type=${encodeURIComponent(eventType)}&message=${encodeURIComponent(message)}`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to trigger test event');
+    return res.json();
+  },
+
+  async getOpenApiSchema(): Promise<any> {
+    const res = await fetch(`${API_BASE}/developer/openapi.json`);
+    if (!res.ok) throw new Error('Failed to fetch OpenAPI schema');
     return res.json();
   }
 };

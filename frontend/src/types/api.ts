@@ -157,4 +157,44 @@ export interface PipelineUpdatePayload {
   steps?: PipelineStep[];
 }
 
+export interface DeveloperInfo {
+  project: string;
+  version: string;
+  environment: {
+    python_version: string;
+    os: string;
+    host: string;
+    port: number;
+    api_prefix: string;
+  };
+  docs: {
+    swagger_ui: string;
+    redoc: string;
+    openapi_json: string;
+  };
+  websocket: {
+    stream_endpoint: string;
+    scoped_endpoint: string;
+    supported_events: string[];
+  };
+  engines: {
+    total_registered: number;
+    installed_count: number;
+    installed: string[];
+  };
+  cli: {
+    binary: string;
+    module: string;
+    commands: string[];
+  };
+}
+
+export interface WebSocketEventPacket {
+  event: string;
+  timestamp?: string | number;
+  payload?: any;
+  [key: string]: any;
+}
+
+
 

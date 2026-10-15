@@ -1,8 +1,8 @@
 import React from 'react';
-import { UploadCloud, Files, ListOrdered, Wrench, Activity, Settings, GitMerge, CheckCircle2, XCircle } from 'lucide-react';
+import { UploadCloud, Files, ListOrdered, Wrench, Activity, Settings, GitMerge, CheckCircle2, XCircle, Terminal } from 'lucide-react';
 import { EngineInfo } from '../../types/api';
 
-export type TabType = 'upload' | 'files' | 'pipelines' | 'jobs' | 'engines' | 'diagnostics' | 'settings';
+export type TabType = 'upload' | 'files' | 'pipelines' | 'jobs' | 'engines' | 'diagnostics' | 'developer' | 'settings';
 
 interface SidebarProps {
   currentTab: TabType;
@@ -33,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       subtext: `${installedEnginesCount}/${engines.length || 9} Ready` 
     },
     { id: 'diagnostics', label: 'System Diagnostics', icon: Activity },
+    { id: 'developer', label: 'Developer & API', icon: Terminal, subtext: 'Swagger & CLI' },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

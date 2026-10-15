@@ -11,7 +11,9 @@ import { PipelineEditor } from './components/pipeline/PipelineEditor';
 import { EngineManager } from './components/system/EngineManager';
 import { Diagnostics } from './components/system/Diagnostics';
 import { SettingsView } from './components/system/SettingsView';
+import { DeveloperHub } from './components/developer/DeveloperHub';
 import { api } from './services/api';
+import { socketService } from './services/socket';
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from './types/api';
 
 export function App() {
@@ -62,6 +64,36 @@ export function App() {
 
   useEffect(() => {
     loadData();
+    socketService.connect();
+
+    const unsubProgress = socketService.on('job:progress', (pkt) => {
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.id === pkt.job_id
+            ? { ...j, progress_percent: pkt.percent, status: 'running' }
+            : j
+        )
+      );
+    });
+
+    const unsubCompleted = socketService.on('job:completed', () => {
+      api.listJobs().then(setJobs).catch(() => {});
+    });
+
+    const unsubFailed = socketService.on('job:failed', () => {
+      api.listJobs().then(setJobs).catch(() => {});
+    });
+
+    const unsubCancelled = socketService.on('job:cancelled', () => {
+      api.listJobs().then(setJobs).catch(() => {});
+    });
+
+    return () => {
+      unsubProgress();
+      unsubCompleted();
+      unsubFailed();
+      unsubCancelled();
+    };
   }, [loadData]);
 
   // Polling for jobs when any job is active
@@ -307,6 +339,10 @@ export function App() {
 
             {currentTab === 'diagnostics' && (
               <Diagnostics diagnostics={diagnostics} />
+            )}
+
+            {currentTab === 'developer' && (
+              <DeveloperHub />
             )}
 
             {currentTab === 'settings' && (
