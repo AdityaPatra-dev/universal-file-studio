@@ -17,9 +17,10 @@ def anyio_backend():
     return "asyncio"
 
 @pytest.fixture(autouse=True, scope="session")
-async def setup_test_env():
-    await init_db()
-    await EngineManager.scan_and_register_all()
+def setup_test_env():
+    import asyncio
+    asyncio.run(init_db())
+    asyncio.run(EngineManager.scan_and_register_all())
 
 @pytest.fixture
 async def client():
