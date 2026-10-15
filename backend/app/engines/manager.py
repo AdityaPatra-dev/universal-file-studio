@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,4 +51,26 @@ class EngineManager:
     @classmethod
     def get_registry(cls) -> CapabilityRegistry:
         return CapabilityRegistry()
+
+    @classmethod
+    async def get_all_detected(cls) -> List[EngineInfo]:
+        results = []
+        for detector in ALL_DETECTORS:
+            info = await detector.detect()
+            results.append(info)
+        return results
+
+    @classmethod
+    def list_all(cls) -> List[EngineInfo]:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            # In running loop, run in thread or executor
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                return executor.submit(asyncio.run, cls.get_all_detected()).result()
+        return asyncio.run(cls.get_all_detected())
+
 
