@@ -106,6 +106,13 @@ class JobManager:
             f_res = await session.execute(f_stmt)
             file_rec = f_res.scalar_one_or_none()
 
+        from app.websocket.manager import ws_manager
+        await ws_manager.emit_job_progress(
+            job_id=job_id,
+            percent=5.0,
+            current_file=file_rec.original_filename if file_rec else ""
+        )
+
         try:
             # Execute operation using Processor Registry
             out_path, cmd_str, stdout_str, stderr_str = await self._run_operation(
@@ -139,6 +146,14 @@ class JobManager:
                 db_job.duration_seconds = duration
                 await session.commit()
 
+            await ws_manager.emit_job_completed(
+                job_id=job_id,
+                output_path=out_path or "",
+                duration=duration,
+                input_size=file_rec.size_bytes if file_rec else 0,
+                output_size=out_size or 0
+            )
+
         except asyncio.CancelledError:
             async with AsyncSessionLocal() as session:
                 j_stmt = select(Job).where(Job.id == job_id)
@@ -148,6 +163,8 @@ class JobManager:
                 db_job.error_message = "Job was cancelled by user."
                 db_job.completed_at = utc_now()
                 await session.commit()
+
+            await ws_manager.emit_job_cancelled(job_id=job_id)
 
         except Exception as exc:
             duration = round(time.time() - start_time, 2)
@@ -164,6 +181,12 @@ class JobManager:
                 db_job.completed_at = utc_now()
                 db_job.duration_seconds = duration
                 await session.commit()
+
+            await ws_manager.emit_job_failed(
+                job_id=job_id,
+                error=error_msg[:999],
+                detail=error_detail
+            )
 
     async def _run_operation(
         self,
@@ -185,6 +208,12 @@ class JobManager:
             async with AsyncSessionLocal() as s:
                 await s.execute(update(Job).where(Job.id == job_id).values(progress_percent=p))
                 await s.commit()
+            from app.websocket.manager import ws_manager
+            await ws_manager.emit_job_progress(
+                job_id=job_id,
+                percent=p,
+                current_file=file_rec.original_filename if file_rec else ""
+            )
 
         await set_progress(35.0)
 
