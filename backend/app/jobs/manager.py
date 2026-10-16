@@ -232,7 +232,7 @@ class JobManager:
             out_path, res = await pipeline_runner.execute_chain(
                 input_path=input_path,
                 steps=steps,
-                output_dir=out_dir,
+                output_dir=Path(out_dir),
                 job_id=job_id,
                 progress_callback=set_progress,
                 file_info=f_info,
@@ -243,20 +243,56 @@ class JobManager:
             await set_progress(100.0)
             return out_path, res.command_str, res.stdout, res.stderr
 
-        out_path, res = await processor_registry.dispatch(
-            operation=operation,
-            input_path=input_path,
-            output_dir=out_dir,
-            job_id=job_id,
-            parameters=parameters,
-            file_info=f_info
-        )
+        # Live progressive ticker for single operations
+        current_p = 10.0
+        await set_progress(current_p)
+        stop_ticker = asyncio.Event()
+
+        async def progress_ticker():
+            nonlocal current_p
+            # Calculate dynamic estimate based on duration or file size
+            est_seconds = 6.0
+            if file_rec and file_rec.duration_seconds:
+                est_seconds = max(4.0, file_rec.duration_seconds * 0.5)
+            elif file_rec and file_rec.size_bytes:
+                est_seconds = max(3.0, (file_rec.size_bytes / (1024 * 1024)) * 0.7)
+
+            start_t = time.time()
+            while not stop_ticker.is_set():
+                await asyncio.sleep(0.7)
+                if stop_ticker.is_set():
+                    break
+                elapsed = time.time() - start_t
+                ratio = min(0.92, 1.0 - (0.5 ** (elapsed / max(2.5, est_seconds))))
+                new_p = round(10.0 + ratio * 82.0, 1)
+                if new_p > current_p and new_p <= 94.0:
+                    current_p = new_p
+                    await set_progress(current_p)
+
+        ticker_task = asyncio.create_task(progress_ticker())
+
+        try:
+            out_path, res = await processor_registry.dispatch(
+                operation=operation,
+                input_path=input_path,
+                output_dir=out_dir,
+                job_id=job_id,
+                parameters=parameters,
+                file_info=f_info
+            )
+        finally:
+            stop_ticker.set()
+            ticker_task.cancel()
+            try:
+                await ticker_task
+            except asyncio.CancelledError:
+                pass
 
         if not res.success:
             err_msg = res.stderr or res.stdout or f"Process failed with exit code {res.returncode}"
             raise RuntimeError(err_msg)
 
-        await set_progress(95.0)
+        await set_progress(100.0)
         return out_path, res.command_str, res.stdout, res.stderr
 
 job_manager = JobManager()

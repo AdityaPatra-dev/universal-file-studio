@@ -110,8 +110,13 @@ async def download_job_output(job_id: str, db: AsyncSession = Depends(get_db)):
 
     p = Path(job.output_path)
     if p.is_dir():
-        # Directory output - zip it or notify user
-        raise HTTPException(status_code=400, detail="Output is a directory. Please inspect locally.")
+        import shutil, tempfile
+        zip_base = Path(tempfile.gettempdir()) / f"{job.output_filename or p.name}_{job_id[:8]}"
+        archive_path = shutil.make_archive(str(zip_base), "zip", str(p))
+        return FileResponse(
+            path=archive_path,
+            filename=f"{job.output_filename or p.name}.zip"
+        )
 
     return FileResponse(
         path=job.output_path,

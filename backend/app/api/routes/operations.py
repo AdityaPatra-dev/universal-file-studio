@@ -20,9 +20,9 @@ async def list_operations() -> List[Dict[str, Any]]:
             "name": "Convert Video",
             "engine": "ffmpeg",
             "category": "video",
-            "description": "Convert video to MP4, WebM, MKV, AVI",
+            "description": "Convert video to MP4, WebM, MKV, AVI, MOV, or GIF animation",
             "parameters": [
-                {"name": "format", "type": "select", "options": ["mp4", "webm", "mkv", "avi"], "default": "mp4"}
+                {"name": "format", "type": "select", "options": ["mp4", "webm", "mkv", "avi", "mov", "gif"], "default": "mp4"}
             ]
         })
         ops.append({
@@ -42,7 +42,7 @@ async def list_operations() -> List[Dict[str, Any]]:
             "category": "video",
             "description": "Extract audio stream from video",
             "parameters": [
-                {"name": "format", "type": "select", "options": ["mp3", "wav", "aac"], "default": "mp3"}
+                {"name": "format", "type": "select", "options": ["mp3", "wav", "aac", "flac", "ogg", "m4a"], "default": "mp3"}
             ]
         })
         ops.append({
@@ -52,7 +52,7 @@ async def list_operations() -> List[Dict[str, Any]]:
             "category": "audio",
             "description": "Convert audio format",
             "parameters": [
-                {"name": "format", "type": "select", "options": ["mp3", "wav", "flac", "aac", "ogg"], "default": "mp3"}
+                {"name": "format", "type": "select", "options": ["mp3", "wav", "flac", "aac", "ogg", "m4a"], "default": "mp3"}
             ]
         })
         ops.append({
