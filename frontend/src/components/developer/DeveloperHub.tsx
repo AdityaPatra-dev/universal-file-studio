@@ -128,20 +128,20 @@ export const DeveloperHub: React.FC = () => {
         {/* Quick Nav Actions */}
         <div className="flex items-center gap-2">
           <a
-            href="http://127.0.0.1:8000/docs"
+            href={`${window.location.protocol}//${window.location.hostname}:8000/docs`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/20 text-brand-300 border border-brand-500/30 rounded-lg hover:bg-brand-500/30 transition text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-500/20 text-brand-300 border border-brand-500/30 rounded-lg hover:bg-brand-500/30 transition text-xs font-semibold cursor-pointer"
           >
             <BookOpen className="h-3.5 w-3.5" />
             Swagger UI
             <ExternalLink className="h-3 w-3" />
           </a>
           <a
-            href="http://127.0.0.1:8000/redoc"
+            href={`${window.location.protocol}//${window.location.hostname}:8000/redoc`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-900 text-slate-300 border border-surface-700 rounded-lg hover:bg-surface-800 transition text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-900 text-slate-300 border border-surface-700 rounded-lg hover:bg-surface-800 transition text-xs font-semibold cursor-pointer"
           >
             ReDoc
             <ExternalLink className="h-3 w-3" />

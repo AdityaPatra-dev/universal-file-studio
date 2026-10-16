@@ -4,7 +4,7 @@ import {
   Layers, CheckCircle, RefreshCw, X, Sliders, FileText,
   ChevronUp, ChevronDown, BookOpen, Archive, Film, Shield,
   Music, Info, FolderArchive, Download, Upload, AlertTriangle,
-  Check, CheckSquare, Square
+  Check, CheckSquare, Square, Search, Edit3
 } from 'lucide-react';
 import { Pipeline, FileRecord, Operation, OperationSpec, PipelineValidationIssue } from '../../types/api';
 import { api } from '../../services/api';
@@ -13,6 +13,7 @@ import { StepParameterForm } from './StepParameterForm';
 interface PipelineEditorProps {
   files: FileRecord[];
   onJobStarted: () => void;
+  preSelectedFileIds?: number[];
 }
 
 interface PipelineTemplate {
@@ -99,6 +100,7 @@ const PIPELINE_TEMPLATES: PipelineTemplate[] = [
 export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   files,
   onJobStarted,
+  preSelectedFileIds = [],
 }) => {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -107,7 +109,10 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null);
   
   // Execution file selection (multi-select supported)
-  const [selectedFileIds, setSelectedFileIds] = useState<number[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<number[]>(preSelectedFileIds);
+  const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [fileCategoryFilter, setFileCategoryFilter] = useState('all');
+
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -122,6 +127,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     { operation: 'images_to_pdf', parameters: { quality: 85, compress: 'jpeg' } }
   ]);
   const [validationIssues, setValidationIssues] = useState<PipelineValidationIssue[]>([]);
+  const [confirmDeletePipe, setConfirmDeletePipe] = useState<Pipeline | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadPipelinesAndSpecs = async () => {
@@ -149,6 +155,12 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     loadPipelinesAndSpecs();
   }, []);
 
+  useEffect(() => {
+    if (preSelectedFileIds.length > 0) {
+      setSelectedFileIds(preSelectedFileIds);
+    }
+  }, [preSelectedFileIds]);
+
   // Validate pipeline steps whenever steps change in create modal
   useEffect(() => {
     if (!isCreating || newSteps.length === 0) return;
@@ -161,23 +173,26 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
         });
         setValidationIssues(res.issues || []);
       } catch (e) {
-        // Validation endpoint fallback
+        // Soft fail
       }
-    }, 250);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [newSteps, isCreating, newPipeName]);
+  }, [newSteps, isCreating, newPipeName, newPipeDesc]);
 
   const toggleFileSelection = (id: number) => {
-    setSelectedFileIds(prev => 
-      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
+    setSelectedFileIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
   const handleSelectAllFiles = () => {
-    if (selectedFileIds.length === files.length) {
-      setSelectedFileIds([]);
+    const visibleIds = filteredFilesForExecution.map(f => f.id);
+    const allVisibleSelected = visibleIds.every(id => selectedFileIds.includes(id));
+
+    if (allVisibleSelected) {
+      setSelectedFileIds(prev => prev.filter(id => !visibleIds.includes(id)));
     } else {
-      setSelectedFileIds(files.map(f => f.id));
+      setSelectedFileIds(prev => Array.from(new Set([...prev, ...visibleIds])));
     }
   };
 
@@ -186,16 +201,17 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     setIsExecuting(true);
     setError(null);
     setSuccessMsg(null);
+
     try {
       if (selectedFileIds.length === 1) {
         await api.executePipeline(selectedPipeline.id, selectedFileIds[0]);
       } else {
         await api.batchExecutePipeline(selectedPipeline.id, selectedFileIds, 'skip');
       }
+
       setIsExecuting(false);
-      setSuccessMsg(`Started pipeline "${selectedPipeline.name}" on ${selectedFileIds.length} ${selectedFileIds.length === 1 ? 'file' : 'files'}.`);
+      setSuccessMsg(`Enqueued ${selectedFileIds.length} file(s) for pipeline "${selectedPipeline.name}"`);
       onJobStarted();
-      setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err: any) {
       setIsExecuting(false);
       setError(err?.message || 'Pipeline execution failed');
@@ -230,7 +246,6 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   };
 
   const handleAddStep = () => {
-    // Pick first available operation or default
     const defaultOp = operations.length > 0 ? operations[0].id : 'image_convert';
     setNewSteps([...newSteps, { operation: defaultOp, parameters: getOpDefaults(defaultOp) }]);
   };
@@ -267,10 +282,38 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     setNewSteps(updated);
   };
 
-  const applyTemplate = (template: PipelineTemplate) => {
-    setNewPipeName(template.name);
-    setNewPipeDesc(template.description);
-    setNewSteps(template.steps.map(s => ({ ...s, parameters: { ...s.parameters } })));
+  // 1-Click Template activation (P1 Fixed: Selects/loads directly in view without forcing editor modal)
+  const applyTemplate = async (template: PipelineTemplate) => {
+    const existing = pipelines.find(p => p.name.toLowerCase() === template.name.toLowerCase());
+    if (existing) {
+      setSelectedPipeline(existing);
+      setSuccessMsg(`Loaded preset: "${existing.name}". Select input files below and run!`);
+      return;
+    }
+
+    // Otherwise create it and select it
+    try {
+      const created = await api.createPipeline({
+        name: template.name,
+        description: template.description,
+        steps: template.steps,
+      });
+      setPipelines(prev => [...prev, created]);
+      setSelectedPipeline(created);
+      setSuccessMsg(`Loaded preset: "${created.name}". Ready for execution!`);
+    } catch (err) {
+      // Fallback: open builder
+      setNewPipeName(template.name);
+      setNewPipeDesc(template.description);
+      setNewSteps(template.steps.map(s => ({ ...s, parameters: { ...s.parameters } })));
+      setIsCreating(true);
+    }
+  };
+
+  const openEditPipelineModal = (p: Pipeline) => {
+    setNewPipeName(p.name);
+    setNewPipeDesc(p.description);
+    setNewSteps(p.steps.map(s => ({ ...s, parameters: { ...s.parameters } })));
     setIsCreating(true);
   };
 
@@ -287,19 +330,21 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
       setIsCreating(false);
       setNewPipeName('');
       setNewPipeDesc('');
+      setSuccessMsg(`Pipeline "${created.name}" saved successfully!`);
     } catch (err: any) {
       alert(`Failed to create pipeline: ${err.message}`);
     }
   };
 
   const handleDeletePipeline = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this pipeline?')) return;
     try {
       await api.deletePipeline(id);
       setPipelines(pipelines.filter((p) => p.id !== id));
       if (selectedPipeline?.id === id) {
         setSelectedPipeline(pipelines.find((p) => p.id !== id) || null);
       }
+      setConfirmDeletePipe(null);
+      setSuccessMsg('Pipeline deleted.');
     } catch (err: any) {
       alert(`Failed to delete pipeline: ${err.message}`);
     }
@@ -338,7 +383,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
         });
         setPipelines([...pipelines, imported]);
         setSelectedPipeline(imported);
-        alert(`Successfully imported pipeline: "${imported.name}"`);
+        setSuccessMsg(`Successfully imported pipeline: "${imported.name}"`);
       } catch (err: any) {
         alert(`Failed to import pipeline: ${err.message}`);
       }
@@ -346,6 +391,13 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     reader.readAsText(file);
     e.target.value = '';
   };
+
+  // Filtered files for pipeline execution
+  const filteredFilesForExecution = files.filter(f => {
+    const matchesSearch = f.filename.toLowerCase().includes(fileSearchQuery.toLowerCase());
+    const matchesCat = fileCategoryFilter === 'all' || f.category === fileCategoryFilter;
+    return matchesSearch && matchesCat;
+  });
 
   return (
     <div className="space-y-6">
@@ -373,7 +425,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors border border-surface-700"
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors border border-surface-700 cursor-pointer"
             title="Import Pipeline from JSON"
           >
             <Upload className="h-3.5 w-3.5" />
@@ -391,29 +443,29 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
               ]);
               setIsCreating(true);
             }}
-            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30"
+            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
-            <span>New Pipeline</span>
+            <span>New Custom Pipeline</span>
           </button>
         </div>
       </div>
 
       {/* Quick Templates Bar */}
-      <div className="p-4 rounded-2xl bg-surface-900/60 border border-surface-800 space-y-2.5">
+      <div className="p-4 rounded-3xl bg-surface-900/60 border border-surface-800 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-brand-400" />
-            Quick Pipeline Templates (1-Click Presets)
+            1-Click Workflow Recipes
           </span>
-          <span className="text-[10px] text-slate-500">Click any preset to launch or customize</span>
+          <span className="text-[10px] text-slate-500">Click any preset to select & run immediately</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
           {PIPELINE_TEMPLATES.map((tmpl, idx) => (
             <div
               key={idx}
               onClick={() => applyTemplate(tmpl)}
-              className="p-3 rounded-xl bg-surface-950/70 border border-surface-800 hover:border-brand-500/50 hover:bg-surface-800/40 cursor-pointer transition-all group flex flex-col justify-between"
+              className="p-3 rounded-2xl bg-surface-950/70 border border-surface-800 hover:border-brand-500/50 hover:bg-surface-800/40 cursor-pointer transition-all group flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -443,7 +495,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
       {error && (
         <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="text-rose-400 hover:text-white">
+          <button onClick={() => setError(null)} className="text-rose-400 hover:text-white cursor-pointer">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -452,7 +504,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
       {successMsg && (
         <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center justify-between">
           <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-white">
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-white cursor-pointer">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -467,7 +519,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
             <button 
               onClick={loadPipelinesAndSpecs} 
               disabled={isLoading}
-              className="text-slate-500 hover:text-slate-300 p-1"
+              className="text-slate-500 hover:text-slate-300 p-1 cursor-pointer"
               title="Refresh pipelines"
             >
               <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
@@ -507,18 +559,28 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                           e.stopPropagation();
                           handleExportJson(p);
                         }}
-                        className="text-slate-500 hover:text-brand-300 p-1 transition-colors"
+                        className="text-slate-500 hover:text-brand-300 p-1 transition-colors cursor-pointer"
                         title="Export JSON"
                       >
                         <Download className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditPipelineModal(p);
+                        }}
+                        className="text-slate-500 hover:text-white p-1 transition-colors cursor-pointer"
+                        title="Edit pipeline steps"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
                       </button>
                       {p.id > 7 && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeletePipeline(p.id);
+                            setConfirmDeletePipe(p);
                           }}
-                          className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                          className="text-slate-500 hover:text-rose-400 p-1 transition-colors cursor-pointer"
                           title="Delete custom pipeline"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -551,21 +613,25 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                     <h3 className="text-lg font-bold text-white">{selectedPipeline.name}</h3>
                     {selectedPipeline.steps.some(s => s.operation === 'archive_extract' || s.operation === 'images_to_pdf' || s.operation === 'pdf_merge') && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        ⚡ Generic Batch Processing Enabled
+                        ⚡ Batch Capable
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => openEditPipelineModal(selectedPipeline)}
+                      className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition-colors border border-surface-700 cursor-pointer"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                      <span>Edit Steps</span>
+                    </button>
+                    <button
                       onClick={() => handleExportJson(selectedPipeline)}
-                      className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition-colors border border-surface-700"
+                      className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition-colors border border-surface-700 cursor-pointer"
                     >
                       <Download className="h-3 w-3" />
                       <span>Export</span>
                     </button>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-800 text-slate-400">
-                      ID #{selectedPipeline.id}
-                    </span>
                   </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">{selectedPipeline.description}</p>
@@ -643,19 +709,19 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 </div>
               </div>
 
-              {/* Execution Panel with Multi-File Selection */}
+              {/* Execution Panel with Filterable Multi-File Selection (P2 Fixed) */}
               <div className="p-5 rounded-2xl bg-surface-950/80 border border-surface-800 space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <label className="text-xs font-semibold text-slate-200 uppercase tracking-wider block">
-                    Select Input File(s) for Pipeline Execution
+                    Select Input File(s) for Execution
                   </label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={handleSelectAllFiles}
-                      className="text-[11px] text-brand-400 hover:text-brand-300 font-medium transition-colors"
+                      className="text-[11px] text-brand-400 hover:text-brand-300 font-medium transition-colors cursor-pointer"
                     >
-                      {selectedFileIds.length === files.length && files.length > 0 ? 'Deselect All' : 'Select All'}
+                      {selectedFileIds.length === files.length && files.length > 0 ? 'Deselect All' : 'Select All Filtered'}
                     </button>
                     <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-800 text-slate-300">
                       {selectedFileIds.length} Selected
@@ -663,14 +729,43 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                   </div>
                 </div>
 
+                {/* Search & Filter Toolbar for Files Checklist */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Filter files by name..."
+                      value={fileSearchQuery}
+                      onChange={(e) => setFileSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-2.5 py-1.5 rounded-xl bg-surface-900 border border-surface-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500"
+                    />
+                  </div>
+                  <select
+                    value={fileCategoryFilter}
+                    onChange={(e) => setFileCategoryFilter(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-xl bg-surface-900 border border-surface-800 text-xs text-slate-300 focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="image">Images</option>
+                    <option value="video">Videos</option>
+                    <option value="audio">Audio</option>
+                    <option value="pdf">PDFs</option>
+                    <option value="document">Documents</option>
+                    <option value="archive">Archives</option>
+                  </select>
+                </div>
+
                 {/* Multi-Select Files List */}
-                <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-2xl bg-surface-900/60 border border-surface-800">
-                  {files.length === 0 ? (
+                <div className="max-h-52 overflow-y-auto space-y-1.5 p-2 rounded-2xl bg-surface-900/60 border border-surface-800">
+                  {filteredFilesForExecution.length === 0 ? (
                     <div className="p-4 text-center text-slate-500 text-xs">
-                      No files uploaded yet. Drag files into library to process.
+                      {files.length === 0
+                        ? 'No files uploaded yet. Drag files into library to process.'
+                        : 'No files match the search/category filter.'}
                     </div>
                   ) : (
-                    files.map((f) => {
+                    filteredFilesForExecution.map((f) => {
                       const isChecked = selectedFileIds.includes(f.id);
                       return (
                         <div
@@ -704,17 +799,19 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 </div>
 
                 {/* Execution Button */}
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                   <div className="text-[11px] text-slate-400">
                     {selectedFileIds.length > 1
                       ? `Batch Mode: Will trigger ${selectedFileIds.length} parallel pipeline jobs.`
-                      : 'Single Run: Executes sequential chain with isolated scratch buffers.'}
+                      : selectedFileIds.length === 1
+                      ? 'Single Run: Executes sequential chain with isolated scratch buffers.'
+                      : 'Please select at least one file above to run this pipeline.'}
                   </div>
 
                   <button
                     onClick={handleExecute}
                     disabled={selectedFileIds.length === 0 || isExecuting}
-                    className="flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50"
+                    className="flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 cursor-pointer"
                   >
                     <Play className="h-3.5 w-3.5 fill-current" />
                     <span>
@@ -730,7 +827,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
             </div>
           ) : (
             <div className="p-12 text-center rounded-3xl bg-surface-900/40 border border-surface-800 text-slate-400 text-xs">
-              Select a pipeline on the left or create a new one to inspect its flow.
+              Select a pipeline on the left or click a template recipe above to inspect its execution nodes.
             </div>
           )}
         </div>
@@ -751,7 +848,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
               </div>
               <button
                 onClick={() => setIsCreating(false)}
-                className="p-1.5 rounded-xl bg-surface-800 text-slate-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-xl bg-surface-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -774,7 +871,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                         setNewPipeDesc(tmpl.description);
                         setNewSteps(tmpl.steps.map(s => ({ ...s, parameters: { ...s.parameters } })));
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-surface-950 border border-surface-800 hover:border-brand-500/60 hover:text-white text-slate-400 text-[11px] font-medium transition-all flex items-center gap-1"
+                      className="px-2.5 py-1 rounded-lg bg-surface-950 border border-surface-800 hover:border-brand-500/60 hover:text-white text-slate-400 text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer"
                     >
                       <span>{tmpl.icon}</span>
                       <span>{tmpl.badge}</span>
@@ -840,7 +937,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                   </label>
                   <button
                     onClick={handleAddStep}
-                    className="px-2.5 py-1 rounded-lg bg-brand-600/20 text-brand-300 hover:bg-brand-600/30 text-xs flex items-center gap-1 font-semibold transition-colors"
+                    className="px-2.5 py-1 rounded-lg bg-brand-600/20 text-brand-300 hover:bg-brand-600/30 text-xs flex items-center gap-1 font-semibold transition-colors cursor-pointer"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Add Step</span>
@@ -881,7 +978,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                               type="button"
                               onClick={() => handleMoveStep(idx, 'up')}
                               disabled={idx === 0}
-                              className="p-1 rounded bg-surface-900 hover:bg-surface-800 text-slate-400 hover:text-white disabled:opacity-30"
+                              className="p-1 rounded bg-surface-900 hover:bg-surface-800 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
                               title="Move step up"
                             >
                               <ChevronUp className="h-3.5 w-3.5" />
@@ -890,7 +987,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                               type="button"
                               onClick={() => handleMoveStep(idx, 'down')}
                               disabled={idx === newSteps.length - 1}
-                              className="p-1 rounded bg-surface-900 hover:bg-surface-800 text-slate-400 hover:text-white disabled:opacity-30"
+                              className="p-1 rounded bg-surface-900 hover:bg-surface-800 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
                               title="Move step down"
                             >
                               <ChevronDown className="h-3.5 w-3.5" />
@@ -899,7 +996,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                               type="button"
                               onClick={() => handleRemoveStep(idx)}
                               disabled={newSteps.length <= 1}
-                              className="p-1 rounded bg-surface-900 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 disabled:opacity-30 transition-colors ml-1"
+                              className="p-1 rounded bg-surface-900 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 disabled:opacity-30 transition-colors ml-1 cursor-pointer"
                               title="Remove step"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -907,7 +1004,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                           </div>
                         </div>
 
-                        {/* Dynamic Step Parameter Form (Improvement 3) */}
+                        {/* Dynamic Step Parameter Form */}
                         <StepParameterForm
                           operation={currentOp}
                           spec={currentSpec}
@@ -930,18 +1027,52 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
               <div className="flex items-center space-x-3">
                 <button
                   onClick={() => setIsCreating(false)}
-                  className="px-4 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs transition-colors"
+                  className="px-4 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCreatePipeline}
                   disabled={!newPipeName.trim() || newSteps.length === 0}
-                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs disabled:opacity-50 transition-all shadow-md shadow-brand-600/30"
+                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs disabled:opacity-50 transition-all shadow-md shadow-brand-600/30 cursor-pointer"
                 >
                   Save & Use Pipeline
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Delete Pipeline Confirmation Modal */}
+      {confirmDeletePipe && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-rose-400">
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h4 className="font-bold text-white text-base">Delete Custom Pipeline?</h4>
+                <p className="text-xs text-slate-400 truncate max-w-[260px]">{confirmDeletePipe.name}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to delete this custom pipeline recipe? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setConfirmDeletePipe(null)}
+                className="px-4 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeletePipeline(confirmDeletePipe.id)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Delete Pipeline
+              </button>
             </div>
           </div>
         </div>

@@ -1,28 +1,57 @@
-import React from 'react';
-import { Activity, Cpu, HardDrive, Server, Folder, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Cpu, HardDrive, Server, Folder, ShieldCheck, RefreshCw, Copy, Check } from 'lucide-react';
 import { SystemDiagnostics } from '../../types/api';
 
 interface DiagnosticsProps {
   diagnostics: SystemDiagnostics | null;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
-export const Diagnostics: React.FC<DiagnosticsProps> = ({ diagnostics }) => {
+export const Diagnostics: React.FC<DiagnosticsProps> = ({ 
+  diagnostics, 
+  onRefresh, 
+  isRefreshing 
+}) => {
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
+
+  const handleCopyPath = (key: string, val: string) => {
+    navigator.clipboard.writeText(val);
+    setCopiedPath(key);
+    setTimeout(() => setCopiedPath(null), 2000);
+  };
+
   if (!diagnostics) {
     return (
-      <div className="p-12 text-center rounded-3xl bg-surface-900/30 border border-surface-800 text-slate-400">
-        Loading system telemetry...
+      <div className="p-12 text-center rounded-3xl bg-surface-900/30 border border-surface-800 text-slate-400 space-y-2">
+        <RefreshCw className="h-6 w-6 animate-spin text-brand-400 mx-auto" />
+        <p>Loading real-time hardware telemetry...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="p-6 rounded-3xl bg-surface-900/40 border border-surface-800">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-1">
-          <Activity className="h-5 w-5 text-brand-400" />
-          Hardware & Resource Diagnostics
-        </h2>
-        <p className="text-xs text-slate-400">Real-time local hardware capacity and system health.</p>
+      <div className="p-6 rounded-3xl bg-surface-900/40 border border-surface-800 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-1">
+              <Activity className="h-5 w-5 text-brand-400" />
+              Hardware & Resource Diagnostics
+            </h2>
+            <p className="text-xs text-slate-400">Real-time local hardware capacity and system health telemetry.</p>
+          </div>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 border border-surface-700 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin text-brand-400' : ''}`} />
+              <span>Refresh Telemetry</span>
+            </button>
+          )}
+        </div>
 
         {/* Resource Gauges */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
@@ -97,7 +126,7 @@ export const Diagnostics: React.FC<DiagnosticsProps> = ({ diagnostics }) => {
             <div className="text-slate-200 truncate">{diagnostics.os}</div>
           </div>
           <div className="p-3.5 rounded-2xl bg-surface-950/60 border border-surface-800/60">
-            <div className="text-slate-500 text-[10px] uppercase font-sans mb-1 font-semibold">Platform</div>
+            <div className="text-slate-500 text-[10px] uppercase font-sans mb-1 font-semibold">Platform Architecture</div>
             <div className="text-slate-200 truncate">{diagnostics.platform}</div>
           </div>
           <div className="p-3.5 rounded-2xl bg-surface-950/60 border border-surface-800/60">
@@ -122,9 +151,18 @@ export const Diagnostics: React.FC<DiagnosticsProps> = ({ diagnostics }) => {
         </h3>
         <div className="divide-y divide-surface-800/60 text-xs font-mono">
           {Object.entries(diagnostics.storage_paths).map(([key, val]) => (
-            <div key={key} className="py-2.5 flex items-center justify-between">
-              <span className="text-slate-400 capitalize">{key} Path:</span>
-              <span className="text-slate-200 break-all select-all font-semibold">{val}</span>
+            <div key={key} className="py-2.5 flex items-center justify-between gap-3">
+              <span className="text-slate-400 capitalize shrink-0">{key} Path:</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-slate-200 break-all select-all font-semibold truncate">{val}</span>
+                <button
+                  onClick={() => handleCopyPath(key, val)}
+                  className="p-1 rounded-md bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                  title="Copy directory path"
+                >
+                  {copiedPath === key ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -132,4 +170,3 @@ export const Diagnostics: React.FC<DiagnosticsProps> = ({ diagnostics }) => {
     </div>
   );
 };
-
