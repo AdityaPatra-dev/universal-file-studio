@@ -246,4 +246,25 @@ async def test_pipeline_batch_execute_and_import_export(client):
     assert imp_res.status_code == 200
     assert imp_res.json()["name"] == "Imported Hash Pipeline"
 
+@pytest.mark.anyio
+async def test_pipeline_runner_single_step_string_output_dir(tmp_path):
+    md_file = tmp_path / "test.md"
+    md_file.write_text("# Test content\n", encoding="utf-8")
+    out_dir = str(tmp_path / "str_out")
+
+    steps = [
+        {"operation": "file_hash", "parameters": {"format": "txt"}}
+    ]
+
+    out_file, res = await pipeline_runner.execute_chain(
+        input_path=str(md_file),
+        steps=steps,
+        output_dir=out_dir,
+        job_id="str_dir_test_001"
+    )
+
+    assert res.success is True
+    assert os.path.exists(out_file)
+
+
 

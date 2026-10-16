@@ -101,12 +101,13 @@ class DocumentProcessor(BaseProcessor):
         format_from = "epub" if in_ext in [".epub", ".epub3"] else ("fb2" if in_ext == ".fb2" else None)
 
         # Direct Pandoc conversion for document, web, and markup formats
-        if target_fmt in ["docx", "odt", "html", "htm", "md", "markdown", "txt"]:
+        if target_fmt in ["docx", "odt", "html", "htm", "md", "markdown", "txt", "text"]:
+            pandoc_target = "plain" if target_fmt in ["txt", "text"] else ("markdown" if target_fmt in ["md", "markdown"] else target_fmt)
             res = await pandoc_engine.convert(
                 input_path=str(in_p),
                 output_path=final_out_path,
                 format_from=format_from,
-                format_to="markdown" if target_fmt in ["md", "markdown"] else target_fmt
+                format_to=pandoc_target
             )
             return final_out_path, res
 

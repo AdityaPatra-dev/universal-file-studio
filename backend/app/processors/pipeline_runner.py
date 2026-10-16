@@ -3,7 +3,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional, Callable, Awaitable
+from typing import List, Dict, Any, Tuple, Optional, Callable, Awaitable, Union
 
 from app.engines.wrappers.base import ProcessResult
 from app.processors.registry import processor_registry
@@ -59,7 +59,7 @@ class PipelineRunner:
         self,
         input_path: str,
         steps: List[Dict[str, Any]],
-        output_dir: Path,
+        output_dir: Union[str, Path],
         job_id: str,
         progress_callback: Optional[Callable[[float], Awaitable[None]]] = None,
         file_info: Optional[Dict[str, Any]] = None,
@@ -68,6 +68,7 @@ class PipelineRunner:
         if not steps:
             raise ValueError("Pipeline must have at least one step.")
 
+        output_dir_p = Path(output_dir)
         temp_workspace = Path(tempfile.mkdtemp(prefix=f"ufs_pipe_{job_id[:8]}_"))
         current_input = input_path
         commands_executed: List[str] = []
@@ -84,7 +85,7 @@ class PipelineRunner:
                 spec = OPERATION_SPECS.get(op, {})
 
                 is_final = (step_num == total_steps)
-                step_out_dir = output_dir if is_final else (temp_workspace / f"step_{step_num}_out")
+                step_out_dir = output_dir_p if is_final else (temp_workspace / f"step_{step_num}_out")
                 step_out_dir.mkdir(parents=True, exist_ok=True)
 
                 if progress_callback:

@@ -88,9 +88,11 @@ class PandocEngine(BaseEngine):
         if self.is_installed():
             cmd = ["pandoc", input_path, "-o", output_path]
             if format_from:
-                cmd.extend(["-f", format_from])
+                norm_from = "plain" if format_from.lower() in ["txt", "text"] else ("markdown" if format_from.lower() in ["md", "markdown"] else format_from)
+                cmd.extend(["-f", norm_from])
             if format_to:
-                cmd.extend(["-t", format_to])
+                norm_to = "plain" if format_to.lower() in ["txt", "text"] else ("markdown" if format_to.lower() in ["md", "markdown"] else format_to)
+                cmd.extend(["-t", norm_to])
             return await self.execute(cmd)
 
         # Fallback for systems where pandoc CLI is not installed

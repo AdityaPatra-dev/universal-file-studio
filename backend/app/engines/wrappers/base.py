@@ -22,7 +22,25 @@ class BaseEngine(ABC):
 
     def is_installed(self) -> bool:
         registry = CapabilityRegistry()
-        return registry.is_installed(self.name)
+        if registry.is_installed(self.name):
+            return True
+        import shutil
+        engine_binaries = {
+            "pandoc": ["pandoc"],
+            "ffmpeg": ["ffmpeg"],
+            "imagemagick": ["magick", "convert"],
+            "sevenzip": ["7z", "7za", "7zz"],
+            "7z": ["7z", "7za", "7zz"],
+            "poppler": ["pdftoppm", "pdfinfo"],
+            "ghostscript": ["gs"],
+            "libreoffice": ["libreoffice", "soffice"],
+            "qpdf": ["qpdf"],
+            "tesseract": ["tesseract"],
+        }
+        for bin_name in engine_binaries.get(self.name, [self.name]):
+            if shutil.which(bin_name):
+                return True
+        return False
 
     def get_info(self) -> Optional[EngineInfo]:
         registry = CapabilityRegistry()

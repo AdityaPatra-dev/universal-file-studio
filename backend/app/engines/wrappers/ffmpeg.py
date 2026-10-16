@@ -10,6 +10,8 @@ class FFmpegEngine(BaseEngine):
         info = self.get_info()
         encoders = info.capabilities.encoders if info and info.capabilities else []
         fmt = format_ext.lower().lstrip(".")
+        if fmt == "gif":
+            return "gif"
         if fmt == "webm":
             if "libvpx-vp9" in encoders:
                 return "libvpx-vp9"
@@ -44,19 +46,22 @@ class FFmpegEngine(BaseEngine):
         preset: Optional[str] = None
     ) -> ProcessResult:
         cmd = ["ffmpeg", "-y", "-i", input_path]
-        ext = Path(output_path).suffix
+        ext = Path(output_path).suffix.lower()
 
-        v_codec = video_codec or self.get_best_video_encoder(ext)
-        a_codec = audio_codec or self.get_best_audio_encoder(ext)
+        if ext == ".gif":
+            cmd.extend(["-c:v", "gif", "-an"])
+        else:
+            v_codec = video_codec or self.get_best_video_encoder(ext)
+            a_codec = audio_codec or self.get_best_audio_encoder(ext)
 
-        cmd.extend(["-c:v", v_codec])
-        cmd.extend(["-c:a", a_codec])
+            cmd.extend(["-c:v", v_codec])
+            cmd.extend(["-c:a", a_codec])
 
-        # crf and preset only apply to x264/x265/vpx
-        if crf is not None and v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
-            cmd.extend(["-crf", str(crf)])
-        if preset and v_codec in ["libx264", "libx265"]:
-            cmd.extend(["-preset", preset])
+            # crf and preset only apply to x264/x265/vpx
+            if crf is not None and v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
+                cmd.extend(["-crf", str(crf)])
+            if preset and v_codec in ["libx264", "libx265"]:
+                cmd.extend(["-preset", preset])
 
         cmd.append(output_path)
         return await self.execute(cmd)

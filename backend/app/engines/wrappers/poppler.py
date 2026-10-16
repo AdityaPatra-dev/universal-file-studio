@@ -12,8 +12,9 @@ class PopplerEngine(BaseEngine):
         format: str = "png",
         dpi: int = 150
     ) -> ProcessResult:
-        # pdftoppm -png -r 150 input.pdf output_prefix
-        cmd = ["pdftoppm", f"-{format}", "-r", str(dpi), input_path, output_prefix]
+        fmt = format.lower().lstrip(".")
+        flag = "-jpeg" if fmt in ["jpg", "jpeg"] else f"-{fmt}"
+        cmd = ["pdftoppm", flag, "-r", str(dpi), input_path, output_prefix]
         return await self.execute(cmd)
 
     async def pdf_to_text(self, input_path: str, output_path: str) -> ProcessResult:

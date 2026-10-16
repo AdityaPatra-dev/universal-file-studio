@@ -34,6 +34,10 @@ class PdfProcessor(BaseProcessor):
             out_prefix = str(out_d / f"{in_p.stem}_{job_id[:8]}_page")
             res = await poppler_engine.pdf_to_image(input_path, out_prefix, format=fmt, dpi=dpi)
             first_page = f"{out_prefix}-1.{fmt}"
+            if not Path(first_page).exists():
+                alt_ext = "jpg" if fmt == "jpeg" else ("jpeg" if fmt == "jpg" else fmt)
+                if Path(f"{out_prefix}-1.{alt_ext}").exists():
+                    first_page = f"{out_prefix}-1.{alt_ext}"
             return first_page, res
 
         # 3. PDF to Text
