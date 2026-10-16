@@ -55,6 +55,26 @@ async def list_operations() -> List[Dict[str, Any]]:
                 {"name": "format", "type": "select", "options": ["mp3", "wav", "flac", "aac", "ogg"], "default": "mp3"}
             ]
         })
+        ops.append({
+            "id": "video_concat",
+            "name": "Concatenate Videos",
+            "engine": "ffmpeg",
+            "category": "video",
+            "description": "Merge multiple video clips from folder or archive",
+            "parameters": [
+                {"name": "format", "type": "select", "options": ["mp4", "mkv", "webm"], "default": "mp4"}
+            ]
+        })
+        ops.append({
+            "id": "audio_merge",
+            "name": "Merge Audio Files",
+            "engine": "ffmpeg",
+            "category": "audio",
+            "description": "Combine multiple audio tracks sequentially",
+            "parameters": [
+                {"name": "format", "type": "select", "options": ["mp3", "wav", "flac", "aac"], "default": "mp3"}
+            ]
+        })
 
     if registry.is_installed("imagemagick"):
         ops.append({
@@ -109,6 +129,14 @@ async def list_operations() -> List[Dict[str, Any]]:
             ]
         })
         ops.append({
+            "id": "archive_list",
+            "name": "List Archive Manifest",
+            "engine": "7z",
+            "category": "archive",
+            "description": "Output structured file listing manifest of archive",
+            "parameters": []
+        })
+        ops.append({
             "id": "archive_to_pdf",
             "name": "Archive to Single PDF (Comic / Manga)",
             "engine": "imagemagick",
@@ -129,6 +157,22 @@ async def list_operations() -> List[Dict[str, Any]]:
                 {"name": "quality", "type": "number", "default": 85, "min": 20, "max": 100},
                 {"name": "compress", "type": "select", "options": ["jpeg", "deflate"], "default": "jpeg"}
             ]
+        })
+        ops.append({
+            "id": "pdf_merge",
+            "name": "Merge PDF Documents",
+            "engine": "ghostscript",
+            "category": "pdf",
+            "description": "Combine multiple PDF documents into a single document",
+            "parameters": []
+        })
+        ops.append({
+            "id": "pdf_split",
+            "name": "Split PDF Pages",
+            "engine": "poppler",
+            "category": "pdf",
+            "description": "Burst PDF pages into standalone single-page PDFs",
+            "parameters": []
         })
 
     if registry.is_installed("libreoffice"):
@@ -267,3 +311,24 @@ async def get_file_operations(file_id: int, db: AsyncSession = Depends(get_db)):
             matching.append(op)
 
     return matching
+
+@router.get("/specs")
+async def get_operation_specs() -> Dict[str, Any]:
+    from app.processors.specs import OPERATION_SPECS
+    return OPERATION_SPECS
+
+@router.get("/{op_id}/compatible-next")
+async def get_compatible_next_operations(op_id: str):
+    from app.processors.specs import OPERATION_SPECS
+    spec = OPERATION_SPECS.get(op_id)
+    if not spec:
+        raise HTTPException(status_code=404, detail=f"Operation '{op_id}' not found in specifications")
+
+    output_cat = spec.get("produces", {}).get("category", "")
+    compatible = []
+    for next_op_id, next_spec in OPERATION_SPECS.items():
+        accepted_cats = next_spec.get("accepts", {}).get("categories", [])
+        if output_cat in accepted_cats or "directory" in accepted_cats or output_cat == "same":
+            compatible.append(next_spec)
+    return compatible
+

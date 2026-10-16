@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   GitMerge, Play, Plus, Trash2, ArrowRight, Sparkles, 
   Layers, CheckCircle, RefreshCw, X, Sliders, FileText,
   ChevronUp, ChevronDown, BookOpen, Archive, Film, Shield,
-  Music, Info, FolderArchive, ArrowDown
+  Music, Info, FolderArchive, Download, Upload, AlertTriangle,
+  Check, CheckSquare, Square
 } from 'lucide-react';
-import { Pipeline, FileRecord, Operation, OperationParam } from '../../types/api';
+import { Pipeline, FileRecord, Operation, OperationSpec, PipelineValidationIssue } from '../../types/api';
 import { api } from '../../services/api';
+import { StepParameterForm } from './StepParameterForm';
 
 interface PipelineEditorProps {
   files: FileRecord[];
@@ -74,12 +76,21 @@ const PIPELINE_TEMPLATES: PipelineTemplate[] = [
     ]
   },
   {
+    name: 'Merge Multiple PDFs into One',
+    description: 'Concatenate multiple PDF documents into a single consolidated PDF file',
+    badge: 'Merge PDF',
+    icon: '📑',
+    steps: [
+      { operation: 'pdf_merge', parameters: {} }
+    ]
+  },
+  {
     name: 'Video Audio Rip & Sanitize',
     description: 'Extract MP3 audio track from video and remove author tags',
     badge: 'Audio Rip',
     icon: '🎵',
     steps: [
-      { operation: 'extract_audio', parameters: { format: 'mp3', bitrate: 192 } },
+      { operation: 'extract_audio', parameters: { format: 'mp3', bitrate: '192' } },
       { operation: 'strip_metadata', parameters: {} }
     ]
   }
@@ -91,11 +102,15 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
 }) => {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
+  const [specs, setSpecs] = useState<Record<string, OperationSpec>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [selectedPipeline, setSelectedPipeline] = useState<Pipeline | null>(null);
-  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
+  
+  // Execution file selection (multi-select supported)
+  const [selectedFileIds, setSelectedFileIds] = useState<number[]>([]);
   const [isExecuting, setIsExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // New Pipeline Modal
   const [isCreating, setIsCreating] = useState(false);
@@ -106,16 +121,20 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     { operation: 'image_convert', parameters: { format: 'webp', quality: 85 } },
     { operation: 'images_to_pdf', parameters: { quality: 85, compress: 'jpeg' } }
   ]);
+  const [validationIssues, setValidationIssues] = useState<PipelineValidationIssue[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadPipelines = async () => {
+  const loadPipelinesAndSpecs = async () => {
     setIsLoading(true);
     try {
-      const [pipeList, opList] = await Promise.all([
+      const [pipeList, opList, specMap] = await Promise.all([
         api.listPipelines(),
         api.listOperations(),
+        api.getOperationSpecs().catch(() => ({} as Record<string, OperationSpec>)),
       ]);
       setPipelines(pipeList);
       setOperations(opList);
+      setSpecs(specMap);
       if (pipeList.length > 0 && !selectedPipeline) {
         setSelectedPipeline(pipeList[0]);
       }
@@ -127,17 +146,56 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   };
 
   useEffect(() => {
-    loadPipelines();
+    loadPipelinesAndSpecs();
   }, []);
 
+  // Validate pipeline steps whenever steps change in create modal
+  useEffect(() => {
+    if (!isCreating || newSteps.length === 0) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.validatePipeline({
+          name: newPipeName || 'Draft',
+          description: newPipeDesc,
+          steps: newSteps,
+        });
+        setValidationIssues(res.issues || []);
+      } catch (e) {
+        // Validation endpoint fallback
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [newSteps, isCreating, newPipeName]);
+
+  const toggleFileSelection = (id: number) => {
+    setSelectedFileIds(prev => 
+      prev.includes(id) ? prev.filter(fId => fId !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFiles = () => {
+    if (selectedFileIds.length === files.length) {
+      setSelectedFileIds([]);
+    } else {
+      setSelectedFileIds(files.map(f => f.id));
+    }
+  };
+
   const handleExecute = async () => {
-    if (!selectedPipeline || !selectedFileId) return;
+    if (!selectedPipeline || selectedFileIds.length === 0) return;
     setIsExecuting(true);
     setError(null);
+    setSuccessMsg(null);
     try {
-      await api.executePipeline(selectedPipeline.id, selectedFileId);
+      if (selectedFileIds.length === 1) {
+        await api.executePipeline(selectedPipeline.id, selectedFileIds[0]);
+      } else {
+        await api.batchExecutePipeline(selectedPipeline.id, selectedFileIds, 'skip');
+      }
       setIsExecuting(false);
+      setSuccessMsg(`Started pipeline "${selectedPipeline.name}" on ${selectedFileIds.length} ${selectedFileIds.length === 1 ? 'file' : 'files'}.`);
       onJobStarted();
+      setTimeout(() => setSuccessMsg(null), 5000);
     } catch (err: any) {
       setIsExecuting(false);
       setError(err?.message || 'Pipeline execution failed');
@@ -145,29 +203,26 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   };
 
   const getOpDefaults = (opId: string): Record<string, any> => {
+    const spec = specs[opId];
     const op = operations.find((o) => o.id === opId);
+    const params = spec?.parameters || op?.parameters || [];
     const defaults: Record<string, any> = {};
-    if (op?.parameters) {
-      for (const p of op.parameters) {
-        if (p.default !== undefined) {
-          defaults[p.name] = p.default;
-        } else if (p.type === 'select' && p.options && p.options.length > 0) {
-          defaults[p.name] = p.options[0];
-        } else if (p.type === 'number') {
-          defaults[p.name] = p.min || 0;
-        }
+
+    for (const p of params) {
+      if (p.default !== undefined) {
+        defaults[p.name] = p.default;
+      } else if (p.type === 'select' && p.options && p.options.length > 0) {
+        defaults[p.name] = p.options[0];
+      } else if (p.type === 'number') {
+        defaults[p.name] = p.min ?? 0;
       }
     }
-    // Hardcoded sensible defaults for key operations
+
     if (opId === 'image_convert' && !defaults.format) {
       defaults.format = 'webp';
       defaults.quality = 85;
     }
-    if (opId === 'images_to_pdf') {
-      defaults.quality = 85;
-      defaults.compress = 'jpeg';
-    }
-    if (opId === 'archive_to_pdf') {
+    if (opId === 'images_to_pdf' || opId === 'archive_to_pdf') {
       defaults.quality = 85;
       defaults.compress = 'jpeg';
     }
@@ -175,6 +230,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   };
 
   const handleAddStep = () => {
+    // Pick first available operation or default
     const defaultOp = operations.length > 0 ? operations[0].id : 'image_convert';
     setNewSteps([...newSteps, { operation: defaultOp, parameters: getOpDefaults(defaultOp) }]);
   };
@@ -249,38 +305,98 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
     }
   };
 
-  const selectedFile = files.find((f) => f.id === selectedFileId);
+  const handleExportJson = async (p: Pipeline) => {
+    try {
+      const data = await api.exportPipeline(p.id);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${p.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_pipeline.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(`Export failed: ${e.message}`);
+    }
+  };
+
+  const handleImportJsonFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (!json.name || !Array.isArray(json.steps)) {
+          throw new Error('Invalid pipeline JSON format. Must contain "name" and "steps" array.');
+        }
+        const imported = await api.importPipeline({
+          name: json.name,
+          description: json.description || '',
+          steps: json.steps,
+        });
+        setPipelines([...pipelines, imported]);
+        setSelectedPipeline(imported);
+        alert(`Successfully imported pipeline: "${imported.name}"`);
+      } catch (err: any) {
+        alert(`Failed to import pipeline: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   return (
     <div className="space-y-6">
+      {/* Hidden File Input for JSON Import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImportJsonFile}
+        accept=".json"
+        className="hidden"
+      />
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <GitMerge className="h-5 w-5 text-brand-400" />
-            Multi-Stage Pipeline Studio
+            Universal Multi-Stage Pipeline Studio
           </h2>
           <p className="text-xs text-slate-400">
-            Chain transformation operations in sequence. Unpack archives, process multi-file sets, and compile to final formats.
+            Chain transformation operations in sequence. Unpack archives, process multi-file sets, batch-convert any media, and compile.
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setNewPipeName('');
-            setNewPipeDesc('');
-            setNewSteps([
-              { operation: 'archive_extract', parameters: {} },
-              { operation: 'image_convert', parameters: { format: 'webp', quality: 85 } },
-              { operation: 'images_to_pdf', parameters: { quality: 85, compress: 'jpeg' } }
-            ]);
-            setIsCreating(true);
-          }}
-          className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Pipeline</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors border border-surface-700"
+            title="Import Pipeline from JSON"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            <span>Import JSON</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setNewPipeName('');
+              setNewPipeDesc('');
+              setNewSteps([
+                { operation: 'archive_extract', parameters: {} },
+                { operation: 'image_convert', parameters: { format: 'webp', quality: 85 } },
+                { operation: 'images_to_pdf', parameters: { quality: 85, compress: 'jpeg' } }
+              ]);
+              setIsCreating(true);
+            }}
+            className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Pipeline</span>
+          </button>
+        </div>
       </div>
 
       {/* Quick Templates Bar */}
@@ -288,11 +404,11 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-brand-400" />
-            Quick Pipeline Templates (1-Click Setup)
+            Quick Pipeline Templates (1-Click Presets)
           </span>
-          <span className="text-[10px] text-slate-500">Click any template to customize or run</span>
+          <span className="text-[10px] text-slate-500">Click any preset to launch or customize</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
           {PIPELINE_TEMPLATES.map((tmpl, idx) => (
             <div
               key={idx}
@@ -303,9 +419,9 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-semibold text-xs text-white group-hover:text-brand-300 transition-colors flex items-center gap-1.5">
                     <span>{tmpl.icon}</span>
-                    <span>{tmpl.name}</span>
+                    <span className="line-clamp-1">{tmpl.name}</span>
                   </span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-400 border border-brand-500/20 shrink-0">
                     {tmpl.badge}
                   </span>
                 </div>
@@ -333,6 +449,15 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
         </div>
       )}
 
+      {successMsg && (
+        <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center justify-between">
+          <span>{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-white">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Grid: Pipelines List & Node Visualizer */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: Pipeline Presets List */}
@@ -340,7 +465,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
           <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
             <span>Available Pipelines ({pipelines.length})</span>
             <button 
-              onClick={loadPipelines} 
+              onClick={loadPipelinesAndSpecs} 
               disabled={isLoading}
               className="text-slate-500 hover:text-slate-300 p-1"
               title="Refresh pipelines"
@@ -352,7 +477,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
           <div className="space-y-2 max-h-[720px] overflow-y-auto pr-1">
             {pipelines.map((p) => {
               const isSelected = selectedPipeline?.id === p.id;
-              const isMultiFile = p.steps.some(s => s.operation === 'archive_extract' || s.operation === 'images_to_pdf');
+              const isMultiFile = p.steps.some(s => s.operation === 'archive_extract' || s.operation === 'images_to_pdf' || s.operation === 'pdf_merge' || s.operation === 'video_concat');
               return (
                 <div
                   key={p.id}
@@ -375,25 +500,38 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                       </div>
                       <p className="text-xs text-slate-400 mt-1 line-clamp-2">{p.description}</p>
                     </div>
-                    {p.id > 7 && (
+
+                    <div className="flex items-center space-x-1">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeletePipeline(p.id);
+                          handleExportJson(p);
                         }}
-                        className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
-                        title="Delete custom pipeline"
+                        className="text-slate-500 hover:text-brand-300 p-1 transition-colors"
+                        title="Export JSON"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Download className="h-3.5 w-3.5" />
                       </button>
-                    )}
+                      {p.id > 7 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePipeline(p.id);
+                          }}
+                          className="text-slate-500 hover:text-rose-400 p-1 transition-colors"
+                          title="Delete custom pipeline"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-3 flex items-center justify-between text-[11px] font-mono">
                     <span className="text-brand-400 font-semibold">
                       {p.steps.length} {p.steps.length === 1 ? 'Step' : 'Steps'}
                     </span>
-                    <span className="text-slate-500 text-[10px]">
+                    <span className="text-slate-500 text-[10px] line-clamp-1 max-w-[200px]">
                       {p.steps.map(s => s.operation.replace(/_/g, ' ')).join(' → ')}
                     </span>
                   </div>
@@ -411,15 +549,24 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-bold text-white">{selectedPipeline.name}</h3>
-                    {selectedPipeline.steps.some(s => s.operation === 'archive_extract' || s.operation === 'images_to_pdf') && (
+                    {selectedPipeline.steps.some(s => s.operation === 'archive_extract' || s.operation === 'images_to_pdf' || s.operation === 'pdf_merge') && (
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        ⚡ Multi-File Batch Enabled
+                        ⚡ Generic Batch Processing Enabled
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-800 text-slate-400">
-                    Pipeline #{selectedPipeline.id}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleExportJson(selectedPipeline)}
+                      className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition-colors border border-surface-700"
+                    >
+                      <Download className="h-3 w-3" />
+                      <span>Export</span>
+                    </button>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-800 text-slate-400">
+                      ID #{selectedPipeline.id}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">{selectedPipeline.description}</p>
               </div>
@@ -434,7 +581,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                   {selectedPipeline.steps.map((step, idx) => {
                     const hasParams = step.parameters && Object.keys(step.parameters).length > 0;
                     const isExtraction = step.operation === 'archive_extract';
-                    const isMerge = step.operation === 'images_to_pdf' || step.operation === 'archive_to_pdf';
+                    const isMerge = ['images_to_pdf', 'archive_to_pdf', 'pdf_merge', 'video_concat', 'audio_merge'].includes(step.operation);
 
                     return (
                       <div key={idx} className="flex flex-col sm:flex-row items-center gap-3">
@@ -449,12 +596,12 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                                 <span>{step.operation.replace(/_/g, ' ')}</span>
                                 {isExtraction && (
                                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
-                                    Extracts Multiple Files
+                                    Extracts Directory
                                   </span>
                                 )}
                                 {isMerge && (
                                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
-                                    Merges to Single PDF
+                                    Consolidates to File
                                   </span>
                                 )}
                               </div>
@@ -473,7 +620,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                                 </div>
                               ) : (
                                 <div className="text-[10px] text-slate-500 mt-0.5">
-                                  {isExtraction ? 'Extracts all images and files into working directory' : 'Default parameters'}
+                                  {isExtraction ? 'Extracts all contents into isolated working directory' : 'Default parameters'}
                                 </div>
                               )}
                             </div>
@@ -496,60 +643,89 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 </div>
               </div>
 
-              {/* Execution Panel */}
+              {/* Execution Panel with Multi-File Selection */}
               <div className="p-5 rounded-2xl bg-surface-950/80 border border-surface-800 space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-200 uppercase tracking-wider block">
-                    Select Input File to Run Pipeline
+                    Select Input File(s) for Pipeline Execution
                   </label>
-                  {selectedFile && (
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {(selectedFile.size_bytes / (1024 * 1024)).toFixed(2)} MB
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFiles}
+                      className="text-[11px] text-brand-400 hover:text-brand-300 font-medium transition-colors"
+                    >
+                      {selectedFileIds.length === files.length && files.length > 0 ? 'Deselect All' : 'Select All'}
+                    </button>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-surface-800 text-slate-300">
+                      {selectedFileIds.length} Selected
                     </span>
+                  </div>
+                </div>
+
+                {/* Multi-Select Files List */}
+                <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-2xl bg-surface-900/60 border border-surface-800">
+                  {files.length === 0 ? (
+                    <div className="p-4 text-center text-slate-500 text-xs">
+                      No files uploaded yet. Drag files into library to process.
+                    </div>
+                  ) : (
+                    files.map((f) => {
+                      const isChecked = selectedFileIds.includes(f.id);
+                      return (
+                        <div
+                          key={f.id}
+                          onClick={() => toggleFileSelection(f.id)}
+                          className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'bg-brand-500/10 border border-brand-500/30'
+                              : 'bg-surface-950/70 border border-surface-800 hover:border-surface-700'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            {isChecked ? (
+                              <CheckSquare className="h-4 w-4 text-brand-400 shrink-0" />
+                            ) : (
+                              <Square className="h-4 w-4 text-slate-500 shrink-0" />
+                            )}
+                            <span className="text-xs text-white truncate font-medium">{f.filename}</span>
+                          </div>
+
+                          <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded bg-surface-800 text-slate-400 uppercase">
+                              {f.category}
+                            </span>
+                            <span>{(f.size_bytes / (1024 * 1024)).toFixed(2)} MB</span>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <select
-                      value={selectedFileId || ''}
-                      onChange={(e) => setSelectedFileId(parseInt(e.target.value, 10))}
-                      className="w-full px-3 py-2.5 rounded-xl bg-surface-900 border border-surface-700 text-xs text-slate-200 focus:outline-none focus:border-brand-500"
-                    >
-                      <option value="">-- Choose file from library --</option>
-                      {files.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.filename} [{f.category.toUpperCase()}]
-                        </option>
-                      ))}
-                    </select>
+                {/* Execution Button */}
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-[11px] text-slate-400">
+                    {selectedFileIds.length > 1
+                      ? `Batch Mode: Will trigger ${selectedFileIds.length} parallel pipeline jobs.`
+                      : 'Single Run: Executes sequential chain with isolated scratch buffers.'}
                   </div>
 
                   <button
                     onClick={handleExecute}
-                    disabled={!selectedFileId || isExecuting}
+                    disabled={selectedFileIds.length === 0 || isExecuting}
                     className="flex items-center justify-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50"
                   >
                     <Play className="h-3.5 w-3.5 fill-current" />
-                    <span>{isExecuting ? 'Starting Pipeline...' : 'Run Pipeline'}</span>
+                    <span>
+                      {isExecuting
+                        ? 'Starting Pipeline...'
+                        : selectedFileIds.length > 1
+                        ? `Run Batch Pipeline (${selectedFileIds.length} Files)`
+                        : 'Run Pipeline'}
+                    </span>
                   </button>
                 </div>
-
-                {/* Helpful contextual tip */}
-                {selectedFile && (
-                  <div className="p-2.5 rounded-xl bg-surface-900/60 border border-surface-800 flex items-center gap-2 text-[11px] text-slate-400">
-                    <Info className="h-4 w-4 text-brand-400 shrink-0" />
-                    {selectedFile.category === 'archive' && selectedPipeline.steps.some(s => s.operation === 'archive_extract') ? (
-                      <span className="text-emerald-400">
-                        Archive detected: All images will be extracted, batch-processed in order, and compiled.
-                      </span>
-                    ) : (
-                      <span>
-                        Intermediate files are isolated in a temporary directory and automatically cleaned after the final stage completes.
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           ) : (
@@ -632,6 +808,29 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 </div>
               </div>
 
+              {/* Validation Issues Banner */}
+              {validationIssues.length > 0 && (
+                <div className="p-3 rounded-2xl bg-surface-950 border border-surface-800 space-y-1.5">
+                  <div className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Pipeline Chain Validation Analysis</span>
+                  </div>
+                  {validationIssues.map((issue, idx) => (
+                    <div
+                      key={idx}
+                      className={`text-[11px] p-2 rounded-xl flex items-start gap-2 ${
+                        issue.severity === 'error'
+                          ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                          : 'bg-amber-500/10 border border-amber-500/20 text-amber-300'
+                      }`}
+                    >
+                      <span>{issue.severity === 'error' ? '❌' : '⚠️'}</span>
+                      <span>{issue.message}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Step Sequence Builder */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
@@ -651,15 +850,14 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                 <div className="space-y-3">
                   {newSteps.map((step, idx) => {
                     const currentOp = operations.find((o) => o.id === step.operation);
-                    const isExtract = step.operation === 'archive_extract';
-                    const isMerge = step.operation === 'images_to_pdf' || step.operation === 'archive_to_pdf';
+                    const currentSpec = specs[step.operation];
 
                     return (
                       <div
                         key={idx}
                         className="p-4 rounded-2xl bg-surface-950 border border-surface-800 space-y-3 hover:border-surface-700 transition-colors"
                       >
-                        {/* Step Header: Number, Op Dropdown, Reorder, Delete */}
+                        {/* Step Header */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center space-x-2.5 flex-1">
                             <span className="w-6 h-6 rounded-lg bg-brand-500/20 text-brand-300 font-mono text-xs flex items-center justify-center font-bold">
@@ -709,151 +907,13 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                           </div>
                         </div>
 
-                        {/* Multi-file Context Callouts */}
-                        {isExtract && (
-                          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 flex items-center gap-2">
-                            <span>📂</span>
-                            <span>Unpacks ZIP/CBZ. Downstream image steps will automatically batch-process all extracted images in order.</span>
-                          </div>
-                        )}
-
-                        {isMerge && (
-                          <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300 flex items-center gap-2">
-                            <span>📑</span>
-                            <span>Compiles all extracted and processed images sequentially into a single consolidated PDF book.</span>
-                          </div>
-                        )}
-
-                        {/* Step Parameter Controls */}
-                        <div className="pt-1 border-t border-surface-900">
-                          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                            <Sliders className="h-3 w-3 text-brand-400" />
-                            Step Parameters
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                            {/* Format selector if applicable */}
-                            {(step.operation.includes('convert') || step.operation === 'archive_create') && (
-                              <div>
-                                <label className="block text-[10px] text-slate-400 mb-1">Target Format</label>
-                                <select
-                                  value={step.parameters.format || (step.operation.includes('image') ? 'webp' : 'mp4')}
-                                  onChange={(e) => handleParameterChange(idx, 'format', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 rounded-lg bg-surface-900 border border-surface-750 text-xs text-slate-200 focus:outline-none"
-                                >
-                                  {step.operation.includes('image') && (
-                                    <>
-                                      <option value="webp">WebP (Modern & Lightweight)</option>
-                                      <option value="png">PNG (Lossless)</option>
-                                      <option value="jpg">JPG (Standard)</option>
-                                      <option value="avif">AVIF (Ultra Compressed)</option>
-                                    </>
-                                  )}
-                                  {step.operation.includes('video') && (
-                                    <>
-                                      <option value="webm">WebM (VP9 + Opus)</option>
-                                      <option value="mp4">MP4 (H.264 Universal)</option>
-                                      <option value="mkv">MKV</option>
-                                    </>
-                                  )}
-                                  {step.operation.includes('audio') && (
-                                    <>
-                                      <option value="mp3">MP3</option>
-                                      <option value="aac">AAC</option>
-                                      <option value="wav">WAV</option>
-                                      <option value="flac">FLAC</option>
-                                    </>
-                                  )}
-                                  {step.operation === 'archive_create' && (
-                                    <>
-                                      <option value="zip">ZIP</option>
-                                      <option value="7z">7Z</option>
-                                    </>
-                                  )}
-                                  {!step.operation.includes('image') && !step.operation.includes('video') && !step.operation.includes('audio') && step.operation !== 'archive_create' && (
-                                    <>
-                                      <option value="pdf">PDF</option>
-                                      <option value="docx">DOCX</option>
-                                      <option value="html">HTML</option>
-                                      <option value="txt">TXT</option>
-                                    </>
-                                  )}
-                                </select>
-                              </div>
-                            )}
-
-                            {/* Quality Slider for Images / PDF */}
-                            {(step.operation.includes('image') || step.operation.includes('pdf')) && step.operation !== 'archive_extract' && (
-                              <div className="sm:col-span-2">
-                                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                                  <span>Compression Quality</span>
-                                  <span className="font-mono text-brand-400 font-bold">
-                                    {step.parameters.quality ?? 85}%
-                                  </span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min="20"
-                                  max="100"
-                                  step="5"
-                                  value={step.parameters.quality ?? 85}
-                                  onChange={(e) => handleParameterChange(idx, 'quality', parseInt(e.target.value, 10))}
-                                  className="w-full accent-brand-500 h-1.5 bg-surface-800 rounded-lg cursor-pointer"
-                                />
-                              </div>
-                            )}
-
-                            {/* PDF Compression algorithm */}
-                            {(step.operation === 'images_to_pdf' || step.operation === 'archive_to_pdf') && (
-                              <div>
-                                <label className="block text-[10px] text-slate-400 mb-1">PDF Engine Compression</label>
-                                <select
-                                  value={step.parameters.compress || 'jpeg'}
-                                  onChange={(e) => handleParameterChange(idx, 'compress', e.target.value)}
-                                  className="w-full px-2.5 py-1.5 rounded-lg bg-surface-900 border border-surface-750 text-xs text-slate-200 focus:outline-none"
-                                >
-                                  <option value="jpeg">JPEG (Fast, Optimized for Manga/Photos)</option>
-                                  <option value="deflate">Deflate / ZIP (Lossless, Larger file)</option>
-                                </select>
-                              </div>
-                            )}
-
-                            {/* Video CRF for Video Convert */}
-                            {step.operation.includes('video') && !step.operation.includes('extract_audio') && (
-                              <div>
-                                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                                  <span>Encoding CRF</span>
-                                  <span className="font-mono text-brand-400 font-bold">{step.parameters.crf ?? 28}</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min="18"
-                                  max="35"
-                                  value={step.parameters.crf ?? 28}
-                                  onChange={(e) => handleParameterChange(idx, 'crf', parseInt(e.target.value, 10))}
-                                  className="w-full accent-brand-500 h-1.5 bg-surface-800 rounded-lg cursor-pointer"
-                                />
-                              </div>
-                            )}
-
-                            {/* Audio Bitrate */}
-                            {(step.operation === 'extract_audio' || step.operation === 'audio_convert') && (
-                              <div>
-                                <label className="block text-[10px] text-slate-400 mb-1">Audio Bitrate</label>
-                                <select
-                                  value={step.parameters.bitrate || 192}
-                                  onChange={(e) => handleParameterChange(idx, 'bitrate', parseInt(e.target.value, 10))}
-                                  className="w-full px-2.5 py-1.5 rounded-lg bg-surface-900 border border-surface-750 text-xs text-slate-200 focus:outline-none"
-                                >
-                                  <option value={128}>128 kbps (Standard)</option>
-                                  <option value={192}>192 kbps (High)</option>
-                                  <option value={256}>256 kbps (Very High)</option>
-                                  <option value={320}>320 kbps (Max Fidelity)</option>
-                                </select>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        {/* Dynamic Step Parameter Form (Improvement 3) */}
+                        <StepParameterForm
+                          operation={currentOp}
+                          spec={currentSpec}
+                          parameters={step.parameters}
+                          onChange={(paramName, value) => handleParameterChange(idx, paramName, value)}
+                        />
                       </div>
                     );
                   })}

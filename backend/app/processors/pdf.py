@@ -49,7 +49,15 @@ class PdfProcessor(BaseProcessor):
             res = await ghostscript_engine.compress(input_path, out_file, quality_setting=quality)
             return out_file, res
 
-        # 5. PDF Rotate Pages
+        # 5. PDF Merge
+        elif operation in ["pdf_merge", "merge_pdf", "merge_pdfs"]:
+            return await self._merge_pdfs(in_p, out_d, job_id, parameters)
+
+        # 6. PDF Split
+        elif operation in ["pdf_split", "split_pdf"]:
+            return await self._split_pdf(in_p, out_d, job_id, parameters)
+
+        # 7. PDF Rotate Pages
         elif operation in ["pdf_rotate_pages", "rotate_pdf"]:
             angle = int(parameters.get("angle", 90))
             pages = str(parameters.get("pages", "1-z"))
@@ -62,7 +70,7 @@ class PdfProcessor(BaseProcessor):
                 res = await ghostscript_engine.execute(cmd)
             return out_file, res
 
-        # 6. PDF Extract Pages
+        # 8. PDF Extract Pages
         elif operation in ["pdf_extract_pages", "extract_pdf_pages"]:
             pages = str(parameters.get("pages", "1"))
             out_file = str(out_d / f"{in_p.stem}_extracted_{job_id[:8]}.pdf")
@@ -154,4 +162,67 @@ class PdfProcessor(BaseProcessor):
             if temp_dir and temp_dir.exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
+    async def _merge_pdfs(
+        self,
+        in_p: Path,
+        out_d: Path,
+        job_id: str,
+        parameters: Dict[str, Any]
+    ) -> Tuple[str, ProcessResult]:
+        out_d.mkdir(parents=True, exist_ok=True)
+        out_pdf = str(out_d / f"{in_p.stem}_merged_{job_id[:8]}.pdf")
+
+        if in_p.is_dir():
+            pdfs = sorted([p for p in in_p.rglob("*.pdf")], key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x.name)])
+        else:
+            pdfs = [in_p]
+
+        if not pdfs:
+            return out_pdf, ProcessResult(
+                returncode=1,
+                stdout="",
+                stderr="No PDF files found to merge.",
+                success=False,
+                command=["gs", "pdf_merge"]
+            )
+
+        if len(pdfs) == 1:
+            shutil.copyfile(str(pdfs[0]), out_pdf)
+            return out_pdf, ProcessResult(returncode=0, stdout="Single PDF copied", stderr="", success=True, command=["copy", str(pdfs[0]), out_pdf])
+
+        cmd = [
+            "gs", "-dBATCH", "-dNOPAUSE", "-q",
+            "-sDEVICE=pdfwrite",
+            f"-sOutputFile={out_pdf}",
+            *[str(p.resolve()) for p in pdfs]
+        ]
+        res = await ghostscript_engine.execute(cmd, timeout=300)
+        return out_pdf, res
+
+    async def _split_pdf(
+        self,
+        in_p: Path,
+        out_d: Path,
+        job_id: str,
+        parameters: Dict[str, Any]
+    ) -> Tuple[str, ProcessResult]:
+        split_dir = out_d / f"{in_p.stem}_pages_{job_id[:8]}"
+        split_dir.mkdir(parents=True, exist_ok=True)
+        out_pattern = str(split_dir / "page_%d.pdf")
+
+        cmd = ["pdfseparate", str(in_p), out_pattern]
+        res = await poppler_engine.execute(cmd)
+        if not res.success:
+            # Fallback using Ghostscript
+            cmd_gs = [
+                "gs", "-dBATCH", "-dNOPAUSE", "-q",
+                "-sDEVICE=pdfwrite",
+                f"-sOutputFile={str(split_dir / 'page_%04d.pdf')}",
+                str(in_p)
+            ]
+            res = await ghostscript_engine.execute(cmd_gs)
+
+        return str(split_dir), res
+
 pdf_processor = PdfProcessor()
+

@@ -153,3 +153,97 @@ async def test_pipeline_runner_zip_to_webp_to_pdf_chain(temp_workdir, tmp_path):
     assert os.path.exists(direct_out)
     assert os.path.getsize(direct_out) > 500
 
+@pytest.mark.anyio
+async def test_operation_specs_api(client):
+    specs_res = await client.get("/api/v1/operations/specs")
+    assert specs_res.status_code == 200
+    specs = specs_res.json()
+    assert "image_convert" in specs
+    assert "video_convert" in specs
+    assert "pdf_merge" in specs
+    assert specs["image_convert"]["batch_capable"] is True
+
+    next_res = await client.get("/api/v1/operations/image_convert/compatible-next")
+    assert next_res.status_code == 200
+    next_ops = next_res.json()
+    assert len(next_ops) > 0
+
+@pytest.mark.anyio
+async def test_pipeline_validation_api(client):
+    # Valid pipeline
+    valid_payload = {
+        "name": "Valid Manga Chain",
+        "description": "Extract then convert then pdf",
+        "steps": [
+            {"operation": "archive_extract", "parameters": {}},
+            {"operation": "image_convert", "parameters": {"format": "webp"}},
+            {"operation": "images_to_pdf", "parameters": {}}
+        ]
+    }
+    val_res = await client.post("/api/v1/pipelines/validate", json=valid_payload)
+    assert val_res.status_code == 200
+    assert val_res.json()["valid"] is True
+
+    # Incompatible pipeline (audio into images_to_pdf)
+    invalid_payload = {
+        "name": "Invalid Chain",
+        "description": "Audio directly into PDF",
+        "steps": [
+            {"operation": "audio_convert", "parameters": {}},
+            {"operation": "images_to_pdf", "parameters": {}}
+        ]
+    }
+    inval_res = await client.post("/api/v1/pipelines/validate", json=invalid_payload)
+    assert inval_res.status_code == 200
+    assert inval_res.json()["valid"] is False
+    assert len(inval_res.json()["issues"]) > 0
+
+@pytest.mark.anyio
+async def test_pipeline_batch_execute_and_import_export(client):
+    # 1. Upload 2 sample files
+    f1 = {"files": ("batch_doc1.md", b"# Doc 1", "text/markdown")}
+    f2 = {"files": ("batch_doc2.md", b"# Doc 2", "text/markdown")}
+    u1 = await client.post("/api/v1/files/upload", files=f1)
+    u2 = await client.post("/api/v1/files/upload", files=f2)
+    fid1 = u1.json()[0]["id"]
+    fid2 = u2.json()[0]["id"]
+
+    # 2. Create pipeline
+    p_payload = {
+        "name": "Batch Hash Pipeline",
+        "description": "Calculate sha256 checksum",
+        "steps": [
+            {"operation": "file_hash", "parameters": {"algorithm": "sha256"}}
+        ]
+    }
+    p_res = await client.post("/api/v1/pipelines", json=p_payload)
+    pipeline_id = p_res.json()["id"]
+
+    # 3. Batch execute pipeline on 2 files
+    batch_res = await client.post(
+        f"/api/v1/pipelines/{pipeline_id}/batch-execute",
+        json={"file_ids": [fid1, fid2], "on_error": "skip"}
+    )
+    assert batch_res.status_code == 200
+    jobs = batch_res.json()
+    assert len(jobs) == 2
+    assert jobs[0]["operation"] == "pipeline_execute"
+
+    # 4. Export pipeline
+    exp_res = await client.get(f"/api/v1/pipelines/{pipeline_id}/export")
+    assert exp_res.status_code == 200
+    exp_data = exp_res.json()
+    assert exp_data["name"] == "Batch Hash Pipeline"
+    assert "ufs_pipeline_version" in exp_data
+
+    # 5. Import pipeline
+    imp_payload = {
+        "name": "Imported Hash Pipeline",
+        "description": "Imported pipeline test",
+        "steps": exp_data["steps"]
+    }
+    imp_res = await client.post("/api/v1/pipelines/import", json=imp_payload)
+    assert imp_res.status_code == 200
+    assert imp_res.json()["name"] == "Imported Hash Pipeline"
+
+

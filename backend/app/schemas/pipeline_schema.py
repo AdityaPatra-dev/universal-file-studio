@@ -30,3 +30,18 @@ class PipelineResponse(PipelineBase):
 class PipelineExecuteRequest(BaseModel):
     file_id: int
     parameters: Dict[str, Any] = {}
+
+class PipelineBatchExecuteRequest(BaseModel):
+    file_ids: List[int]
+    parameters: Dict[str, Any] = {}
+    on_error: str = "skip"  # "stop" | "skip" | "collect"
+
+class PipelineValidationIssue(BaseModel):
+    step: int
+    operation: str
+    severity: str  # "error" | "warning" | "info"
+    message: str
+
+class PipelineValidationResponse(BaseModel):
+    valid: bool
+    issues: List[PipelineValidationIssue] = []

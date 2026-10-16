@@ -228,13 +228,15 @@ class JobManager:
         if operation == "pipeline_execute":
             from app.processors.pipeline_runner import pipeline_runner
             steps = parameters.get("steps", [])
+            on_err = parameters.get("on_error", "stop")
             out_path, res = await pipeline_runner.execute_chain(
                 input_path=input_path,
                 steps=steps,
                 output_dir=out_dir,
                 job_id=job_id,
                 progress_callback=set_progress,
-                file_info=f_info
+                file_info=f_info,
+                on_error=on_err
             )
             if not res.success:
                 raise RuntimeError(res.stderr or f"Pipeline execution failed: {res.stdout}")

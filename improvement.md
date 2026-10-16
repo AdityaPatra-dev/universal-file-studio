@@ -1215,3 +1215,4 @@ plugins/
 
 > [!TIP]
 > Start with `specs.py` → `/api/v1/operations/specs` → `StepParameterForm.tsx`. This alone will make the pipeline editor work with **any** current and future operation without frontend code changes.
+

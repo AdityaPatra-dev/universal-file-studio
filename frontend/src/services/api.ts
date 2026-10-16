@@ -2,7 +2,7 @@ import {
   FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, 
   Preset, AppSetting, FileHashesResponse, FileMetadataResponse,
   Pipeline, PipelineCreatePayload, PipelineUpdatePayload,
-  DeveloperInfo
+  DeveloperInfo, OperationSpec, PipelineValidationResponse
 } from '../types/api';
 
 const getApiBase = (): string => {
@@ -303,6 +303,48 @@ export const api = {
       body: JSON.stringify({ file_id: fileId, parameters }),
     });
     return parseResponse<Job>(res, 'Failed to execute pipeline');
+  },
+
+  async batchExecutePipeline(id: number, fileIds: number[], onError: 'stop' | 'skip' | 'collect' = 'skip', parameters: Record<string, any> = {}): Promise<Job[]> {
+    const res = await fetchSafe(`${API_BASE}/pipelines/${id}/batch-execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_ids: fileIds, on_error: onError, parameters }),
+    });
+    return parseResponse<Job[]>(res, 'Failed to batch execute pipeline');
+  },
+
+  async validatePipeline(payload: { name: string; description?: string; steps: any[] }): Promise<PipelineValidationResponse> {
+    const res = await fetchSafe(`${API_BASE}/pipelines/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return parseResponse<PipelineValidationResponse>(res, 'Failed to validate pipeline');
+  },
+
+  async exportPipeline(id: number): Promise<any> {
+    const res = await fetchSafe(`${API_BASE}/pipelines/${id}/export`);
+    return parseResponse<any>(res, 'Failed to export pipeline');
+  },
+
+  async importPipeline(payload: PipelineCreatePayload): Promise<Pipeline> {
+    const res = await fetchSafe(`${API_BASE}/pipelines/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return parseResponse<Pipeline>(res, 'Failed to import pipeline');
+  },
+
+  async getOperationSpecs(): Promise<Record<string, OperationSpec>> {
+    const res = await fetchSafe(`${API_BASE}/operations/specs`);
+    return parseResponse<Record<string, OperationSpec>>(res, 'Failed to fetch operation specs');
+  },
+
+  async getCompatibleNext(opId: string): Promise<OperationSpec[]> {
+    const res = await fetchSafe(`${API_BASE}/operations/${opId}/compatible-next`);
+    return parseResponse<OperationSpec[]>(res, 'Failed to fetch compatible operations');
   },
 
   // Developer & Documentation

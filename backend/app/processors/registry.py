@@ -42,6 +42,9 @@ class ProcessorRegistry:
             "video_remove_audio": video_processor,
             "extract_frames": video_processor,
             "video_extract_frames": video_processor,
+            "video_concat": video_processor,
+            "concat_video": video_processor,
+            "merge_videos": video_processor,
 
             # Audio
             "audio_convert": audio_processor,
@@ -56,6 +59,9 @@ class ProcessorRegistry:
             "change_audio_speed": audio_processor,
             "audio_reverse": audio_processor,
             "reverse_audio": audio_processor,
+            "audio_merge": audio_processor,
+            "merge_audio": audio_processor,
+            "concat_audio": audio_processor,
 
             # Image
             "image_convert": image_processor,
@@ -87,6 +93,11 @@ class ProcessorRegistry:
             "archive_to_pdf": pdf_processor,
             "cbz_to_pdf": pdf_processor,
             "merge_to_pdf": pdf_processor,
+            "pdf_merge": pdf_processor,
+            "merge_pdf": pdf_processor,
+            "merge_pdfs": pdf_processor,
+            "pdf_split": pdf_processor,
+            "split_pdf": pdf_processor,
 
             # Archive
             "archive_create": archive_processor,
@@ -94,6 +105,8 @@ class ProcessorRegistry:
             "archive_extract": archive_processor,
             "extract_archive": archive_processor,
             "archive_test": archive_processor,
+            "archive_list": archive_processor,
+            "list_archive": archive_processor,
 
             # Documents & Office
             "document_convert": document_processor,

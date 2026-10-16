@@ -128,6 +128,43 @@ class VideoProcessor(BaseProcessor):
             res = await ffmpeg_engine.extract_frames(input_path, out_sub_d, fps=fps, format=fmt)
             return out_sub_d, res
 
+        # 13. Video Concat (Directory or multi-video merge)
+        elif operation in ["video_concat", "concat_video", "merge_videos"]:
+            import re
+            vid_exts = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".ts"}
+            if in_p.is_dir():
+                vids = sorted([p for p in in_p.rglob("*") if p.suffix.lower() in vid_exts], key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x.name)])
+            else:
+                vids = [in_p]
+
+            fmt = str(parameters.get("format", "mp4")).lower().lstrip(".")
+            out_file = str(out_d / f"{in_p.stem}_concat_{job_id[:8]}.{fmt}")
+
+            if not vids:
+                return out_file, ProcessResult(returncode=1, stdout="", stderr="No video files found to concatenate", success=False, command=["ffmpeg", "concat"])
+
+            if len(vids) == 1:
+                import shutil
+                shutil.copyfile(str(vids[0]), out_file)
+                return out_file, ProcessResult(returncode=0, stdout="Single video copied", stderr="", success=True, command=["copy", str(vids[0]), out_file])
+
+            # Write concat file
+            concat_txt = out_d / f"concat_{job_id[:8]}.txt"
+            with open(concat_txt, "w", encoding="utf-8") as f:
+                for v in vids:
+                    f.write(f"file '{v.resolve().as_posix()}'\n")
+
+            cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c", "copy", out_file]
+            res = await ffmpeg_engine.execute(cmd)
+            if not res.success or not os.path.exists(out_file) or os.path.getsize(out_file) == 0:
+                # Fallback to re-encoding if streams are mismatched
+                cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c:v", "libx264", "-c:a", "aac", out_file]
+                res = await ffmpeg_engine.execute(cmd)
+
+            if concat_txt.exists():
+                concat_txt.unlink(missing_ok=True)
+            return out_file, res
+
         # Default fallback
         out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.mp4")
         res = await ffmpeg_engine.convert(input_path, out_file)

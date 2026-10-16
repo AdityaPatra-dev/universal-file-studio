@@ -196,5 +196,41 @@ export interface WebSocketEventPacket {
   [key: string]: any;
 }
 
+export interface OperationSpec {
+  id: string;
+  name: string;
+  category: string;
+  engine: string;
+  description: string;
+  accepts: {
+    categories: string[];
+    formats: string[];
+    directory: boolean;
+  };
+  produces: {
+    category: string;
+    format?: string;
+    format_from_param?: string;
+    directory: boolean;
+  };
+  parameters: OperationParam[];
+  batch_capable: boolean;
+}
 
+export interface PipelineValidationIssue {
+  step: number;
+  operation: string;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+}
 
+export interface PipelineValidationResponse {
+  valid: boolean;
+  issues: PipelineValidationIssue[];
+}
+
+export interface PipelineBatchExecutePayload {
+  file_ids: number[];
+  parameters?: Record<string, any>;
+  on_error?: 'stop' | 'skip' | 'collect';
+}

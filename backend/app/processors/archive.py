@@ -41,6 +41,15 @@ class ArchiveProcessor(BaseProcessor):
             res = await sevenzip_engine.test(input_path)
             return input_path, res
 
+        # 4. Archive List Manifest
+        elif operation in ["archive_list", "list_archive"]:
+            out_file = str(out_d / f"{in_p.stem}_manifest_{job_id[:8]}.txt")
+            cmd = ["7z", "l", "-ba", input_path]
+            res = await sevenzip_engine.execute(cmd)
+            with open(out_file, "w", encoding="utf-8") as f:
+                f.write(res.stdout or "")
+            return out_file, res
+
         # Default fallback
         out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.zip")
         res = await sevenzip_engine.create(out_file, [input_path])

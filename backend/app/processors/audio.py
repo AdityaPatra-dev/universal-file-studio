@@ -78,6 +78,36 @@ class AudioProcessor(BaseProcessor):
             res = await ffmpeg_engine.execute(cmd)
             return out_file, res
 
+        # 7. Audio Merge / Concat
+        elif operation in ["audio_merge", "merge_audio", "concat_audio"]:
+            import re, os, shutil
+            aud_exts = {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".opus", ".wma"}
+            if in_p.is_dir():
+                auds = sorted([p for p in in_p.rglob("*") if p.suffix.lower() in aud_exts], key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x.name)])
+            else:
+                auds = [in_p]
+
+            fmt = str(parameters.get("format", "mp3")).lower().lstrip(".")
+            out_file = str(out_d / f"{in_p.stem}_merged_{job_id[:8]}.{fmt}")
+
+            if not auds:
+                return out_file, ProcessResult(returncode=1, stdout="", stderr="No audio files found to merge", success=False, command=["ffmpeg", "audio_merge"])
+
+            if len(auds) == 1:
+                shutil.copyfile(str(auds[0]), out_file)
+                return out_file, ProcessResult(returncode=0, stdout="Single audio copied", stderr="", success=True, command=["copy", str(auds[0]), out_file])
+
+            concat_txt = out_d / f"audio_concat_{job_id[:8]}.txt"
+            with open(concat_txt, "w", encoding="utf-8") as f:
+                for a in auds:
+                    f.write(f"file '{a.resolve().as_posix()}'\n")
+
+            cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c:a", "libmp3lame" if fmt == "mp3" else "aac", out_file]
+            res = await ffmpeg_engine.execute(cmd)
+            if concat_txt.exists():
+                concat_txt.unlink(missing_ok=True)
+            return out_file, res
+
         # Default fallback
         out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.mp3")
         cmd = ["ffmpeg", "-y", "-i", input_path, out_file]
