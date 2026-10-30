@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   UploadCloud, Files, ListOrdered, Wrench, Activity, Settings, 
-  GitMerge, CheckCircle2, XCircle, Terminal, X, ChevronRight
+  Wand2, CheckCircle2, XCircle, Terminal, X, ChevronRight
 } from 'lucide-react';
 import { EngineInfo } from '../../types/api';
 
@@ -44,10 +44,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     { 
       id: 'pipelines', 
-      label: 'Pipelines Studio', 
-      icon: GitMerge, 
-      subtext: 'Chains & Recipes',
-      desc: 'Multi-Step Chains'
+      label: 'Workflows & Recipes', 
+      icon: Wand2, 
+      subtext: '1-Tap Automation',
+      desc: 'PDFs, ZIPs, Videos'
     },
     { 
       id: 'jobs', 

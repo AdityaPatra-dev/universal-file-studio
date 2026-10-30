@@ -57,3 +57,4 @@ echo To install on your connected phone or emulator:
 echo   adb install -r universal-file-studio.apk
 echo ======================================================================
 pause
+

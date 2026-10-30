@@ -29,4 +29,4 @@ test/
 frontend/android/.gradle/
 frontend/android/app/build/
 frontend/android/build/
-emulator_job_completed.png
+emulator_*.png

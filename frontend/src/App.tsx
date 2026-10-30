@@ -315,7 +315,6 @@ export function App() {
         onRefresh={loadData}
         isRefreshing={isRefreshing}
         onNavigateTab={setCurrentTab}
-        onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
         onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
         onOpenMobileConnect={() => setIsMobileConnectOpen(true)}
       />

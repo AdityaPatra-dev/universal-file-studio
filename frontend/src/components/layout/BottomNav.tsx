@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  UploadCloud, Files, GitMerge, ListOrdered, Grid, 
+  UploadCloud, Files, Wand2, ListOrdered, Grid, 
   Wrench, Activity, Settings, Terminal, Smartphone, 
   HelpCircle, X, ChevronRight, RefreshCw, Cpu
 } from 'lucide-react';
@@ -49,8 +49,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'pipelines' as TabType,
-      label: 'Pipelines',
-      icon: GitMerge,
+      label: 'Workflows',
+      icon: Wand2,
     },
     {
       id: 'jobs' as TabType,
