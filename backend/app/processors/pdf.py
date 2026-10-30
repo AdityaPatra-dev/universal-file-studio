@@ -180,6 +180,13 @@ class PdfProcessor(BaseProcessor):
             pdfs = sorted([p for p in in_p.rglob("*.pdf")], key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x.name)])
         else:
             pdfs = [in_p]
+            extra_files = parameters.get("additional_files") or parameters.get("files") or []
+            if isinstance(extra_files, str):
+                extra_files = [f.strip() for f in extra_files.split(",") if f.strip()]
+            for ef in extra_files:
+                p_ef = Path(ef)
+                if p_ef.exists() and p_ef not in pdfs:
+                    pdfs.append(p_ef)
 
         if not pdfs:
             return out_pdf, ProcessResult(

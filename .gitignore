@@ -23,6 +23,7 @@ storage/thumbnails/*
 !storage/thumbnails/.gitkeep
 # Test files
 test/
+test_samples/
 
 # Android & Mobile Build Artifacts
 *.apk

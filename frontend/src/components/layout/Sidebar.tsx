@@ -44,10 +44,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     { 
       id: 'pipelines', 
-      label: 'Workflows & Recipes', 
+      label: 'Tools & Recipes', 
       icon: Wand2, 
-      subtext: '1-Tap Automation',
-      desc: 'PDFs, ZIPs, Videos'
+      subtext: '102+ Local Tools',
+      desc: 'iLovePDF, Video, Audio, ZIP'
     },
     { 
       id: 'jobs', 

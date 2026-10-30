@@ -29,11 +29,11 @@ class FFmpegEngine(BaseEngine):
         encoders = info.capabilities.encoders if info and info.capabilities else []
         fmt = format_ext.lower().lstrip(".")
         if fmt == "webm":
-            if "libopus" in encoders:
+            if "libopus" in encoders or not encoders:
                 return "libopus"
             return "libvorbis" if "libvorbis" in encoders else "opus"
         if fmt == "mp3":
-            return "libmp3lame" if "libmp3lame" in encoders else "mp3"
+            return "libmp3lame"
         return "aac"
 
     async def convert(
@@ -56,6 +56,8 @@ class FFmpegEngine(BaseEngine):
 
             cmd.extend(["-c:v", v_codec])
             cmd.extend(["-c:a", a_codec])
+            if a_codec == "opus":
+                cmd.extend(["-strict", "-2"])
 
             # crf and preset only apply to x264/x265/vpx
             if crf is not None and v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:

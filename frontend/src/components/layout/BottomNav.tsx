@@ -49,7 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'pipelines' as TabType,
-      label: 'Workflows',
+      label: 'Tools',
       icon: Wand2,
     },
     {

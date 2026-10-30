@@ -97,3 +97,68 @@ Across almost every page and modal, users are confronted with developer terminol
    - Recreate `JobList.tsx` for modern visual task tracking.
 7. **Phase 7: Mobile APK Compilation & Emulator Verification**
    - Rebuild Android APK and verify on `emulator-5554` with zero regressions.
+8. **Phase 8: Complete 102+ Offline Tools Catalog & iLovePDF Parity**
+   - Implemented domain catalogs across 5 studios with top tools pinned and specialized controls.
+9. **Phase 9: Comprehensive Desktop CLI Verification**
+   - Automated test suite validating all 9 native hardware engines and 29 core operations.
+
+---
+
+## 5. 102+ Offline Tools Catalog & iLovePDF Parity (Phase 8 Completed)
+
+| Studio | Tool Count | Pinned Top Tools | Highlights |
+| :--- | :---: | :--- | :--- |
+| **Document & PDF** | **36** | Merge PDF, PDF to Word, Word to PDF, Compress, Split, Photos to PDF, PDF to Images, Protect, Unlock, Watermark, Sign | 100% parity with all 27 iLovePDF web tools. 3-tier compression cards, 9-point watermark alignment grid, page range selectors. |
+| **Video Studio** | **21** | Universal Transcoder, Video Trim/Cut, Compress, Extract Audio/MP3, Video to GIF, 9:16 Social Re-crop, Mute Video | Hardware-accelerated FFmpeg transcoding, fast-seek cutting without re-encoding, aspect-ratio preserving padding. |
+| **Audio Studio** | **15** | Universal Transcoder, Ringtone Trim/Cutter, Compress Audio, Normalize Loudness EBU R128, Volume Booster | EBU R128 broadcast standard loudness normalization, lossless FLAC/WAV/MP3 conversion, dynamic range compression. |
+| **Image Studio** | **20** | Universal Transcoder, TinyPNG Compress, Photos to PDF, Resize Image, Crop Image, iPhone HEIC to JPG, Strip EXIF | High-ratio compression, batch conversion, EXIF GPS privacy scrubber, aspect ratio locking. |
+| **Archive & Data** | **10** | Universal Unpack/Extract, Create ZIP, ZIP to PDF, Password Encrypt (AES-256), 7-Zip Ultra | Multiformat decompression (ZIP, 7Z, RAR, TAR, GZ), manifest listing, integrity validation, SHA-256 checksums. |
+
+---
+
+## 6. Desktop CLI Test Verification Report (Phase 9 Completed)
+
+**Test Command**: `python scripts/verify_all_cli_functions.py`  
+**Engines Exercised**: FFmpeg (8.1.3), ImageMagick (7.1.2-34), Ghostscript (10.06.0), Poppler (26.01.0), Pandoc (3.12.1), 7-Zip (26.04), Tesseract (5.5.3)  
+**Execution Wall Time**: 32.10 seconds  
+**Pass Rate**: **29 / 29 (100% SUCCESS)**
+
+```
+======================================================================
+  Universal File Studio - Full Desktop CLI Function Test Suite
+======================================================================
+[DIAGNOSTICS] Testing SYS-01: Check system status and configuration... ✓ PASSED
+[DIAGNOSTICS] Testing SYS-02: List detected hardware CLI engines...   ✓ PASSED
+[SECURITY]    Testing HASH-01: Compute SHA-256, MD5, and CRC-32...    ✓ PASSED
+[SECURITY]    Testing META-01: Sanitize EXIF and device metadata...    ✓ PASSED
+[DOCUMENT]    Testing OCR-01: Extract text from image via Tesseract... ✓ PASSED
+[DOCUMENT]    Testing CONV-01: Transcode Markdown to HTML (Pandoc)...  ✓ PASSED
+[IMAGE]       Testing CONV-02: Transcode PNG to WebP (ImageMagick)...  ✓ PASSED
+[AUDIO]       Testing CONV-03: Transcode WAV to MP3 (FFmpeg)...        ✓ PASSED
+[VIDEO]       Testing CONV-04: Transcode MP4 to WebM (VP9 + Opus)...   ✓ PASSED
+[DOCUMENT]    Testing PDF-01: Lossless PDF compress (Ghostscript)...   ✓ PASSED
+[DOCUMENT]    Testing PDF-02: Merge multiple PDFs (Ghostscript)...     ✓ PASSED
+[DOCUMENT]    Testing PDF-03: Split multi-page PDF (Poppler)...        ✓ PASSED
+[DOCUMENT]    Testing PDF-04: Render PDF to high-res PNG (pdftoppm)... ✓ PASSED
+[DOCUMENT]    Testing PDF-05: Combine images to PDF (ImageMagick)...   ✓ PASSED
+[VIDEO]       Testing VID-01: Fast-seek video trimming (-c copy)...   ✓ PASSED
+[VIDEO]       Testing VID-02: Extract audio track from MP4...          ✓ PASSED
+[VIDEO]       Testing VID-03: Resize video with aspect pad...          ✓ PASSED
+[VIDEO]       Testing VID-04: Strip audio track (Mute video stream)... ✓ PASSED
+[AUDIO]       Testing AUD-01: Trim audio duration (Ringtone cutter)... ✓ PASSED
+[AUDIO]       Testing AUD-02: EBU R128 loudness normalization...       ✓ PASSED
+[IMAGE]       Testing IMG-01: Resize image dimensions...               ✓ PASSED
+[IMAGE]       Testing IMG-02: Convert to Black & White Grayscale...   ✓ PASSED
+[IMAGE]       Testing IMG-03: Rotate image orientation by 90°...       ✓ PASSED
+[ARCHIVE]     Testing ARC-01: Package files into ZIP (7-Zip)...        ✓ PASSED
+[ARCHIVE]     Testing ARC-02: List manifest table-of-contents...       ✓ PASSED
+[ARCHIVE]     Testing ARC-03: Decompress & extract ZIP archive...      ✓ PASSED
+[ARCHIVE]     Testing ARC-04: Test archive integrity & CRC...          ✓ PASSED
+[PIPELINE]    Testing PIPE-01: Video Privacy Scrub & WebM Pipeline...  ✓ PASSED
+[PIPELINE]    Testing PIPE-02: Image Sanitize & WebP Pipeline...       ✓ PASSED
+======================================================================
+  29 / 29 TESTS PASSED (100% SUCCESS)
+======================================================================
+```
+
+

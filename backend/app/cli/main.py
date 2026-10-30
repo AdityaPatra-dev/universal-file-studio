@@ -25,7 +25,10 @@ from app.processors.pipeline_runner import pipeline_runner
 @click.version_option(version=settings.VERSION, prog_name="Universal File Studio CLI (ufs)")
 def cli():
     """Universal File Studio (ufs) - Local-First File Processing CLI."""
-    pass
+    try:
+        asyncio.run(EngineManager.scan_and_register_all())
+    except Exception:
+        pass
 
 
 @cli.command()
@@ -265,6 +268,64 @@ def pipeline_run(pipeline_id, input_path, output_dir):
         click.echo(f"SUCCESS: Pipeline completed! Output saved to: {res_path}")
     else:
         click.echo(f"ERROR: Pipeline failed: {result.stderr or result.stdout}", err=True)
+        sys.exit(1)
+
+
+@cli.command(name="process")
+@click.argument("operation", type=str)
+@click.argument("input_path", type=click.Path(exists=True))
+@click.option("--param", "-p", multiple=True, help="Parameter in key=value format (e.g. -p start_time=00:01 -p duration=5)")
+@click.option("--output-dir", "-o", default=None, help="Destination directory (defaults to configured OUTPUT_DIR)")
+def process_op(operation, input_path, param, output_dir):
+    """Execute any registered studio operation directly from the CLI."""
+    out_dir = output_dir or settings.OUTPUT_DIR
+    os.makedirs(out_dir, exist_ok=True)
+    
+    # Parse param list into dictionary
+    parameters = {}
+    for item in param:
+        if "=" in item:
+            k, v = item.split("=", 1)
+            v_lower = v.lower()
+            if v_lower in ("true", "yes"):
+                parameters[k] = True
+            elif v_lower in ("false", "no"):
+                parameters[k] = False
+            else:
+                try:
+                    if "." in v:
+                        parameters[k] = float(v)
+                    else:
+                        parameters[k] = int(v)
+                except ValueError:
+                    parameters[k] = v
+        else:
+            parameters[item] = True
+            
+    click.echo(f"[UFS] Executing operation '{operation}' on '{Path(input_path).name}'...")
+    if parameters:
+        click.echo(f"Parameters: {parameters}")
+
+    async def _run():
+        res_path, result = await processor_registry.dispatch(
+            operation=operation,
+            input_path=input_path,
+            output_dir=out_dir,
+            job_id=f"cli_{operation}",
+            parameters=parameters,
+            file_info=None
+        )
+        return res_path, result
+
+    res_path, result = asyncio.run(_run())
+    if result.success and res_path and os.path.exists(res_path):
+        click.echo(f"SUCCESS: Operation '{operation}' completed!")
+        click.echo(f"Output: {res_path}")
+        if result.command_str:
+            click.echo(f"Engine command: {result.command_str}")
+    else:
+        err_msg = result.stderr or result.stdout or "Unknown execution error"
+        click.echo(f"ERROR: Operation '{operation}' failed: {err_msg}", err=True)
         sys.exit(1)
 
 

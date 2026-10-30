@@ -19,7 +19,10 @@ import { api } from './services/api';
 import { socketService } from './services/socket';
 import { universalEngine, EngineMode } from './services/universalEngine';
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from './types/api';
-import { Sparkles, X, GitMerge, Layers } from 'lucide-react';
+import { Sparkles, X, GitMerge, Layers, Flame, ArrowRight, Wand2 } from 'lucide-react';
+import { ProcessDirectory } from './components/processes/ProcessDirectory';
+import { ProcessRunnerModal } from './components/processes/ProcessRunnerModal';
+import { findToolById, StudioTool } from './data/catalog';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('upload');
@@ -54,6 +57,8 @@ export function App() {
     message: string;
   } | null>(null);
   const [pipelinePreSelectedFileIds, setPipelinePreSelectedFileIds] = useState<number[]>([]);
+  const [pipelineViewMode, setPipelineViewMode] = useState<'directory' | 'builder'>('directory');
+  const [dashboardTool, setDashboardTool] = useState<StudioTool | null>(null);
 
   // Load all initial data
   const loadData = useCallback(async () => {
@@ -188,6 +193,7 @@ export function App() {
 
   const handleBatchPipeline = (selectedFiles: FileRecord[]) => {
     setPipelinePreSelectedFileIds(selectedFiles.map(f => f.id));
+    setPipelineViewMode('builder');
     setCurrentTab('pipelines');
   };
 
@@ -398,6 +404,62 @@ export function App() {
                   uploadProgress={uploadProgress}
                 />
 
+                {/* Quick 1-Tap Offline Tools */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <span className="p-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <Flame className="h-3.5 w-3.5" />
+                      </span>
+                      <h3 className="text-sm font-bold text-white tracking-tight">Popular Quick Tools</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPipelineViewMode('directory');
+                        setCurrentTab('pipelines');
+                      }}
+                      className="text-xs text-brand-400 hover:text-brand-300 font-bold btn-press flex items-center gap-1"
+                    >
+                      <span>All 102+ Tools</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                    {[
+                      { id: 'pdf_merge', label: 'Merge PDF', sub: 'iLovePDF Parity', color: 'from-amber-500 to-orange-600' },
+                      { id: 'pdf_to_docx', label: 'PDF to Word', sub: 'Pandoc / Libre', color: 'from-amber-600 to-red-600' },
+                      { id: 'pdf_compress', label: 'Compress PDF', sub: 'Ghostscript Lossless', color: 'from-orange-500 to-amber-600' },
+                      { id: 'video_trim', label: 'Trim Video', sub: 'Fast Seek Cut', color: 'from-indigo-500 to-violet-600' },
+                      { id: 'pdf_images_to_pdf', label: 'Photos to PDF', sub: '1-Tap Document', color: 'from-cyan-500 to-blue-600' },
+                      { id: 'archive_extract', label: 'Unpack Archive', sub: 'ZIP, 7Z, RAR, TAR', color: 'from-emerald-500 to-teal-600' },
+                    ].map((qt) => (
+                      <button
+                        key={qt.id}
+                        type="button"
+                        onClick={() => {
+                          const tool = findToolById(qt.id);
+                          if (tool) setDashboardTool(tool);
+                        }}
+                        className="p-3 rounded-2xl bg-surface-900 border border-surface-750/70 hover:border-brand-500/50 text-left transition-all btn-press group flex flex-col justify-between shadow-sm"
+                      >
+                        <div className={`p-2 rounded-xl bg-gradient-to-br ${qt.color} text-white w-fit shadow-md group-hover:scale-105 transition-transform`}>
+                          <Sparkles className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="mt-2.5">
+                          <div className="text-xs font-bold text-white group-hover:text-brand-300 transition-colors leading-tight truncate">
+                            {qt.label}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                            {qt.sub}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {files.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -442,17 +504,60 @@ export function App() {
               </div>
             )}
 
-            {/* Tab 3: Pipelines Studio */}
+            {/* Tab 3: Tools & Pipelines Studio */}
             {currentTab === 'pipelines' && (
-              <PipelineEditor
-                files={files}
-                preSelectedFileIds={pipelinePreSelectedFileIds}
-                onJobStarted={async () => {
-                  const updatedJobs = await api.listJobs();
-                  setJobs(updatedJobs);
-                  setCurrentTab('jobs');
-                }}
-              />
+              <div className="space-y-6">
+                {/* Mode Switcher */}
+                <div className="flex items-center justify-between bg-surface-900/90 p-1.5 rounded-2xl border border-surface-750/70 max-w-md shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setPipelineViewMode('directory')}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all btn-press flex items-center justify-center gap-2 ${
+                      pipelineViewMode === 'directory'
+                        ? 'bg-brand-600 text-white shadow-md shadow-brand-500/25'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>102+ Tools Directory</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPipelineViewMode('builder')}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all btn-press flex items-center justify-center gap-2 ${
+                      pipelineViewMode === 'builder'
+                        ? 'bg-brand-600 text-white shadow-md shadow-brand-500/25'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <GitMerge className="h-3.5 w-3.5" />
+                    <span>Workflows Builder</span>
+                  </button>
+                </div>
+
+                {pipelineViewMode === 'directory' ? (
+                  <ProcessDirectory
+                    libraryFiles={files}
+                    onJobStarted={async () => {
+                      const updatedJobs = await api.listJobs();
+                      setJobs(updatedJobs);
+                      setCurrentTab('jobs');
+                    }}
+                    onFilesUploaded={(newFiles) => setFiles((prev) => [...newFiles, ...prev])}
+                    onOpenPipelineEditor={() => setPipelineViewMode('builder')}
+                  />
+                ) : (
+                  <PipelineEditor
+                    files={files}
+                    preSelectedFileIds={pipelinePreSelectedFileIds}
+                    onJobStarted={async () => {
+                      const updatedJobs = await api.listJobs();
+                      setJobs(updatedJobs);
+                      setCurrentTab('jobs');
+                    }}
+                  />
+                )}
+              </div>
             )}
 
             {/* Tab 4: Job Queue & History */}
@@ -554,6 +659,22 @@ export function App() {
         isOpen={isMobileConnectOpen}
         onClose={() => setIsMobileConnectOpen(false)}
       />
+
+      {/* Dashboard Quick Tool Runner Modal */}
+      {dashboardTool && (
+        <ProcessRunnerModal
+          tool={dashboardTool}
+          isOpen={Boolean(dashboardTool)}
+          onClose={() => setDashboardTool(null)}
+          libraryFiles={files}
+          onJobStarted={async () => {
+            const updatedJobs = await api.listJobs();
+            setJobs(updatedJobs);
+            setCurrentTab('jobs');
+          }}
+          onFilesUploaded={(newFiles) => setFiles((prev) => [...newFiles, ...prev])}
+        />
+      )}
 
       {/* Mobile Adaptive Bottom Navigation Bar */}
       <BottomNav
