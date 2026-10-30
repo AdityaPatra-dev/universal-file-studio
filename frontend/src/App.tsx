@@ -17,11 +17,13 @@ import { MobileConnectModal } from './components/common/MobileConnectModal';
 import { BottomNav } from './components/layout/BottomNav';
 import { api } from './services/api';
 import { socketService } from './services/socket';
+import { universalEngine, EngineMode } from './services/universalEngine';
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from './types/api';
 import { Sparkles, X, GitMerge, Layers } from 'lucide-react';
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('upload');
+  const [engineMode, setEngineMode] = useState<EngineMode>(universalEngine.getMode());
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [engines, setEngines] = useState<EngineInfo[]>([]);
@@ -77,38 +79,48 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const unsubMode = universalEngine.onModeChange((mode) => setEngineMode(mode));
     loadData();
-    socketService.connect();
 
-    const unsubProgress = socketService.on('job:progress', (pkt) => {
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.id === pkt.job_id
-            ? { ...j, progress_percent: pkt.percent, status: 'running' }
-            : j
-        )
-      );
-    });
+    if (engineMode === 'desktop') {
+      socketService.connect();
 
-    const unsubCompleted = socketService.on('job:completed', () => {
-      api.listJobs().then(setJobs).catch(() => {});
-    });
+      const unsubProgress = socketService.on('job:progress', (pkt) => {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === pkt.job_id
+              ? { ...j, progress_percent: pkt.percent, status: 'running' }
+              : j
+          )
+        );
+      });
 
-    const unsubFailed = socketService.on('job:failed', () => {
-      api.listJobs().then(setJobs).catch(() => {});
-    });
+      const unsubCompleted = socketService.on('job:completed', () => {
+        api.listJobs().then(setJobs).catch(() => {});
+        api.listFiles().then(setFiles).catch(() => {});
+      });
 
-    const unsubCancelled = socketService.on('job:cancelled', () => {
-      api.listJobs().then(setJobs).catch(() => {});
-    });
+      const unsubFailed = socketService.on('job:failed', () => {
+        api.listJobs().then(setJobs).catch(() => {});
+      });
+
+      const unsubCancelled = socketService.on('job:cancelled', () => {
+        api.listJobs().then(setJobs).catch(() => {});
+      });
+
+      return () => {
+        unsubMode();
+        unsubProgress();
+        unsubCompleted();
+        unsubFailed();
+        unsubCancelled();
+      };
+    }
 
     return () => {
-      unsubProgress();
-      unsubCompleted();
-      unsubFailed();
-      unsubCancelled();
+      unsubMode();
     };
-  }, [loadData]);
+  }, [loadData, engineMode]);
 
   // Polling for jobs when any job is active
   useEffect(() => {
@@ -200,8 +212,19 @@ export function App() {
     }
   };
 
-  const handleDownloadFile = (id: number) => {
-    window.open(api.getFileDownloadUrl(id), '_blank');
+  const handleDownloadFile = async (id: number) => {
+    try {
+      const url = await universalEngine.getFileDownloadUrl(id);
+      const a = document.createElement('a');
+      a.href = url;
+      const f = files.find((item) => item.id === id);
+      a.download = f?.filename || `file_${id}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      window.open(api.getFileDownloadUrl(id), '_blank');
+    }
   };
 
   const handleCancelJob = async (id: string) => {
@@ -254,8 +277,19 @@ export function App() {
     }
   };
 
-  const handleDownloadOutput = (id: string) => {
-    window.open(api.getJobDownloadUrl(id), '_blank');
+  const handleDownloadOutput = async (id: string) => {
+    try {
+      const url = await universalEngine.getJobDownloadUrl(id);
+      const a = document.createElement('a');
+      a.href = url;
+      const job = jobs.find((j) => j.id === id);
+      a.download = job?.output_filename || `result_${id}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      window.open(api.getJobDownloadUrl(id), '_blank');
+    }
   };
 
   const handleRescanEngines = async () => {
@@ -277,6 +311,7 @@ export function App() {
       {/* Global Header */}
       <Header
         activeJobsCount={activeJobsCount}
+        engineMode={engineMode}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
         onNavigateTab={setCurrentTab}

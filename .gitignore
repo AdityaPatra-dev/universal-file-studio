@@ -23,3 +23,10 @@ storage/thumbnails/*
 !storage/thumbnails/.gitkeep
 # Test files
 test/
+
+# Android & Mobile Build Artifacts
+*.apk
+frontend/android/.gradle/
+frontend/android/app/build/
+frontend/android/build/
+emulator_job_completed.png
