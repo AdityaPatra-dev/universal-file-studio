@@ -21,10 +21,13 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose,
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+        {/* Mobile Drag Handle */}
+        <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
+
         {/* Modal Header */}
-        <div className="px-6 py-5 border-b border-surface-800 flex items-center justify-between bg-surface-900/80">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-surface-800 flex items-center justify-between bg-surface-900/80">
           <div className="flex items-center space-x-3">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-md">
               <Sparkles className="h-5 w-5 text-white" />
@@ -185,14 +188,14 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ isOpen, onClose,
           </div>
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-surface-800 bg-surface-900/60 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500 font-mono">
+        {/* Modal Footer with Safe Bottom Spacing */}
+        <div className="px-5 sm:px-6 py-4 border-t border-surface-800 bg-surface-900/90 flex items-center justify-between safe-bottom">
+          <span className="text-[11px] text-slate-500 font-mono hidden sm:inline">
             Universal File Studio v1.0 • Privacy-First
           </span>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30 cursor-pointer min-h-[42px]"
           >
             Got it, Let's Start!
           </button>

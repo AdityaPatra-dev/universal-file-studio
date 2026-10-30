@@ -24,3 +24,25 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Touch utilities & Mobile safe area insets */
+.safe-bottom {
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+}
+.safe-top {
+  padding-top: max(12px, env(safe-area-inset-top, 12px));
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Mobile tap highlight reset */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+

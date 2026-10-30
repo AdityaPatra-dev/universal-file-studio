@@ -100,11 +100,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS - Allow all local origins (localhost and 127.0.0.1 on any port)
+# CORS - Allow local and LAN origins for mobile Android & desktop access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

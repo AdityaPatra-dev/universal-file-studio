@@ -342,7 +342,7 @@ Universal File Studio provides first-class developer tooling built directly into
 - **Node.js 18+** & `npm`
 - Any desired CLI engines installed (FFmpeg, ImageMagick, Pandoc, LibreOffice, Tesseract, etc.)
 
-### 1. One-Line Launch
+### 1. Automated Quickstart (Linux & macOS)
 ```bash
 git clone https://github.com/AdityaPatra-dev/universal-file-studio.git
 cd universal-file-studio
@@ -350,11 +350,37 @@ cd universal-file-studio
 # Run automated install and build
 ./install.sh
 
-# Start backend & GUI studio
+# Start backend & GUI studio (binds to 0.0.0.0 for Local & Mobile LAN access)
 ./start.sh
 ```
 
-### 2. Manual Development Setup
+### 2. Windows Native Quickstart (No Docker Required)
+Double-click `start.bat` or run in Command Prompt / PowerShell:
+```cmd
+start.bat
+```
+This automatically configures Python virtualenv, installs backend requirements, verifies storage directories, and runs the studio on `http://localhost:8000`.
+
+### 3. Docker One-Command Setup (Linux, Windows & macOS)
+Universal File Studio ships with an all-in-one multi-stage container pre-configured with **all 9 native engines**:
+```bash
+# Using Docker Compose (Linux, macOS, Windows Docker Desktop)
+docker compose up --build -d
+
+# Or using the 1-click launch scripts:
+./run-docker.sh      # On Linux / macOS
+run-docker.bat       # On Windows
+```
+The studio will be immediately live at **`http://localhost:8000`**.
+
+### 4. 📱 Mobile Android & iOS Quick Connect (PWA)
+Universal File Studio features an adaptive mobile interface with bottom navigation and touch file cards:
+1. Ensure your smartphone is connected to the same Wi-Fi network as the host machine.
+2. Click **"Phone Connect"** in the top navigation bar to display your instant **QR Code** and LAN URL (e.g. `http://192.168.1.50:8000`).
+3. Scan the QR code or navigate to the URL in mobile Chrome on Android.
+4. Tap **Menu (⋮) → "Install App"** or **"Add to Home Screen"** to install Universal File Studio as a standalone native-feeling Android PWA with full-screen support!
+
+### 5. Manual Development Setup
 ```bash
 # 1. Setup Python Virtual Environment
 python3 -m venv .venv

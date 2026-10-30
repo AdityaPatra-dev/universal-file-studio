@@ -26,20 +26,11 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_JOBS: int = 4
     SUBPROCESS_TIMEOUT_SECONDS: int = 3600
     
-    # Local Server
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    # Local Server (binds to 0.0.0.0 for LAN & Mobile Android access)
+    HOST: str = os.getenv("HOST", "0.0.0.0")
+    PORT: int = int(os.getenv("PORT", "8000"))
     ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080"
+        "*"
     ]
     DEBUG: bool = True
     

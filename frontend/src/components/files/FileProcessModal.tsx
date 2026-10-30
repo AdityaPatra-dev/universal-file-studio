@@ -136,16 +136,19 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+        {/* Mobile Drag Handle */}
+        <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
+
         {/* Header */}
-        <div className="px-6 py-5 border-b border-surface-800 flex items-center justify-between bg-surface-900/70">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-surface-800 flex items-center justify-between bg-surface-900/80">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-brand-400" />
               Configure File Operation
             </h3>
-            <p className="text-xs text-slate-400 truncate max-w-md">{file.filename}</p>
+            <p className="text-xs text-slate-400 truncate max-w-[240px] sm:max-w-md">{file.filename}</p>
           </div>
           <button
             onClick={onClose}
@@ -385,8 +388,8 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-surface-800 bg-surface-900/60 flex items-center justify-between">
+        {/* Footer Actions with Safe Bottom Spacing */}
+        <div className="px-5 sm:px-6 py-4 border-t border-surface-800 bg-surface-900/90 flex items-center justify-between safe-bottom">
           <div className="text-xs text-slate-400 hidden sm:block">
             {selectedOp && (
               <span className="flex items-center gap-1.5">
@@ -395,17 +398,17 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
               </span>
             )}
           </div>
-          <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+          <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer min-h-[42px]"
             >
               Cancel
             </button>
             <button
               onClick={handleStartJob}
               disabled={isSubmitting || !selectedOp}
-              className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 cursor-pointer"
+              className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 cursor-pointer min-h-[42px]"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               <span>{getActionLabel()}</span>

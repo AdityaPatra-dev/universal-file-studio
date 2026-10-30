@@ -281,23 +281,26 @@ export const JobList: React.FC<JobListProps> = ({
         </div>
       )}
 
-      {/* Terminal / Log Modal */}
+      {/* Terminal / Log Modal (Adaptive Mobile Sheet) */}
       {selectedLogJob && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-            <div className="px-6 py-4 border-b border-surface-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+          <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+            {/* Mobile Drag Handle */}
+            <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
+
+            <div className="px-5 sm:px-6 py-4 border-b border-surface-800 flex items-center justify-between bg-surface-900/80">
               <h4 className="font-bold text-white text-sm flex items-center gap-2">
                 <Terminal className="h-4 w-4 text-brand-400" />
                 Execution Log — Job {selectedLogJob.id.slice(0, 8)}
               </h4>
               <button
                 onClick={() => setSelectedLogJob(null)}
-                className="text-slate-400 hover:text-white text-sm cursor-pointer"
+                className="px-3 py-1 rounded-xl bg-surface-800 text-slate-400 hover:text-white text-xs cursor-pointer"
               >
                 Close
               </button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-4 font-mono text-xs">
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 font-mono text-xs safe-bottom">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <div className="text-[10px] text-slate-500 uppercase">CLI Command Executed</div>
@@ -309,14 +312,14 @@ export const JobList: React.FC<JobListProps> = ({
                     <span>{copiedCmd ? 'Copied' : 'Copy Command'}</span>
                   </button>
                 </div>
-                <div className="p-3 rounded-xl bg-surface-950 text-emerald-400 break-all select-all border border-surface-800">
+                <div className="p-3 rounded-xl bg-surface-950 text-emerald-400 break-all select-all border border-surface-800 text-[11px]">
                   {selectedLogJob.command_executed}
                 </div>
               </div>
               {selectedLogJob.stdout && (
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase mb-1">Stdout Output</div>
-                  <pre className="p-3 rounded-xl bg-surface-950 text-slate-300 overflow-x-auto max-h-48 border border-surface-800">
+                  <pre className="p-3 rounded-xl bg-surface-950 text-slate-300 overflow-x-auto max-h-48 border border-surface-800 text-[11px]">
                     {selectedLogJob.stdout}
                   </pre>
                 </div>
@@ -324,7 +327,7 @@ export const JobList: React.FC<JobListProps> = ({
               {selectedLogJob.stderr && (
                 <div>
                   <div className="text-[10px] text-slate-500 uppercase mb-1">Stderr Stream</div>
-                  <pre className="p-3 rounded-xl bg-surface-950 text-amber-300 overflow-x-auto max-h-48 border border-surface-800">
+                  <pre className="p-3 rounded-xl bg-surface-950 text-amber-300 overflow-x-auto max-h-48 border border-surface-800 text-[11px]">
                     {selectedLogJob.stderr}
                   </pre>
                 </div>

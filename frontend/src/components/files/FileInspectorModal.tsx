@@ -105,16 +105,19 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+        {/* Mobile Drag Handle */}
+        <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
+
         {/* Modal Header */}
-        <div className="px-6 py-5 border-b border-surface-800 flex items-center justify-between bg-surface-900/70">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-surface-800 flex items-center justify-between bg-surface-900/80">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-brand-400" />
               Advanced File Inspector & Security
             </h3>
-            <p className="text-xs text-slate-400 truncate max-w-md">
+            <p className="text-xs text-slate-400 truncate max-w-[240px] sm:max-w-md">
               {file.filename} ({formatBytes(file.size_bytes)}) • {file.detected_format?.toUpperCase() || file.category.toUpperCase()}
             </p>
           </div>
@@ -309,14 +312,14 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-surface-800 bg-surface-900/60 flex items-center justify-between">
+        {/* Modal Footer with Safe Bottom Spacing */}
+        <div className="px-5 sm:px-6 py-4 border-t border-surface-800 bg-surface-900/80 flex items-center justify-between safe-bottom">
           <div className="text-[11px] text-slate-500 font-mono">
             Integrity Verified Locally
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white font-medium text-xs transition-colors cursor-pointer"
+            className="px-5 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white font-medium text-xs transition-colors cursor-pointer min-h-[40px]"
           >
             Close
           </button>

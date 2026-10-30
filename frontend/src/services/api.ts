@@ -2,7 +2,8 @@ import {
   FileRecord, Job, EngineInfo, SystemDiagnostics, Operation, 
   Preset, AppSetting, FileHashesResponse, FileMetadataResponse,
   Pipeline, PipelineCreatePayload, PipelineUpdatePayload,
-  DeveloperInfo, OperationSpec, PipelineValidationResponse
+  DeveloperInfo, OperationSpec, PipelineValidationResponse,
+  NetworkInfo
 } from '../types/api';
 
 const getApiBase = (): string => {
@@ -363,5 +364,10 @@ export const api = {
   async getOpenApiSchema(): Promise<any> {
     const res = await fetchSafe(`${API_BASE}/developer/openapi.json`);
     return parseResponse(res, 'Failed to fetch OpenAPI schema');
+  },
+
+  async getNetworkInfo(): Promise<NetworkInfo> {
+    const res = await fetchSafe(`${API_BASE}/system/network`);
+    return parseResponse<NetworkInfo>(res, 'Failed to fetch network information');
   }
 };

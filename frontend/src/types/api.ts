@@ -74,6 +74,15 @@ export interface SystemDiagnostics {
   installed_engines: EngineInfo[];
 }
 
+export interface NetworkInfo {
+  hostname: string;
+  primary_ip: string;
+  all_ips: string[];
+  port: number;
+  mobile_url: string;
+  is_lan_available: boolean;
+}
+
 export interface OperationParam {
   name: string;
   type: 'select' | 'number' | 'text' | 'boolean';

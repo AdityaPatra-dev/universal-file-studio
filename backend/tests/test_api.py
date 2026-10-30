@@ -30,6 +30,16 @@ async def test_diagnostics(client):
     assert "disk_total_gb" in data
 
 @pytest.mark.anyio
+async def test_network_info(client):
+    response = await client.get("/api/v1/system/network")
+    assert response.status_code == 200
+    data = response.json()
+    assert "hostname" in data
+    assert "primary_ip" in data
+    assert "mobile_url" in data
+    assert "port" in data
+
+@pytest.mark.anyio
 async def test_file_upload_and_job_lifecycle(client):
     # 1. Upload a dummy test image
     file_content = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc`\x00\x00\x00\x02\x00\x01H\xaf\xa4q\x00\x00\x00\x00IEND\xaeB`\x82"

@@ -113,3 +113,44 @@ async def update_setting(key: str, payload: SettingUpdate, db: AsyncSession = De
     await db.refresh(setting_rec)
     return setting_rec
 
+@router.get("/network")
+async def get_network_info():
+    import socket
+    hostname = socket.gethostname()
+    local_ips = ["127.0.0.1"]
+    primary_ip = "127.0.0.1"
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        detected_ip = s.getsockname()[0]
+        s.close()
+        if detected_ip and detected_ip not in local_ips:
+            primary_ip = detected_ip
+            local_ips.append(detected_ip)
+    except Exception:
+        pass
+
+    try:
+        # Also grab any host addresses
+        host_info = socket.gethostbyname_ex(hostname)
+        for ip in host_info[2]:
+            if ip not in local_ips and not ip.startswith("127."):
+                local_ips.append(ip)
+                if primary_ip == "127.0.0.1":
+                    primary_ip = ip
+    except Exception:
+        pass
+
+    port = settings.PORT
+    mobile_url = f"http://{primary_ip}:{port}" if primary_ip != "127.0.0.1" else f"http://localhost:{port}"
+
+    return {
+        "hostname": hostname,
+        "primary_ip": primary_ip,
+        "all_ips": local_ips,
+        "port": port,
+        "mobile_url": mobile_url,
+        "is_lan_available": primary_ip != "127.0.0.1"
+    }
+

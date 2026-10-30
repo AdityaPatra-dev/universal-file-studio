@@ -13,6 +13,8 @@ import { Diagnostics } from './components/system/Diagnostics';
 import { SettingsView } from './components/system/SettingsView';
 import { DeveloperHub } from './components/developer/DeveloperHub';
 import { HelpGuideModal } from './components/common/HelpGuideModal';
+import { MobileConnectModal } from './components/common/MobileConnectModal';
+import { BottomNav } from './components/layout/BottomNav';
 import { api } from './services/api';
 import { socketService } from './services/socket';
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from './types/api';
@@ -43,6 +45,7 @@ export function App() {
 
   // UI state for modals & drawers
   const [isHelpGuideOpen, setIsHelpGuideOpen] = useState(false);
+  const [isMobileConnectOpen, setIsMobileConnectOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [uploadNotification, setUploadNotification] = useState<{
     files: FileRecord[];
@@ -279,6 +282,7 @@ export function App() {
         onNavigateTab={setCurrentTab}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
         onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
+        onOpenMobileConnect={() => setIsMobileConnectOpen(true)}
       />
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -293,8 +297,8 @@ export function App() {
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
-        {/* Main Content View */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        {/* Main Content View with responsive padding for mobile bottom bar */}
+        <main className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 pb-24 md:pb-8">
           <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
             {/* Tab 1: Studio Dashboard / Upload */}
             {currentTab === 'upload' && (
@@ -509,6 +513,26 @@ export function App() {
         isOpen={isHelpGuideOpen}
         onClose={() => setIsHelpGuideOpen(false)}
         onNavigateTab={(tab) => setCurrentTab(tab as TabType)}
+      />
+
+      {/* Mobile Connect QR Code Modal */}
+      <MobileConnectModal
+        isOpen={isMobileConnectOpen}
+        onClose={() => setIsMobileConnectOpen(false)}
+      />
+
+      {/* Mobile Adaptive Bottom Navigation Bar */}
+      <BottomNav
+        currentTab={currentTab}
+        onSelectTab={setCurrentTab}
+        filesCount={files.length}
+        jobsCount={jobs.length}
+        activeJobsCount={activeJobsCount}
+        engines={engines}
+        onOpenMobileConnect={() => setIsMobileConnectOpen(true)}
+        onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
+        onRefresh={loadData}
+        isRefreshing={isRefreshing}
       />
     </div>
   );
