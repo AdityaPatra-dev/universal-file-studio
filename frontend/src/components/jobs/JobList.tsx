@@ -90,7 +90,7 @@ export const JobList: React.FC<JobListProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Top Toolbar: Filters & Bulk Actions (P1 Fixed) */}
+      {/* Top Toolbar: Filters & Bulk Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Dynamic Filter Pills */}
         <div className="flex flex-wrap gap-2">
@@ -103,15 +103,15 @@ export const JobList: React.FC<JobListProps> = ({
             <button
               key={st.id}
               onClick={() => setStatusFilter(st.id)}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all btn-press ${
                 statusFilter === st.id
-                  ? 'bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/30'
-                  : 'bg-surface-800/80 text-slate-300 hover:text-white hover:bg-surface-800'
+                  ? 'bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/30 ring-1 ring-brand-500/50'
+                  : 'bg-surface-900/80 text-slate-300 hover:text-white hover:bg-surface-850 border border-surface-800'
               }`}
             >
               <span>{st.label}</span>
               <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                statusFilter === st.id ? 'bg-brand-700 text-white font-bold' : 'bg-surface-900 text-slate-400'
+                statusFilter === st.id ? 'bg-brand-700 text-white font-bold' : 'bg-surface-950 text-slate-400'
               }`}>
                 {st.count}
               </span>
@@ -124,7 +124,7 @@ export const JobList: React.FC<JobListProps> = ({
           {failedJobs.length > 0 && onRetryAllFailed && (
             <button
               onClick={onRetryAllFailed}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-900 hover:bg-surface-850 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-all btn-press"
               title="Retry all failed jobs"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -135,7 +135,7 @@ export const JobList: React.FC<JobListProps> = ({
           {completedJobs.length > 0 && onClearCompleted && (
             <button
               onClick={onClearCompleted}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white border border-surface-700 text-xs font-medium transition-all cursor-pointer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-900 hover:bg-surface-850 text-slate-300 hover:text-white border border-surface-800 text-xs font-medium transition-all btn-press"
               title="Clear all finished jobs from list"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -147,10 +147,10 @@ export const JobList: React.FC<JobListProps> = ({
 
       {/* Jobs List */}
       {filteredJobs.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl bg-surface-900/30 border border-surface-800 space-y-2">
-          <p className="text-sm font-semibold text-slate-300">No jobs found in this view.</p>
+        <div className="p-12 text-center rounded-3xl card-glass border border-surface-800/80 space-y-2">
+          <p className="text-sm font-semibold text-slate-300">No jobs found</p>
           <p className="text-xs text-slate-500">
-            {jobs.length === 0 ? 'Start an operation or pipeline to monitor execution history.' : 'No jobs match the selected filter tab.'}
+            {jobs.length === 0 ? 'Start an operation or recipe to monitor execution.' : 'No jobs match the selected filter.'}
           </p>
         </div>
       ) : (
@@ -158,17 +158,17 @@ export const JobList: React.FC<JobListProps> = ({
           {filteredJobs.map((job) => (
             <div
               key={job.id}
-              className="p-4 rounded-2xl border border-surface-800 bg-surface-900/40 hover:bg-surface-900/70 transition-all space-y-3 shadow-sm"
+              className="p-4 rounded-2xl card-glass border border-surface-800/80 hover:border-surface-700/80 transition-all space-y-3 shadow-md"
             >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2.5 rounded-xl bg-surface-800 text-brand-400">
+                  <div className="p-2.5 rounded-xl bg-surface-850 text-brand-400 border border-surface-750">
                     <FileCheck className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="font-semibold text-sm text-white flex items-center gap-2">
                       <span>{job.operation.replace(/_/g, ' ').toUpperCase()}</span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-800 text-slate-400 border border-surface-700">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-950 text-slate-400 border border-surface-800">
                         {job.engine_used}
                       </span>
                     </div>
@@ -200,7 +200,7 @@ export const JobList: React.FC<JobListProps> = ({
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
                     <span className="text-slate-400">
-                      {job.status === 'queued' ? 'Waiting in background worker queue...' : 'Local hardware execution in progress...'}
+                      {job.status === 'queued' ? 'Queued in worker...' : 'Processing on device...'}
                     </span>
                     <span className="text-brand-300 font-bold">
                       {job.status === 'queued' ? 'In Queue' : `${Math.max(5, job.progress_percent).toFixed(1)}%`}
@@ -228,8 +228,8 @@ export const JobList: React.FC<JobListProps> = ({
                   {job.command_executed && (
                     <button
                       onClick={() => setSelectedLogJob(job)}
-                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white text-xs border border-surface-700/60 transition-colors cursor-pointer"
-                      title="View command and terminal stdout/stderr logs"
+                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-300 hover:text-white text-xs border border-surface-700/60 transition-colors btn-press"
+                      title="View execution logs"
                     >
                       <Terminal className="h-3.5 w-3.5 text-brand-400" />
                       <span>Logs</span>
@@ -239,7 +239,7 @@ export const JobList: React.FC<JobListProps> = ({
                   {job.status === 'running' && (
                     <button
                       onClick={() => onCancelJob(job.id)}
-                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer text-xs"
+                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors btn-press text-xs"
                       title="Cancel running job"
                     >
                       <StopCircle className="h-3.5 w-3.5" />
@@ -250,17 +250,17 @@ export const JobList: React.FC<JobListProps> = ({
                   {job.status === 'completed' && job.output_path && (
                     <button
                       onClick={() => onDownloadOutput(job.id)}
-                      className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-sm shadow-emerald-600/30 cursor-pointer text-xs"
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-sm shadow-emerald-600/30 btn-press text-xs"
                     >
                       <Download className="h-3.5 w-3.5" />
-                      <span>Download Result</span>
+                      <span>Download</span>
                     </button>
                   )}
 
                   {job.status === 'failed' && (
                     <button
                       onClick={() => onRetryJob(job.id)}
-                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors cursor-pointer text-xs"
+                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors btn-press text-xs shadow-sm shadow-brand-600/30"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                       <span>Retry</span>
@@ -269,7 +269,7 @@ export const JobList: React.FC<JobListProps> = ({
 
                   <button
                     onClick={() => onDeleteJob(job.id)}
-                    className="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer border border-surface-700/60"
+                    className="p-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-400 hover:text-rose-400 transition-colors btn-press border border-surface-700/60"
                     title="Remove job from list"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -283,7 +283,7 @@ export const JobList: React.FC<JobListProps> = ({
 
       {/* Terminal / Log Modal (Adaptive Mobile Sheet) */}
       {selectedLogJob && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
           <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
             {/* Mobile Drag Handle */}
             <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
@@ -295,7 +295,7 @@ export const JobList: React.FC<JobListProps> = ({
               </h4>
               <button
                 onClick={() => setSelectedLogJob(null)}
-                className="px-3 py-1 rounded-xl bg-surface-800 text-slate-400 hover:text-white text-xs cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white text-xs btn-press"
               >
                 Close
               </button>
@@ -303,13 +303,13 @@ export const JobList: React.FC<JobListProps> = ({
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 font-mono text-xs safe-bottom">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-[10px] text-slate-500 uppercase">CLI Command Executed</div>
+                  <div className="text-[10px] text-slate-500 uppercase">Command Executed</div>
                   <button
                     onClick={() => handleCopyCmd(selectedLogJob.command_executed || '')}
-                    className="text-[10px] text-brand-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[10px] text-brand-400 hover:underline flex items-center gap-1 btn-press"
                   >
                     {copiedCmd ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                    <span>{copiedCmd ? 'Copied' : 'Copy Command'}</span>
+                    <span>{copiedCmd ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
                 <div className="p-3 rounded-xl bg-surface-950 text-emerald-400 break-all select-all border border-surface-800 text-[11px]">

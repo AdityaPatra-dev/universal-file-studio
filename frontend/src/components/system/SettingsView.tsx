@@ -49,25 +49,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onRefresh 
 
   return (
     <div className="space-y-6">
-      <div className="p-6 rounded-3xl bg-surface-900/40 border border-surface-800 shadow-xl space-y-6">
+      <div className="p-6 rounded-3xl card-glass border border-surface-800/80 shadow-xl space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-1">
               <Settings className="h-5 w-5 text-brand-400" />
-              Application & Engine Settings
+              Settings
             </h2>
             <p className="text-xs text-slate-400">
-              Fine-tune local concurrency workers, scratch disk cleanup, and security limits.
+              Local concurrency workers, scratch disk storage, and security limits.
             </p>
           </div>
 
-          {/* Global Save Toolbar (P1 Fixed: Replaced individual save buttons) */}
+          {/* Global Save Toolbar */}
           <div className="flex items-center gap-2.5">
             {hasChanges && (
               <button
                 onClick={handleReset}
                 disabled={isSaving}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs font-medium border border-surface-700 transition-colors cursor-pointer"
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 text-xs font-medium border border-surface-700/60 transition-colors btn-press"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span>Discard Changes</span>
@@ -77,7 +77,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onRefresh 
             <button
               onClick={handleSaveAll}
               disabled={!hasChanges || isSaving}
-              className={`flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-semibold transition-all shadow-md btn-press ${
                 savedSuccess
                   ? 'bg-emerald-600 text-white shadow-emerald-600/30'
                   : hasChanges
@@ -88,12 +88,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onRefresh 
               {savedSuccess ? (
                 <>
                   <Check className="h-4 w-4" />
-                  <span>Changes Saved!</span>
+                  <span>Saved!</span>
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  <span>{isSaving ? 'Saving...' : 'Save All Changes'}</span>
+                  <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
                 </>
               )}
             </button>

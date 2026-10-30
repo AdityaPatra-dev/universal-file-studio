@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
-  FileVideo, FileAudio, FileImage, FileText, Archive, File, 
-  Trash2, Download, Sparkles, CheckSquare, Square, MinusSquare,
-  Layers, Minimize2, FileArchive, X, FileSpreadsheet, Presentation, FileCode,
-  ShieldCheck, GitMerge, Search, AlertTriangle, Eye, Check
+  FileRecord, Job 
+} from '../../types/api';
+import { 
+  Film, Music, Image as ImageIcon, FileText, Archive, FileQuestion, 
+  Sparkles, Download, Trash2, ArrowUpDown, ChevronUp, ChevronDown, 
+  Search, CheckSquare, Square, MinusSquare, ShieldCheck, 
+  Check, X, FolderArchive, Layers, GitMerge, FileSpreadsheet, Presentation
 } from 'lucide-react';
-import { FileRecord } from '../../types/api';
 import { formatBytes, formatDate } from '../../utils/format';
 
 interface FileListProps {
@@ -15,9 +17,12 @@ interface FileListProps {
   onDownloadFile: (fileId: number) => void;
   onInspectFile?: (file: FileRecord) => void;
   onBatchAction?: (selectedFiles: FileRecord[], mode: 'convert' | 'compress' | 'archive') => void;
-  onBatchDelete?: (selectedIds: number[]) => void;
+  onBatchDelete?: (fileIds: number[]) => void;
   onBatchPipeline?: (selectedFiles: FileRecord[]) => void;
 }
+
+type SortField = 'name' | 'size' | 'date' | 'category';
+type SortDirection = 'asc' | 'desc';
 
 export const FileList: React.FC<FileListProps> = ({
   files,
@@ -27,111 +32,127 @@ export const FileList: React.FC<FileListProps> = ({
   onInspectFile,
   onBatchAction,
   onBatchDelete,
-  onBatchPipeline,
+  onBatchPipeline
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  // In-app deletion confirm dialog state
   const [confirmDeleteFile, setConfirmDeleteFile] = useState<FileRecord | null>(null);
-  const [confirmBatchDelete, setConfirmBatchDelete] = useState<boolean>(false);
 
-  const categories = [
+  // Clean Categories
+  const categories = useMemo(() => [
     { id: 'all', label: 'All Files' },
-    { id: 'video', label: 'Video' },
+    { id: 'image', label: 'Images' },
+    { id: 'video', label: 'Videos' },
+    { id: 'pdf', label: 'PDFs' },
+    { id: 'document', label: 'Docs' },
     { id: 'audio', label: 'Audio' },
-    { id: 'image', label: 'Image' },
-    { id: 'pdf', label: 'PDF' },
-    { id: 'document', label: 'Document' },
-    { id: 'spreadsheet', label: 'Spreadsheet' },
-    { id: 'presentation', label: 'Presentation' },
-    { id: 'text', label: 'Text/Notes' },
-    { id: 'archive', label: 'Archive' },
-  ];
+    { id: 'archive', label: 'Archives' },
+  ], []);
 
-  // Dynamic category counts
-  const categoryCounts = categories.reduce((acc, cat) => {
-    if (cat.id === 'all') {
-      acc[cat.id] = files.length;
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: files.length };
+    files.forEach((f) => {
+      counts[f.category] = (counts[f.category] || 0) + 1;
+    });
+    return counts;
+  }, [files]);
+
+  // Filter & Sort
+  const filteredFiles = useMemo(() => {
+    return files
+      .filter((file) => {
+        if (selectedCategory !== 'all' && file.category !== selectedCategory) {
+          return false;
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          return (
+            file.filename.toLowerCase().includes(q) ||
+            file.category.toLowerCase().includes(q) ||
+            (file.detected_format && file.detected_format.toLowerCase().includes(q))
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'name') cmp = a.filename.localeCompare(b.filename);
+        else if (sortField === 'size') cmp = a.size_bytes - b.size_bytes;
+        else if (sortField === 'date') cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        else if (sortField === 'category') cmp = a.category.localeCompare(b.category);
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+  }, [files, selectedCategory, sortField, sortDirection, searchQuery]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
-      acc[cat.id] = files.filter(f => f.category === cat.id).length;
-    }
-    return acc;
-  }, {} as Record<string, number>);
-
-  const filteredFiles = files.filter((f) => {
-    const matchesCat = selectedCategory === 'all' || f.category === selectedCategory;
-    const matchesSearch = f.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (f.detected_format && f.detected_format.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCat && matchesSearch;
-  });
-
-  const getFileIcon = (cat: string, className = "h-5 w-5") => {
-    switch (cat) {
-      case 'video': return <FileVideo className={`${className} text-purple-400`} />;
-      case 'audio': return <FileAudio className={`${className} text-amber-400`} />;
-      case 'image': return <FileImage className={`${className} text-emerald-400`} />;
-      case 'pdf': return <FileText className={`${className} text-rose-400`} />;
-      case 'document': return <FileText className={`${className} text-blue-400`} />;
-      case 'spreadsheet': return <FileSpreadsheet className={`${className} text-emerald-400`} />;
-      case 'presentation': return <Presentation className={`${className} text-amber-400`} />;
-      case 'text': return <FileCode className={`${className} text-cyan-400`} />;
-      case 'archive': return <Archive className={`${className} text-indigo-400`} />;
-      default: return <File className={`${className} text-slate-400`} />;
-    }
-  };
-
-  const handleToggleSelectAll = () => {
-    if (selectedIds.size === filteredFiles.length && filteredFiles.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredFiles.map((f) => f.id)));
+      setSortField(field);
+      setSortDirection('asc');
     }
   };
 
   const handleToggleSelect = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size === filteredFiles.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredFiles.map((f) => f.id)));
+    }
+  };
+
   const selectedFilesList = files.filter((f) => selectedIds.has(f.id));
   const isAllSelected = filteredFiles.length > 0 && selectedIds.size === filteredFiles.length;
-  const isPartiallySelected = selectedIds.size > 0 && selectedIds.size < filteredFiles.length;
+
+  const getFileIcon = (cat: string) => {
+    switch (cat) {
+      case 'video': return <Film className="h-5 w-5 text-violet-400" />;
+      case 'audio': return <Music className="h-5 w-5 text-rose-400" />;
+      case 'image': return <ImageIcon className="h-5 w-5 text-cyan-400" />;
+      case 'pdf': return <FileText className="h-5 w-5 text-amber-400" />;
+      case 'document': return <FileText className="h-5 w-5 text-blue-400" />;
+      case 'archive': return <Archive className="h-5 w-5 text-emerald-400" />;
+      default: return <FileQuestion className="h-5 w-5 text-slate-400" />;
+    }
+  };
 
   return (
     <div className="space-y-4 relative">
-      {/* Category Pills & Search Bar (Mobile scrollable) */}
+      {/* Search and Category Filters */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Horizontal Scrollable Categories */}
-        <div className="flex overflow-x-auto no-scrollbar gap-1.5 py-1 -mx-1 px-1">
+        {/* Category Pills */}
+        <div className="flex overflow-x-auto no-scrollbar gap-1.5 py-1">
           {categories.map((c) => {
             const count = categoryCounts[c.id] || 0;
             const isSelected = selectedCategory === c.id;
-            const isEmpty = count === 0 && c.id !== 'all';
+            // Only hide empty categories if not 'all'
+            if (count === 0 && c.id !== 'all' && files.length > 0) return null;
 
             return (
               <button
                 key={c.id}
                 onClick={() => setSelectedCategory(c.id)}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all btn-press cursor-pointer ${
                   isSelected
-                    ? 'bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/30'
-                    : isEmpty
-                    ? 'bg-surface-900/60 text-slate-500 hover:text-slate-400 opacity-60'
-                    : 'bg-surface-800/80 text-slate-300 hover:text-white hover:bg-surface-800'
+                    ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
+                    : 'bg-surface-900 border border-surface-800 text-slate-300 hover:text-white hover:border-surface-700'
                 }`}
               >
                 <span>{c.label}</span>
                 <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                  isSelected ? 'bg-brand-700 text-white font-bold' : 'bg-surface-900 text-slate-400'
+                  isSelected ? 'bg-brand-700 text-white font-bold' : 'bg-surface-800 text-slate-400'
                 }`}>
                   {count}
                 </span>
@@ -140,12 +161,12 @@ export const FileList: React.FC<FileListProps> = ({
           })}
         </div>
 
-        {/* Enhanced Search Input with Clear Button */}
-        <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
+        {/* Search */}
+        <div className="relative w-full sm:w-60 shrink-0">
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Search files or format..."
+            placeholder="Search files..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-7 py-2 rounded-xl bg-surface-900 border border-surface-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
@@ -153,8 +174,7 @@ export const FileList: React.FC<FileListProps> = ({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2.5 text-slate-500 hover:text-white"
-              title="Clear search"
+              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -162,47 +182,37 @@ export const FileList: React.FC<FileListProps> = ({
         </div>
       </div>
 
-      {/* Select All Bar (Mobile & Desktop) */}
+      {/* Select All Row */}
       {filteredFiles.length > 0 && (
-        <div className="flex items-center justify-between text-xs text-slate-400 px-2 py-1">
+        <div className="flex items-center justify-between text-xs text-slate-400 px-1 py-0.5">
           <button
             onClick={handleToggleSelectAll}
-            className="flex items-center space-x-2 text-slate-400 hover:text-white cursor-pointer"
+            className="flex items-center space-x-2 text-slate-300 hover:text-white cursor-pointer btn-press"
           >
             {isAllSelected ? (
               <CheckSquare className="h-4 w-4 text-brand-400" />
-            ) : isPartiallySelected ? (
-              <MinusSquare className="h-4 w-4 text-brand-400" />
             ) : (
-              <Square className="h-4 w-4" />
+              <Square className="h-4 w-4 text-slate-500" />
             )}
             <span>{isAllSelected ? 'Deselect All' : `Select All (${filteredFiles.length})`}</span>
           </button>
-          <span className="text-[11px] font-mono">
-            Showing {filteredFiles.length} of {files.length}
+          <span className="text-[11px] font-mono text-slate-400">
+            {filteredFiles.length} file{filteredFiles.length === 1 ? '' : 's'}
           </span>
         </div>
       )}
 
       {/* Empty State */}
       {filteredFiles.length === 0 ? (
-        <div className="p-8 sm:p-12 text-center rounded-3xl bg-surface-900/30 border border-surface-800 space-y-2">
-          <p className="text-sm font-semibold text-slate-300">No files found matching the current filter.</p>
+        <div className="p-8 sm:p-12 text-center rounded-3xl bg-surface-900/40 border border-surface-800 space-y-2">
+          <p className="text-sm font-semibold text-slate-300">No files found.</p>
           <p className="text-xs text-slate-500">
-            {searchQuery ? `Try clearing your search query "${searchQuery}".` : 'Drag and drop or select files to populate your library.'}
+            {searchQuery ? 'Try clearing your search filter.' : 'Choose files from the Studio tab to get started.'}
           </p>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="mt-2 text-xs text-brand-400 hover:underline font-medium cursor-pointer"
-            >
-              Clear filter
-            </button>
-          )}
         </div>
       ) : (
         <>
-          {/* --- MOBILE VIEW: Touch-Friendly Responsive Cards (md:hidden) --- */}
+          {/* Mobile View: Touch-Friendly Responsive Cards */}
           <div className="md:hidden space-y-3">
             {filteredFiles.map((file) => {
               const isSelected = selectedIds.has(file.id);
@@ -212,16 +222,16 @@ export const FileList: React.FC<FileListProps> = ({
                   className={`p-4 rounded-2xl border transition-all space-y-3 ${
                     isSelected
                       ? 'bg-brand-500/10 border-brand-500/40 shadow-md shadow-brand-500/5'
-                      : 'bg-surface-900/50 border-surface-800 hover:bg-surface-900/80'
+                      : 'card-glass'
                   }`}
                 >
                   {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2.5">
-                    <div className="flex items-start space-x-3 truncate">
-                      {/* Selection checkbox */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start space-x-3 min-w-0">
+                      {/* Checkbox */}
                       <button
                         onClick={() => handleToggleSelect(file.id)}
-                        className="p-1 text-slate-400 hover:text-white cursor-pointer mt-0.5"
+                        className="p-1 text-slate-400 hover:text-white cursor-pointer mt-0.5 shrink-0"
                       >
                         {isSelected ? (
                           <CheckSquare className="h-5 w-5 text-brand-400" />
@@ -230,37 +240,35 @@ export const FileList: React.FC<FileListProps> = ({
                         )}
                       </button>
 
-                      {/* File Icon */}
-                      <div className="p-2 rounded-xl bg-surface-800 shrink-0 mt-0.5">
+                      {/* Icon */}
+                      <div className="p-2.5 rounded-xl bg-surface-850 shrink-0 border border-surface-700/60">
                         {getFileIcon(file.category)}
                       </div>
 
-                      {/* Name & format */}
-                      <div className="truncate">
+                      {/* Filename & Info */}
+                      <div className="min-w-0 truncate">
                         <div 
                           onClick={() => onInspectFile && onInspectFile(file)}
-                          className="font-semibold text-sm text-slate-100 truncate cursor-pointer hover:text-brand-300"
+                          className="font-bold text-sm text-white truncate cursor-pointer hover:text-brand-300 transition-colors"
                         >
                           {file.filename}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 font-mono">
-                          <span className="text-brand-400 font-bold">
-                            {file.detected_format ? `.${file.detected_format.toUpperCase()}` : file.category.toUpperCase()}
+                          <span className="text-brand-400 font-semibold uppercase">
+                            {file.detected_format || file.category}
                           </span>
                           <span>•</span>
                           <span>{formatBytes(file.size_bytes)}</span>
-                          <span>•</span>
-                          <span>{formatDate(file.created_at)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card Action Buttons (Touch friendly 44px) */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-surface-800/60">
+                  {/* Card Action Buttons (42px touch targets) */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-surface-800/80">
                     <button
                       onClick={() => onSelectFileForProcess(file)}
-                      className="flex-1 flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all cursor-pointer min-h-[42px]"
+                      className="flex-1 flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-brand-500/25 btn-press cursor-pointer min-h-[42px]"
                     >
                       <Sparkles className="h-3.5 w-3.5" />
                       <span>Process</span>
@@ -269,8 +277,8 @@ export const FileList: React.FC<FileListProps> = ({
                     {onInspectFile && (
                       <button
                         onClick={() => onInspectFile(file)}
-                        className="flex items-center justify-center p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 transition-colors border border-surface-700/60 min-h-[42px] min-w-[42px]"
-                        title="Inspect metadata and checksums"
+                        className="flex items-center justify-center p-2.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 hover:text-white border border-surface-700/60 btn-press min-h-[42px] min-w-[42px]"
+                        title="Inspect file"
                       >
                         <ShieldCheck className="h-4 w-4 text-brand-400" />
                       </button>
@@ -278,16 +286,16 @@ export const FileList: React.FC<FileListProps> = ({
 
                     <button
                       onClick={() => onDownloadFile(file.id)}
-                      className="flex items-center justify-center p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 transition-colors border border-surface-700/60 min-h-[42px] min-w-[42px]"
-                      title="Download file"
+                      className="flex items-center justify-center p-2.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 hover:text-white border border-surface-700/60 btn-press min-h-[42px] min-w-[42px]"
+                      title="Save / Download"
                     >
                       <Download className="h-4 w-4" />
                     </button>
 
                     <button
                       onClick={() => setConfirmDeleteFile(file)}
-                      className="flex items-center justify-center p-2.5 rounded-xl bg-surface-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors border border-surface-700/60 min-h-[42px] min-w-[42px]"
-                      title="Delete file"
+                      className="flex items-center justify-center p-2.5 rounded-xl bg-surface-850 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-surface-700/60 btn-press min-h-[42px] min-w-[42px]"
+                      title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -297,126 +305,110 @@ export const FileList: React.FC<FileListProps> = ({
             })}
           </div>
 
-          {/* --- DESKTOP VIEW: High-Density Table (hidden md:block) --- */}
-          <div className="hidden md:block rounded-2xl border border-surface-800 overflow-hidden bg-surface-900/40">
+          {/* Desktop Table View */}
+          <div className="hidden md:block card-glass rounded-3xl overflow-hidden">
             <table className="w-full text-left text-xs">
-              <thead className="bg-surface-900/90 text-slate-400 uppercase text-[10px] tracking-wider border-b border-surface-800">
+              <thead className="bg-surface-850/60 text-slate-400 font-semibold uppercase text-[10px] tracking-wider border-b border-surface-800">
                 <tr>
-                  <th className="px-3 py-3 w-10 text-center">
-                    <button
-                      onClick={handleToggleSelectAll}
-                      className="p-1 text-slate-400 hover:text-white cursor-pointer"
-                    >
-                      {isAllSelected ? (
-                        <CheckSquare className="h-4 w-4 text-brand-400" />
-                      ) : isPartiallySelected ? (
-                        <MinusSquare className="h-4 w-4 text-brand-400" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
+                  <th className="py-3 px-4 w-10">
+                    <button onClick={handleToggleSelectAll} className="p-1 text-slate-400 hover:text-white">
+                      {isAllSelected ? <CheckSquare className="h-4 w-4 text-brand-400" /> : <Square className="h-4 w-4" />}
                     </button>
                   </th>
-                  <th className="px-4 py-3">File Name</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Format</th>
-                  <th className="px-4 py-3">Size</th>
-                  <th className="px-4 py-3">Added</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
+                    <div className="flex items-center space-x-1.5">
+                      <span>Filename</span>
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 cursor-pointer" onClick={() => handleSort('category')}>
+                    <div className="flex items-center space-x-1.5">
+                      <span>Category</span>
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 cursor-pointer" onClick={() => handleSort('size')}>
+                    <div className="flex items-center space-x-1.5">
+                      <span>Size</span>
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 cursor-pointer" onClick={() => handleSort('date')}>
+                    <div className="flex items-center space-x-1.5">
+                      <span>Added</span>
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-800/60 text-slate-300">
+              <tbody className="divide-y divide-surface-800/60">
                 {filteredFiles.map((file) => {
                   const isSelected = selectedIds.has(file.id);
                   return (
                     <tr
                       key={file.id}
-                      className={`transition-colors group ${
-                        isSelected
-                          ? 'bg-brand-500/10 hover:bg-brand-500/15'
-                          : 'hover:bg-surface-800/40'
-                      }`}
+                      className={`hover:bg-surface-850/50 transition-colors ${isSelected ? 'bg-brand-500/10' : ''}`}
                     >
-                      <td className="px-3 py-3 text-center">
-                        <button
-                          onClick={() => handleToggleSelect(file.id)}
-                          className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="h-4 w-4 text-brand-400" />
-                          ) : (
-                            <Square className="h-4 w-4" />
-                          )}
+                      <td className="py-3 px-4">
+                        <button onClick={() => handleToggleSelect(file.id)} className="p-1 text-slate-400 hover:text-white">
+                          {isSelected ? <CheckSquare className="h-4 w-4 text-brand-400" /> : <Square className="h-4 w-4" />}
                         </button>
                       </td>
-
-                      <td 
-                        onClick={() => onInspectFile && onInspectFile(file)}
-                        className="px-4 py-3 font-medium text-slate-100 cursor-pointer group-hover:text-brand-300 transition-colors"
-                        title="Click to view file metadata & checksums"
-                      >
+                      <td className="py-3 px-4">
                         <div className="flex items-center space-x-3">
-                          <div className="p-2 rounded-xl bg-surface-800 shrink-0 group-hover:bg-brand-500/20 transition-colors">
+                          <div className="p-2 rounded-xl bg-surface-850 border border-surface-700/60">
                             {getFileIcon(file.category)}
                           </div>
-                          <div className="truncate max-w-[220px] lg:max-w-[320px]">
-                            <div className="truncate font-semibold">{file.filename}</div>
-                            <div className="text-[10px] text-slate-500 font-mono truncate">{file.mime_type}</div>
+                          <div>
+                            <span 
+                              onClick={() => onInspectFile && onInspectFile(file)}
+                              className="font-bold text-white hover:text-brand-300 cursor-pointer text-xs"
+                            >
+                              {file.filename}
+                            </span>
                           </div>
                         </div>
                       </td>
-
-                      <td className="px-4 py-3">
-                        <span className="capitalize px-2 py-0.5 rounded-md text-[11px] font-medium bg-surface-800 text-slate-300">
-                          {file.category}
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded-full bg-surface-850 text-slate-300 font-mono text-[10px] uppercase font-bold border border-surface-700/60">
+                          {file.detected_format || file.category}
                         </span>
                       </td>
-
-                      <td className="px-4 py-3 font-mono text-[11px] text-brand-400 font-semibold">
-                        {file.detected_format ? `.${file.detected_format.toUpperCase()}` : 'N/A'}
-                      </td>
-
-                      <td className="px-4 py-3 font-mono text-slate-400">
+                      <td className="py-3 px-4 font-mono text-slate-300">
                         {formatBytes(file.size_bytes)}
                       </td>
-
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                      <td className="py-3 px-4 text-slate-400">
                         {formatDate(file.created_at)}
                       </td>
-
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
                           <button
                             onClick={() => onSelectFileForProcess(file)}
-                            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors text-[11px] shadow-sm shadow-brand-600/30 cursor-pointer"
-                            title="Convert or process file"
+                            className="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-sm shadow-brand-500/20 btn-press"
                           >
-                            <Sparkles className="h-3 w-3" />
-                            <span>Process</span>
+                            Process
                           </button>
-
                           {onInspectFile && (
                             <button
                               onClick={() => onInspectFile(file)}
-                              className="flex items-center space-x-1 px-2 py-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-brand-300 transition-colors text-[11px] border border-surface-700/60 cursor-pointer"
-                              title="Inspect checksums, EXIF, and security metadata"
+                              className="p-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 hover:text-white border border-surface-700/60 btn-press"
+                              title="Inspect metadata"
                             >
                               <ShieldCheck className="h-3.5 w-3.5 text-brand-400" />
-                              <span className="hidden lg:inline">Inspect</span>
                             </button>
                           )}
-
                           <button
                             onClick={() => onDownloadFile(file.id)}
-                            className="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white transition-colors cursor-pointer border border-surface-700/60"
-                            title="Download original file"
+                            className="p-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 hover:text-white border border-surface-700/60 btn-press"
+                            title="Download"
                           >
                             <Download className="h-3.5 w-3.5" />
                           </button>
-
                           <button
                             onClick={() => setConfirmDeleteFile(file)}
-                            className="p-1.5 rounded-lg bg-surface-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors cursor-pointer border border-surface-700/60"
-                            title="Delete file"
+                            className="p-1.5 rounded-xl bg-surface-850 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-surface-700/60 btn-press"
+                            title="Delete"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -431,91 +423,73 @@ export const FileList: React.FC<FileListProps> = ({
         </>
       )}
 
-      {/* Floating Batch Action Bar (Raised above mobile bottom nav) */}
+      {/* Floating Batch Actions Dock */}
       {selectedIds.size > 0 && (
-        <div className="sticky bottom-20 md:bottom-4 z-40 bg-surface-900/95 backdrop-blur-md border border-brand-500/40 rounded-2xl p-3 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
-          <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-start">
-            <span className="px-2.5 py-1 rounded-lg bg-brand-500/20 text-brand-300 font-bold text-xs font-mono">
-              {selectedIds.size} {selectedIds.size === 1 ? 'file' : 'files'} selected
+        <div className="fixed bottom-20 md:bottom-6 inset-x-4 sm:inset-x-auto sm:right-8 sm:left-auto z-40 animate-in slide-in-from-bottom duration-200">
+          <div className="card-glass rounded-2xl p-2 sm:p-2.5 flex items-center space-x-2 border border-brand-500/40 shadow-2xl glow-brand">
+            <span className="text-xs font-bold text-white px-2.5">
+              {selectedIds.size} selected
             </span>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="text-slate-400 hover:text-slate-200 text-xs flex items-center space-x-1 cursor-pointer"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span>Deselect</span>
-            </button>
-          </div>
 
-          <div className="flex items-center space-x-2 flex-wrap w-full sm:w-auto justify-center sm:justify-end">
-            {onBatchPipeline && (
-              <button
-                onClick={() => onBatchPipeline(selectedFilesList)}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all cursor-pointer"
-                title="Send selected files to Pipeline Studio for multi-step chaining"
-              >
-                <GitMerge className="h-3.5 w-3.5" />
-                <span>Run in Pipeline</span>
-              </button>
+            {onBatchAction && (
+              <>
+                <button
+                  onClick={() => onBatchAction(selectedFilesList, 'convert')}
+                  className="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs btn-press"
+                >
+                  Convert
+                </button>
+                <button
+                  onClick={() => onBatchAction(selectedFilesList, 'compress')}
+                  className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700 btn-press"
+                >
+                  Compress
+                </button>
+                <button
+                  onClick={() => onBatchAction(selectedFilesList, 'archive')}
+                  className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-emerald-300 font-semibold text-xs border border-emerald-500/30 btn-press"
+                >
+                  ZIP
+                </button>
+              </>
             )}
-
-            <button
-              onClick={() => onBatchAction && onBatchAction(selectedFilesList, 'convert')}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 font-semibold text-xs transition-all border border-surface-700 cursor-pointer"
-            >
-              <Layers className="h-3.5 w-3.5 text-brand-400" />
-              <span>Batch Convert</span>
-            </button>
-
-            <button
-              onClick={() => onBatchAction && onBatchAction(selectedFilesList, 'compress')}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 font-semibold text-xs transition-all border border-surface-700 cursor-pointer"
-            >
-              <Minimize2 className="h-3.5 w-3.5 text-amber-400" />
-              <span>Compress</span>
-            </button>
-
-            <button
-              onClick={() => onBatchAction && onBatchAction(selectedFilesList, 'archive')}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 font-semibold text-xs transition-all border border-surface-700 cursor-pointer"
-            >
-              <FileArchive className="h-3.5 w-3.5 text-blue-400" />
-              <span>Archive ZIP</span>
-            </button>
 
             {onBatchDelete && (
               <button
-                onClick={() => setConfirmBatchDelete(true)}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs transition-all border border-rose-500/20 cursor-pointer"
+                onClick={() => {
+                  onBatchDelete(Array.from(selectedIds));
+                  setSelectedIds(new Set());
+                }}
+                className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 btn-press"
+                title="Delete Selected"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Delete</span>
+                <Trash2 className="h-4 w-4" />
               </button>
             )}
+
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="p-1.5 text-slate-400 hover:text-white"
+              title="Clear selection"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}
 
-      {/* In-App Single File Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       {confirmDeleteFile && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto">
-            <div className="flex items-center space-x-3 text-rose-400">
-              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-white text-base">Delete File?</h4>
-                <p className="text-xs text-slate-400 truncate max-w-[260px]">{confirmDeleteFile.filename}</p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              This will permanently delete the file and all associated cached artifacts from your local studio storage. This action cannot be undone.
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="w-full max-w-sm card-glass rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="font-bold text-base text-white">Delete File?</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Are you sure you want to delete <strong className="text-white">"{confirmDeleteFile.filename}"</strong>? This action cannot be undone.
             </p>
-            <div className="flex items-center justify-end space-x-3 pt-2">
+            <div className="flex items-center justify-end space-x-2.5 pt-2">
               <button
                 onClick={() => setConfirmDeleteFile(null)}
-                className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs font-medium transition-colors cursor-pointer min-h-[40px]"
+                className="px-4 py-2 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 font-semibold text-xs btn-press"
               >
                 Cancel
               </button>
@@ -524,49 +498,9 @@ export const FileList: React.FC<FileListProps> = ({
                   onDeleteFile(confirmDeleteFile.id);
                   setConfirmDeleteFile(null);
                 }}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md shadow-rose-600/30 transition-all cursor-pointer min-h-[40px]"
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/30 btn-press"
               >
-                Confirm Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* In-App Batch Delete Confirmation Modal */}
-      {confirmBatchDelete && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto">
-            <div className="flex items-center space-x-3 text-rose-400">
-              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div>
-                <h4 className="font-bold text-white text-base">Batch Delete {selectedIds.size} Files?</h4>
-                <p className="text-xs text-slate-400">Permanently remove selected files</p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to delete {selectedIds.size} files from your library? Any running jobs associated with these files will be halted.
-            </p>
-            <div className="flex items-center justify-end space-x-3 pt-2">
-              <button
-                onClick={() => setConfirmBatchDelete(false)}
-                className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs font-medium transition-colors cursor-pointer min-h-[40px]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (onBatchDelete) {
-                    onBatchDelete(Array.from(selectedIds));
-                    setSelectedIds(new Set());
-                  }
-                  setConfirmBatchDelete(false);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md shadow-rose-600/30 transition-all cursor-pointer min-h-[40px]"
-              >
-                Delete {selectedIds.size} Files
+                Delete
               </button>
             </div>
           </div>

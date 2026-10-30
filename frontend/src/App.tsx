@@ -356,7 +356,7 @@ export function App() {
                             setSelectedFileForProcess(uploadNotification.files[0]);
                             setUploadNotification(null);
                           }}
-                          className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all cursor-pointer"
+                          className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all btn-press"
                         >
                           Process File Now →
                         </button>
@@ -367,23 +367,23 @@ export function App() {
                           setCurrentTab('pipelines');
                           setUploadNotification(null);
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 font-semibold text-xs border border-surface-700 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700/60 transition-all btn-press flex items-center gap-1.5"
                       >
                         <GitMerge className="h-3.5 w-3.5 text-brand-400" />
-                        <span>Run in Pipeline Studio</span>
+                        <span>Workflows Studio</span>
                       </button>
                       <button
                         onClick={() => {
                           setCurrentTab('files');
                           setUploadNotification(null);
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 font-semibold text-xs border border-surface-700 transition-all cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700/60 transition-all btn-press"
                       >
-                        View in Library
+                        View Library
                       </button>
                       <button
                         onClick={() => setUploadNotification(null)}
-                        className="p-1.5 text-slate-400 hover:text-white cursor-pointer ml-1"
+                        className="p-1.5 text-slate-400 hover:text-white btn-press ml-1"
                         title="Dismiss notification"
                       >
                         <X className="h-4 w-4" />
@@ -401,12 +401,12 @@ export function App() {
                 {files.length > 0 && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-bold text-white">Recent Uploads</h3>
+                      <h3 className="text-base font-bold text-white tracking-tight">Recent Files</h3>
                       <button
                         onClick={() => setCurrentTab('files')}
-                        className="text-xs text-brand-400 hover:text-brand-300 font-semibold cursor-pointer"
+                        className="text-xs text-brand-400 hover:text-brand-300 font-semibold btn-press"
                       >
-                        View all {files.length} files in Library →
+                        View all {files.length} →
                       </button>
                     </div>
                     <FileList
@@ -425,9 +425,9 @@ export function App() {
             {/* Tab 2: File Library */}
             {currentTab === 'files' && (
               <div className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-bold text-white mb-1">File Library</h2>
-                  <p className="text-xs text-slate-400">All uploaded media and documents ready for conversion, inspection, and chaining.</p>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">File Library</h2>
+                  <span className="text-xs text-slate-400 font-mono">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
                 </div>
                 <FileList
                   files={files}
@@ -458,9 +458,9 @@ export function App() {
             {/* Tab 4: Job Queue & History */}
             {currentTab === 'jobs' && (
               <div className="space-y-6">
-                <div>
-                  <h2 className="text-xl font-bold text-white mb-1">Job Queue & Processing History</h2>
-                  <p className="text-xs text-slate-400">Monitor active background CLI workers, terminal inspection logs, and download completed artifacts.</p>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Job Queue</h2>
+                  <span className="text-xs text-slate-400 font-mono">{jobs.length} total</span>
                 </div>
                 <JobList
                   jobs={jobs}

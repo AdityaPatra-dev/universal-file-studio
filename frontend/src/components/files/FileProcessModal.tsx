@@ -137,7 +137,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
-      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+      <div className="card-glass border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
         {/* Mobile Drag Handle */}
         <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
 
@@ -146,13 +146,13 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-brand-400" />
-              Configure File Operation
+              Process File
             </h3>
             <p className="text-xs text-slate-400 truncate max-w-[240px] sm:max-w-md">{file.filename}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-400 hover:text-white transition-colors btn-press"
           >
             <X className="h-4 w-4" />
           </button>
@@ -170,7 +170,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
           {/* File Metadata Overview */}
           <div className="p-4 rounded-2xl bg-surface-950/70 border border-surface-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-300 font-mono text-[11px]">
             <div>
-              <div className="text-[10px] text-slate-500 uppercase font-sans font-semibold">Current Format</div>
+              <div className="text-[10px] text-slate-500 uppercase font-sans font-semibold">Format</div>
               <div className="text-brand-400 font-bold">{file.detected_format ? `.${file.detected_format.toUpperCase()}` : file.category.toUpperCase()}</div>
             </div>
             <div>
@@ -199,7 +199,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
                   <Sparkles className="h-3.5 w-3.5 text-brand-400" />
                   Quick Presets
                 </label>
-                <span className="text-[10px] text-slate-500">1-Click autofill parameters</span>
+                <span className="text-[10px] text-slate-500">1-tap autofill</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {relevantPresets.map((preset) => {
@@ -209,10 +209,10 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
                     <button
                       key={preset.id}
                       onClick={() => handleApplyPreset(preset)}
-                      className={`p-3 rounded-xl border text-left transition-all group cursor-pointer ${
+                      className={`p-3 rounded-xl border text-left transition-all group btn-press ${
                         isMatchingActive
-                          ? 'border-brand-500/80 bg-brand-500/10 shadow-sm'
-                          : 'border-surface-800 bg-surface-950/50 hover:bg-surface-800/80 hover:border-brand-500/50'
+                          ? 'border-brand-500 bg-brand-500/15 shadow-sm ring-1 ring-brand-500/40'
+                          : 'border-surface-800 bg-surface-950/60 hover:bg-surface-850 hover:border-surface-700'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -234,7 +234,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
           {/* Step 1: Operation Selector */}
           <div>
             <label className="block text-xs font-semibold text-slate-200 uppercase tracking-wider mb-2.5">
-              Step 1: Select Operation
+              Choose Operation
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {operations.map((op) => {
@@ -243,10 +243,10 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
                   <button
                     key={op.id}
                     onClick={() => handleSelectOp(op)}
-                    className={`p-3.5 rounded-2xl text-left border transition-all flex flex-col justify-between cursor-pointer ${
+                    className={`p-3.5 rounded-2xl text-left border transition-all flex flex-col justify-between btn-press ${
                       isSelected
-                        ? 'border-brand-500 bg-brand-500/10 shadow-md shadow-brand-500/10 ring-1 ring-brand-500/50'
-                        : 'border-surface-800 bg-surface-950/60 hover:bg-surface-800 hover:border-surface-700'
+                        ? 'border-brand-500 bg-brand-500/15 shadow-md shadow-brand-500/10 ring-1 ring-brand-500/60'
+                        : 'border-surface-800 bg-surface-950/60 hover:bg-surface-850 hover:border-surface-700'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -264,21 +264,18 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
             </div>
           </div>
 
-          {/* Step 2: High-Visibility Target Format Selector (Elevated from buried dropdown) */}
+          {/* Step 2: High-Visibility Target Format Selector */}
           {formatParam && formatParam.options && formatParam.options.length > 0 && (
             <div className="p-4 rounded-2xl bg-surface-950/90 border border-surface-800 space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
                   <Film className="h-4 w-4 text-brand-400" />
-                  Step 2: Choose Target Format
+                  Target Output Format
                 </label>
                 <span className="text-xs font-mono font-bold text-brand-300 bg-brand-500/15 border border-brand-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                   Selected: <span className="underline">.{(params.format || formatParam.default || formatParam.options[0]).toUpperCase()}</span>
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Click a format below to select your desired output container.
-              </p>
 
               {/* Format Pills Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1">
@@ -289,10 +286,10 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
                       key={opt}
                       type="button"
                       onClick={() => setParams({ ...params, format: opt })}
-                      className={`py-3 px-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                      className={`py-3 px-3 rounded-xl border text-center transition-all btn-press flex flex-col items-center justify-center gap-1 ${
                         isSelected
-                          ? 'border-brand-500 bg-brand-500/20 text-white shadow-md shadow-brand-500/20 ring-2 ring-brand-500/60'
-                          : 'border-surface-800 bg-surface-900/70 text-slate-400 hover:border-surface-700 hover:bg-surface-800 hover:text-slate-200'
+                          ? 'border-brand-500 bg-brand-500/25 text-white shadow-md shadow-brand-500/25 ring-2 ring-brand-500/60'
+                          : 'border-surface-800 bg-surface-900/70 text-slate-400 hover:border-surface-700 hover:bg-surface-850 hover:text-slate-200'
                       }`}
                     >
                       <div className="flex items-center gap-1">
@@ -337,7 +334,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
                         <select
                           value={val || ''}
                           onChange={(e) => setParams({ ...params, [param.name]: e.target.value })}
-                          className="w-full px-3 py-2 rounded-xl bg-surface-900 border border-surface-700 text-xs text-slate-200 focus:outline-none focus:border-brand-500 font-medium"
+                          className="w-full px-3 py-2.5 rounded-xl bg-surface-900 border border-surface-700 text-xs text-slate-200 focus:outline-none focus:border-brand-500 font-medium"
                         >
                           {param.options?.map((opt) => (
                             <option key={opt} value={opt}>
@@ -365,7 +362,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
                           max={param.max}
                           value={val ?? 0}
                           onChange={(e) => setParams({ ...params, [param.name]: parseFloat(e.target.value) })}
-                          className="w-full px-3 py-2 rounded-xl bg-surface-900 border border-surface-700 text-xs text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
+                          className="w-full px-3 py-2.5 rounded-xl bg-surface-900 border border-surface-700 text-xs text-slate-200 focus:outline-none focus:border-brand-500 font-mono"
                         />
                       )}
 
@@ -394,21 +391,21 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
             {selectedOp && (
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Ready to execute via engine: <span className="font-mono text-slate-300">{selectedOp.engine}</span>
+                Engine: <span className="font-mono text-slate-300">{selectedOp.engine}</span>
               </span>
             )}
           </div>
           <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer min-h-[42px]"
+              className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-300 font-medium text-xs transition-colors btn-press min-h-[42px]"
             >
               Cancel
             </button>
             <button
               onClick={handleStartJob}
               disabled={isSubmitting || !selectedOp}
-              className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 cursor-pointer min-h-[42px]"
+              className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 btn-press min-h-[42px]"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               <span>{getActionLabel()}</span>

@@ -106,7 +106,7 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
-      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+      <div className="card-glass border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
         {/* Mobile Drag Handle */}
         <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
 
@@ -115,7 +115,7 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-brand-400" />
-              Advanced File Inspector & Security
+              File Inspector
             </h3>
             <p className="text-xs text-slate-400 truncate max-w-[240px] sm:max-w-md">
               {file.filename} ({formatBytes(file.size_bytes)}) • {file.detected_format?.toUpperCase() || file.category.toUpperCase()}
@@ -123,54 +123,54 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-400 hover:text-white transition-colors btn-press"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Clean Navigation Tab Bar (P0 Fixed: Sanitize button removed from tabs) */}
+        {/* Clean Navigation Tab Bar */}
         <div className="px-6 pt-3 flex items-center justify-between border-b border-surface-800 bg-surface-950/40">
           <div className="flex space-x-4">
             <button
               onClick={() => setActiveTab('hashes')}
-              className={`pb-3 font-semibold text-xs border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`pb-3 font-semibold text-xs border-b-2 transition-all flex items-center gap-1.5 btn-press ${
                 activeTab === 'hashes'
                   ? 'border-brand-500 text-white'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
               <Hash className="h-3.5 w-3.5" />
-              <span>Cryptographic Checksums</span>
+              <span>Checksums</span>
             </button>
             <button
               onClick={() => setActiveTab('metadata')}
-              className={`pb-3 font-semibold text-xs border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`pb-3 font-semibold text-xs border-b-2 transition-all flex items-center gap-1.5 btn-press ${
                 activeTab === 'metadata'
                   ? 'border-brand-500 text-white'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
               <FileCode className="h-3.5 w-3.5" />
-              <span>Deep Metadata & EXIF ({metadataEntries.length})</span>
+              <span>Metadata & EXIF ({metadataEntries.length})</span>
             </button>
           </div>
 
           {activeTab === 'hashes' && hashes && (
             <button
               onClick={handleCopyAllHashes}
-              className="mb-2 px-3 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white text-[11px] font-medium border border-surface-700 flex items-center gap-1 transition-colors cursor-pointer"
+              className="mb-2 px-3 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white text-[11px] font-medium border border-surface-700 flex items-center gap-1 transition-colors btn-press"
               title="Copy all digests formatted to clipboard"
             >
               {allCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-              <span>{allCopied ? 'Copied All!' : 'Copy All Hashes'}</span>
+              <span>{allCopied ? 'Copied' : 'Copy All'}</span>
             </button>
           )}
 
           {activeTab === 'metadata' && (
             <button
               onClick={() => setViewRawJson(!viewRawJson)}
-              className="mb-2 px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-mono flex items-center gap-1 border border-surface-700 cursor-pointer"
+              className="mb-2 px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-mono flex items-center gap-1 border border-surface-700 btn-press"
             >
               {viewRawJson ? <Table className="h-3 w-3" /> : <Code2 className="h-3 w-3" />}
               <span>{viewRawJson ? 'Table View' : 'Raw JSON'}</span>
@@ -211,7 +211,7 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
                     </span>
                     <button
                       onClick={() => handleCopy(item.label, item.val)}
-                      className="p-1.5 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
+                      className="p-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-slate-400 hover:text-white transition-colors shrink-0 btn-press border border-surface-750"
                       title="Copy checksum"
                     >
                       {copiedKey === item.label ? (
@@ -319,7 +319,7 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 hover:text-white font-medium text-xs transition-colors cursor-pointer min-h-[40px]"
+            className="px-5 py-2 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-300 hover:text-white font-medium text-xs transition-colors btn-press min-h-[40px]"
           >
             Close
           </button>
@@ -329,23 +329,23 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
       {/* Confirmation Modal for Sanitize Privacy */}
       {showSanitizeConfirm && (
         <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+          <div className="card-glass border border-surface-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
             <div className="flex items-center space-x-3 text-emerald-400">
               <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <div>
-                <h4 className="font-bold text-white text-base">Sanitize File Privacy?</h4>
+                <h4 className="font-bold text-white text-base">Sanitize Metadata?</h4>
                 <p className="text-xs text-slate-400 truncate max-w-[260px]">{file.filename}</p>
               </div>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              This will create a new sanitized version of the file with all embedded GPS coordinates, camera model/serial numbers, author tags, and timestamp metadata completely stripped.
+              This will create a new sanitized copy with all embedded GPS coordinates, camera model/serial numbers, author tags, and timestamp metadata stripped.
             </p>
             <div className="flex items-center justify-end space-x-3 pt-2">
               <button
                 onClick={() => setShowSanitizeConfirm(false)}
-                className="px-4 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 text-xs font-medium transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-300 text-xs font-medium transition-colors btn-press"
               >
                 Cancel
               </button>
@@ -354,9 +354,9 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
                   setShowSanitizeConfirm(false);
                   onTriggerStripMetadata(file);
                 }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/30 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/30 transition-all btn-press"
               >
-                Proceed & Scrub Metadata
+                Scrub Metadata
               </button>
             </div>
           </div>

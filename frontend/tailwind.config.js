@@ -31,10 +31,19 @@ export default {
           600: '#475569',
           700: '#334155',
           800: '#1e293b',
-          850: '#141d2e',
-          900: '#0f172a',
-          950: '#090d16',
+          850: '#161f30',
+          900: '#111726',
+          950: '#0a0d14',
         }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
+      boxShadow: {
+        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+        'glow-brand': '0 0 25px -4px rgba(99, 102, 241, 0.35)',
+        'glow-emerald': '0 0 25px -4px rgba(16, 185, 129, 0.35)',
+        'glow-amber': '0 0 25px -4px rgba(245, 158, 11, 0.35)',
       }
     },
   },

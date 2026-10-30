@@ -17,11 +17,33 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
-        });
-      }
+      (function() {
+        // In native Android Capacitor WebViews, unregister service workers to avoid stale hash chunk caching
+        const isNative = Boolean(
+          window.Capacitor?.isNativePlatform?.() || 
+          window.location.hostname === 'localhost' ||
+          navigator.userAgent.includes('wv')
+        );
+
+        if ('serviceWorker' in navigator) {
+          if (isNative) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              for (var i = 0; i < regs.length; i++) {
+                regs[i].unregister();
+              }
+            });
+            if ('caches' in window) {
+              caches.keys().then(function(keys) {
+                keys.forEach(function(k) { caches.delete(k); });
+              });
+            }
+          } else if (window.location.protocol.startsWith('http')) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js').catch(function() {});
+            });
+          }
+        }
+      })();
     </script>
   </body>
 </html>

@@ -98,30 +98,30 @@ export const EngineManager: React.FC<EngineManagerProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-surface-900 to-surface-900/60 border border-surface-800 shadow-xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl card-glass border border-surface-800/80 shadow-xl">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Wrench className="h-5 w-5 text-brand-400" />
-            Local Hardware CLI Engines
+            Hardware & CLI Engines
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            {installedCount} of {engines.length} engines detected and ready for high-speed local processing.
+            {installedCount} of {engines.length} engines active and ready for local processing.
           </p>
         </div>
         <button
           onClick={onRescan}
           disabled={isRescanning}
-          className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30 disabled:opacity-50 cursor-pointer"
+          className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-md shadow-brand-600/30 disabled:opacity-50 btn-press"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${isRescanning ? 'animate-spin' : ''}`} />
           <span>Rescan System $PATH</span>
         </button>
       </div>
 
-      {/* Package Manager OS Selector for Missing Engines (P1 Fixed) */}
+      {/* Package Manager OS Selector for Missing Engines */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-surface-950/60 border border-surface-800">
         <div className="text-xs text-slate-300 font-medium">
-          Choose your operating system for engine installation commands:
+          OS package manager command guide:
         </div>
         <div className="flex flex-wrap gap-1.5">
           {[
@@ -134,10 +134,10 @@ export const EngineManager: React.FC<EngineManagerProps> = ({
             <button
               key={os.id}
               onClick={() => setSelectedOs(os.id as any)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all btn-press ${
                 selectedOs === os.id
                   ? 'bg-brand-600 text-white font-semibold shadow-sm'
-                  : 'bg-surface-800 text-slate-400 hover:text-white'
+                  : 'bg-surface-850 text-slate-400 hover:text-white border border-surface-800'
               }`}
             >
               {os.label}
@@ -157,7 +157,7 @@ export const EngineManager: React.FC<EngineManagerProps> = ({
               key={engine.name}
               className={`p-5 rounded-3xl border transition-all flex flex-col justify-between ${
                 engine.installed
-                  ? 'bg-surface-900/40 border-surface-800 hover:border-surface-700 shadow-md'
+                  ? 'card-glass border-surface-800/80 hover:border-surface-700/80 shadow-md'
                   : 'bg-surface-950/40 border-surface-900 opacity-80'
               }`}
             >
@@ -217,7 +217,7 @@ export const EngineManager: React.FC<EngineManagerProps> = ({
                     <span className="truncate text-brand-300 select-all">{installCmd}</span>
                     <button
                       onClick={() => handleCopy(engine.name, installCmd)}
-                      className="p-1 rounded-md bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white shrink-0 cursor-pointer"
+                      className="p-1 rounded-md bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white shrink-0 btn-press"
                       title="Copy terminal command"
                     >
                       {isCopied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}

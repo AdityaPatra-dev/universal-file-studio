@@ -110,7 +110,7 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
-      <div className="bg-surface-900 border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
+      <div className="card-glass border border-surface-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh] max-sm:rounded-b-none max-sm:rounded-t-3xl max-sm:mt-auto sm:my-auto animate-in slide-in-from-bottom-4 duration-200">
         {/* Mobile Drag Handle */}
         <div className="w-12 h-1.5 bg-surface-700 rounded-full mx-auto sm:hidden mt-3" />
 
@@ -119,15 +119,15 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
           <div>
             <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
               <Layers className="h-4 w-4 text-brand-400" />
-              Batch Processor ({files.length} {files.length === 1 ? 'file' : 'files'})
+              Batch Actions ({files.length} {files.length === 1 ? 'file' : 'files'})
             </h3>
             <p className="text-xs text-slate-400">
-              Total input size: {formatBytes(totalSize)} • Types: {categoriesInBatch.join(', ')}
+              Total size: {formatBytes(totalSize)}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-400 hover:text-white transition-colors btn-press"
           >
             <X className="h-4 w-4" />
           </button>
@@ -146,7 +146,7 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
           <div className="grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-surface-950 border border-surface-800">
             <button
               onClick={() => setMode('convert')}
-              className={`py-2 px-3 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-xl font-semibold text-xs transition-all btn-press ${
                 mode === 'convert'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-400 hover:text-slate-200'
@@ -156,7 +156,7 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
             </button>
             <button
               onClick={() => setMode('compress')}
-              className={`py-2 px-3 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-xl font-semibold text-xs transition-all btn-press ${
                 mode === 'compress'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-400 hover:text-slate-200'
@@ -166,13 +166,13 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
             </button>
             <button
               onClick={() => setMode('archive')}
-              className={`py-2 px-3 rounded-xl font-semibold text-xs transition-all cursor-pointer ${
+              className={`py-2 px-3 rounded-xl font-semibold text-xs transition-all btn-press ${
                 mode === 'archive'
                   ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Bundle into Archive
+              Create Archive
             </button>
           </div>
 
@@ -217,10 +217,10 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
                             <button
                               key={fmt}
                               onClick={() => setTargetFormat(fmt)}
-                              className={`py-2 px-2 rounded-xl border text-center font-mono font-semibold transition-all text-xs cursor-pointer ${
+                              className={`py-2 px-2 rounded-xl border text-center font-mono font-semibold transition-all text-xs btn-press ${
                                 targetFormat === fmt
-                                  ? 'border-brand-500 bg-brand-500/20 text-white shadow-sm ring-1 ring-brand-500'
-                                  : 'border-surface-800 bg-surface-900/60 text-slate-400 hover:bg-surface-800 hover:text-slate-200'
+                                  ? 'border-brand-500 bg-brand-500/25 text-white shadow-sm ring-1 ring-brand-500'
+                                  : 'border-surface-800 bg-surface-900/60 text-slate-400 hover:bg-surface-850 hover:text-slate-200'
                               }`}
                             >
                               .{fmt}
@@ -375,14 +375,14 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
         <div className="px-5 sm:px-6 py-4 border-t border-surface-800 bg-surface-900/90 flex items-center justify-end space-x-2 sm:space-x-3 safe-bottom">
           <button
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-300 font-medium text-xs transition-colors cursor-pointer min-h-[42px]"
+            className="px-4 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-750 text-slate-300 font-medium text-xs transition-colors btn-press min-h-[42px]"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || files.length === 0}
-            className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 cursor-pointer min-h-[42px]"
+            className="flex-1 sm:flex-initial flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-all shadow-lg shadow-brand-600/30 hover:shadow-brand-500/40 disabled:opacity-50 btn-press min-h-[42px]"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             <span className="truncate">
