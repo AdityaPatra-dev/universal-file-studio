@@ -64,18 +64,22 @@ export function App() {
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const [filesData, jobsData, enginesData, diagData, settingsData] = await Promise.all([
-        api.listFiles(),
-        api.listJobs(),
-        api.getEngines(),
-        api.getDiagnostics(),
-        api.getSettings(),
-      ]);
+      const isDesk = universalEngine.isDesktop();
+      const filesData = await universalEngine.listFiles().catch(() => []);
       setFiles(filesData);
-      setJobs(jobsData);
-      setEngines(enginesData);
-      setDiagnostics(diagData);
-      setSettings(settingsData);
+
+      if (isDesk) {
+        const [jobsData, enginesData, diagData, settingsData] = await Promise.all([
+          api.listJobs().catch(() => []),
+          api.getEngines().catch(() => []),
+          api.getDiagnostics().catch(() => null),
+          api.getSettings().catch(() => []),
+        ]);
+        setJobs(jobsData);
+        setEngines(enginesData);
+        if (diagData) setDiagnostics(diagData);
+        setSettings(settingsData);
+      }
     } catch (err) {
       console.error('Failed to load application data:', err);
     } finally {
@@ -146,7 +150,7 @@ export function App() {
     setUploadProgress(20);
     try {
       setUploadProgress(60);
-      const uploaded = await api.uploadFiles(selectedFiles);
+      const uploaded = await universalEngine.uploadFiles(selectedFiles);
       setUploadProgress(100);
       setFiles(prev => [...uploaded, ...prev]);
 
@@ -402,6 +406,27 @@ export function App() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Tab: File Library */}
+            {currentTab === 'files' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">File Library</h2>
+                  <span className="text-xs text-slate-400 font-mono">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
+                </div>
+                <FileDropZone onFilesSelected={handleFilesSelected} isUploading={isUploading} uploadProgress={uploadProgress} />
+                <FileList
+                  files={files}
+                  onSelectFileForProcess={(file: FileRecord) => setSelectedFileForProcess(file)}
+                  onDeleteFile={handleDeleteFile}
+                  onDownloadFile={handleDownloadFile}
+                  onInspectFile={handleInspectFile}
+                  onBatchAction={handleBatchAction}
+                  onBatchDelete={handleBatchDelete}
+                  onBatchPipeline={handleBatchPipeline}
+                />
               </div>
             )}
 

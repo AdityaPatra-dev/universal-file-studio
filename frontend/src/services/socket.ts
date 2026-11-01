@@ -16,8 +16,28 @@ class WebSocketService {
   constructor() {
     const isDev = import.meta.env.DEV;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = isDev ? 'localhost:8000' : window.location.host;
+    const isCapacitor = typeof window !== 'undefined' && Boolean(
+      (window as any).Capacitor?.isNativePlatform?.() ||
+      window.location.origin.startsWith('capacitor:') ||
+      window.location.protocol === 'file:' ||
+      (window.location.hostname === 'localhost' && window.location.port === '')
+    );
+    const host = isDev || isCapacitor ? '127.0.0.1:8000' : window.location.host;
     this.url = `${protocol}//${host}/ws`;
+  }
+
+  public setUrlFromHttp(httpUrl: string) {
+    try {
+      const parsed = new URL(httpUrl);
+      const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.url = `${wsProtocol}//${parsed.host}/ws`;
+      if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+        this.ws.close();
+        this.connect();
+      }
+    } catch {
+      // ignore invalid URL
+    }
   }
 
   public connect() {

@@ -269,7 +269,8 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
             {pinnedTopTools.map((tool) => (
               <div
                 key={tool.id}
-                className="group relative p-4 rounded-3xl bg-gradient-to-br from-surface-900 to-surface-850 border border-brand-500/30 hover:border-brand-500/60 transition-all duration-200 shadow-lg hover:shadow-brand-500/10 flex flex-col justify-between"
+                onClick={() => handleLaunchTool(tool)}
+                className="group relative p-4 rounded-3xl bg-gradient-to-br from-surface-900 to-surface-850 border border-brand-500/30 hover:border-brand-500/60 transition-all duration-200 shadow-lg hover:shadow-brand-500/10 flex flex-col justify-between cursor-pointer btn-press"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
@@ -364,7 +365,8 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
             {filteredTools.map((tool) => (
               <div
                 key={tool.id}
-                className="group p-4 rounded-3xl bg-surface-900/90 hover:bg-surface-850/90 border border-surface-750/70 hover:border-surface-650 transition-all duration-200 shadow-sm flex flex-col justify-between"
+                onClick={() => handleLaunchTool(tool)}
+                className="group p-4 rounded-3xl bg-surface-900/90 hover:bg-surface-850/90 border border-surface-750/70 hover:border-surface-650 transition-all duration-200 shadow-sm flex flex-col justify-between cursor-pointer btn-press"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between gap-2">

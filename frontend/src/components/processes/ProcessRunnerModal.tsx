@@ -182,7 +182,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
     setExecutionStage('Importing local files...');
     try {
       const filesArray = Array.from(fileList);
-      const uploaded = await api.uploadFiles(filesArray);
+      const uploaded = await universalEngine.uploadFiles(filesArray);
       onFilesUploaded?.(uploaded);
 
       if (tool.acceptsMultipleFiles) {

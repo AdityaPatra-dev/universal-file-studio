@@ -1,5 +1,6 @@
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting, NetworkInfo } from '../types/api';
-import { api } from './api';
+import { api, setApiBase } from './api';
+import { socketService } from './socket';
 import { mobileStorage } from './mobileStorage';
 import { mobileEngines } from './mobileEngines';
 
@@ -43,29 +44,54 @@ class UniversalEngineService {
     }
   }
 
-  public async detectMode(): Promise<EngineMode> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1800);
-      
-      const origin = typeof window !== 'undefined' && window.location.origin && !window.location.origin.startsWith('capacitor:') && window.location.protocol !== 'file:'
-        ? window.location.origin
-        : 'http://127.0.0.1:8000';
+  private getCandidateUrls(): string[] {
+    const urls: string[] = [];
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ufs_backend_url');
+      if (saved) urls.push(saved.replace(/\/+$/, ''));
 
-      const res = await fetch(`${origin}/api/info`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      const isCapacitor = Boolean(
+        (window as any).Capacitor?.isNativePlatform?.() ||
+        window.location.origin.startsWith('capacitor:') ||
+        window.location.protocol === 'file:' ||
+        (window.location.hostname === 'localhost' && window.location.port === '')
+      );
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === 'healthy' || data.app_name || data.app) {
-          this.setMode('desktop');
-          return 'desktop';
-        }
+      if (!isCapacitor && window.location.origin && window.location.origin !== 'null') {
+        urls.push(window.location.origin);
       }
-    } catch {
-      // Backend unreachable or standalone mobile app
+    }
+    // Always include loopback ports for local desktop and Android emulator
+    urls.push('http://127.0.0.1:8000');
+    urls.push('http://10.0.2.2:8000');
+    urls.push('http://localhost:8000');
+    return Array.from(new Set(urls));
+  }
+
+  public async detectMode(): Promise<EngineMode> {
+    const candidates = this.getCandidateUrls();
+    for (const base of candidates) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        const res = await fetch(`${base}/api/info`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'healthy' || data.app_name || data.app) {
+            setApiBase(`${base}/api/v1`);
+            socketService.setUrlFromHttp(base);
+            this.setMode('desktop');
+            return 'desktop';
+          }
+        }
+      } catch {
+        // Continue to try next candidate
+      }
     }
 
     this.setMode('mobile_standalone');
