@@ -33,14 +33,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Frontend Dependencies & Build Web Assets
         run: |
           cd frontend
           npm ci || npm install
           npm run build
-          npx cap copy android
+          ./node_modules/.bin/cap copy android
 
       - name: Grant Execute Permission to Gradlew
         run: chmod +x frontend/android/gradlew
@@ -58,9 +58,13 @@ jobs:
       - name: Organize Android Artifacts
         run: |
           mkdir -p release-artifacts/android
-          find frontend/android/app/build/outputs/apk/release/ -name "*.apk" -exec cp {} release-artifacts/android/ \;
-          find frontend/android/app/build/outputs/bundle/release/ -name "*.aab" -exec cp {} release-artifacts/android/ \;
-          ls -lh release-artifacts/android/
+          cd frontend/android/app/build/outputs
+          cp apk/release/app-arm64-v8a-release.apk ../../../release-artifacts/android/UniversalFileStudio-Android-arm64-v8a.apk 2>/dev/null || true
+          cp apk/release/app-armeabi-v7a-release.apk ../../../release-artifacts/android/UniversalFileStudio-Android-armeabi-v7a.apk 2>/dev/null || true
+          cp apk/release/app-x86_64-release.apk ../../../release-artifacts/android/UniversalFileStudio-Android-x86_64.apk 2>/dev/null || true
+          cp apk/release/app-universal-release.apk ../../../release-artifacts/android/UniversalFileStudio-Android-universal.apk 2>/dev/null || true
+          cp bundle/release/app-release.aab ../../../release-artifacts/android/UniversalFileStudio-Android.aab 2>/dev/null || true
+          ls -lh ../../../release-artifacts/android/
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
@@ -87,7 +91,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build Web Frontend
         run: |
@@ -137,7 +141,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build Web Frontend
         run: |
@@ -186,7 +190,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build Web Frontend
         run: |
@@ -240,6 +244,8 @@ jobs:
       - name: Create GitHub Release with Binary Attachments
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: Universal File Studio ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
