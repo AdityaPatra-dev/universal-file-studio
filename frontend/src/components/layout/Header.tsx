@@ -35,8 +35,8 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center space-x-3 cursor-pointer group select-none btn-press"
           title="Tools & Studio Home"
         >
-          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl bg-gradient-to-tr from-brand-600 via-indigo-600 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0">
-            <HardDrive className="h-5 w-5 text-white" />
+          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-2xl overflow-hidden shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0 border border-surface-700/50 bg-surface-900">
+            <img src="/icon.png" alt="UFS Logo" className="h-full w-full object-cover" />
           </div>
           <div>
             <div className="flex items-center gap-2">
