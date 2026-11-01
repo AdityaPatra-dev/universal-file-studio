@@ -31,3 +31,8 @@ frontend/android/.gradle/
 frontend/android/app/build/
 frontend/android/build/
 emulator_*.png
+
+# Release artifacts
+release-artifacts/
+all-dist/
+final-release-assets/
