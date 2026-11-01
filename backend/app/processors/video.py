@@ -4,6 +4,33 @@ from typing import Dict, Any, Optional, Tuple
 from app.processors.base import BaseProcessor
 from app.engines.wrappers.ffmpeg import ffmpeg_engine
 from app.engines.wrappers.base import ProcessResult
+from app.security.path_validation import sanitize_format
+
+ALLOWED_VIDEO_FORMATS = {"mp4", "webm", "mkv", "avi", "mov", "flv", "ts", "gif"}
+ALLOWED_AUDIO_FORMATS = {"mp3", "aac", "wav", "flac", "ogg", "m4a", "opus"}
+ALLOWED_PRESETS = {"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"}
+
+def _safe_int(val: Any, default: int, min_val: Optional[int] = None, max_val: Optional[int] = None) -> int:
+    try:
+        res = int(val)
+        if min_val is not None:
+            res = max(min_val, res)
+        if max_val is not None:
+            res = min(max_val, res)
+        return res
+    except (ValueError, TypeError):
+        return default
+
+def _safe_float(val: Any, default: float, min_val: Optional[float] = None, max_val: Optional[float] = None) -> float:
+    try:
+        res = float(val)
+        if min_val is not None:
+            res = max(min_val, res)
+        if max_val is not None:
+            res = min(max_val, res)
+        return res
+    except (ValueError, TypeError):
+        return default
 
 class VideoProcessor(BaseProcessor):
     async def process(
@@ -17,21 +44,23 @@ class VideoProcessor(BaseProcessor):
     ) -> Tuple[str, ProcessResult]:
         in_p = Path(input_path)
         out_d = Path(output_dir)
-        target_fmt = str(parameters.get("format") or parameters.get("to") or "mp4").lower().lstrip(".")
+        target_fmt = sanitize_format(parameters.get("format") or parameters.get("to"), ALLOWED_VIDEO_FORMATS, "mp4")
 
         # 1. Video Convert
         if operation in ["video_convert", "convert_video"]:
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.{target_fmt}")
-            crf = parameters.get("crf")
-            preset = parameters.get("preset")
+            crf = _safe_int(parameters.get("crf"), 28, min_val=0, max_val=51) if parameters.get("crf") is not None else None
+            preset = str(parameters.get("preset", "medium")).lower()
+            if preset not in ALLOWED_PRESETS:
+                preset = "medium"
             res = await ffmpeg_engine.convert(input_path, out_file, crf=crf, preset=preset)
             return out_file, res
 
         # 2. Video Compress
         elif operation in ["video_compress", "compress_video"]:
             out_file = str(out_d / f"{in_p.stem}_compressed_{job_id[:8]}.mp4")
-            crf = int(parameters.get("crf", 28))
-            bitrate = parameters.get("bitrate_k")
+            crf = _safe_int(parameters.get("crf", 28), 28, min_val=0, max_val=51)
+            bitrate = _safe_int(parameters.get("bitrate_k"), 1000, min_val=64, max_val=50000) if parameters.get("bitrate_k") else None
             res = await ffmpeg_engine.compress(input_path, out_file, target_bitrate_k=bitrate, crf=crf)
             return out_file, res
 
@@ -48,8 +77,8 @@ class VideoProcessor(BaseProcessor):
         # 4. Video Resize
         elif operation in ["video_resize", "resize_video"]:
             out_file = str(out_d / f"{in_p.stem}_resized_{job_id[:8]}.mp4")
-            w = int(parameters.get("width", 1280))
-            h = int(parameters.get("height", 720))
+            w = _safe_int(parameters.get("width", 1280), 1280, min_val=16, max_val=7680)
+            h = _safe_int(parameters.get("height", 720), 720, min_val=16, max_val=4320)
             keep_aspect = bool(parameters.get("keep_aspect_ratio", True))
             res = await ffmpeg_engine.resize(input_path, out_file, width=w, height=h, keep_aspect_ratio=keep_aspect)
             return out_file, res
@@ -57,18 +86,25 @@ class VideoProcessor(BaseProcessor):
         # 5. Video Crop
         elif operation in ["video_crop", "crop_video"]:
             out_file = str(out_d / f"{in_p.stem}_cropped_{job_id[:8]}.mp4")
-            w = int(parameters.get("width", 640))
-            h = int(parameters.get("height", 480))
-            x = int(parameters.get("x", 0))
-            y = int(parameters.get("y", 0))
+            w = _safe_int(parameters.get("width", 640), 640, min_val=16, max_val=7680)
+            h = _safe_int(parameters.get("height", 480), 480, min_val=16, max_val=4320)
+            x = _safe_int(parameters.get("x", 0), 0, min_val=0)
+            y = _safe_int(parameters.get("y", 0), 0, min_val=0)
             res = await ffmpeg_engine.crop(input_path, out_file, width=w, height=h, x=x, y=y)
             return out_file, res
 
         # 6. Video Rotate / Flip
         elif operation in ["video_rotate", "rotate_video"]:
-            deg = int(parameters.get("degrees", 90))
+            deg = _safe_int(parameters.get("degrees", 90), 90)
             out_file = str(out_d / f"{in_p.stem}_rotated_{job_id[:8]}.mp4")
-            vf = "transpose=1" if deg == 90 else ("transpose=2" if deg == 270 else "hflip,vflip")
+            if deg == 90:
+                vf = "transpose=1"
+            elif deg == 180:
+                vf = "hflip,vflip"
+            elif deg == 270:
+                vf = "transpose=2"
+            else:
+                vf = "null"  # 0 or unhandled angle is no-op
             v_codec = ffmpeg_engine.get_best_video_encoder(".mp4")
             cmd = ["ffmpeg", "-y", "-i", input_path, "-vf", vf, "-c:v", v_codec, "-c:a", "copy", out_file]
             res = await ffmpeg_engine.execute(cmd)
@@ -85,7 +121,7 @@ class VideoProcessor(BaseProcessor):
 
         # 7. Change FPS
         elif operation in ["video_change_fps", "change_fps"]:
-            fps = float(parameters.get("fps", 30))
+            fps = _safe_float(parameters.get("fps", 30), 30.0, min_val=1.0, max_val=120.0)
             out_file = str(out_d / f"{in_p.stem}_{int(fps)}fps_{job_id[:8]}.mp4")
             v_codec = ffmpeg_engine.get_best_video_encoder(".mp4")
             cmd = ["ffmpeg", "-y", "-i", input_path, "-r", str(fps), "-c:v", v_codec, out_file]
@@ -94,7 +130,7 @@ class VideoProcessor(BaseProcessor):
 
         # 8. Video Change Speed
         elif operation in ["video_change_speed", "change_speed"]:
-            speed = float(parameters.get("speed", 1.5))
+            speed = _safe_float(parameters.get("speed", 1.5), 1.5, min_val=0.25, max_val=4.0)
             out_file = str(out_d / f"{in_p.stem}_{speed}x_{job_id[:8]}.mp4")
             res = await ffmpeg_engine.change_speed(input_path, out_file, video_multiplier=speed, audio_multiplier=speed)
             return out_file, res
@@ -107,7 +143,7 @@ class VideoProcessor(BaseProcessor):
 
         # 10. Extract Audio
         elif operation in ["extract_audio", "video_extract_audio"]:
-            audio_fmt = str(parameters.get("format", "mp3")).lower().lstrip(".")
+            audio_fmt = sanitize_format(parameters.get("format"), ALLOWED_AUDIO_FORMATS, "mp3")
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.{audio_fmt}")
             codec = "libmp3lame" if audio_fmt == "mp3" else ("aac" if audio_fmt in ["m4a", "aac"] else "copy")
             res = await ffmpeg_engine.extract_audio(input_path, out_file, audio_codec=codec)
@@ -123,8 +159,8 @@ class VideoProcessor(BaseProcessor):
         # 12. Extract Frames
         elif operation in ["extract_frames", "video_extract_frames"]:
             out_sub_d = str(out_d / f"{in_p.stem}_frames_{job_id[:8]}")
-            fps = float(parameters.get("fps", 1.0))
-            fmt = str(parameters.get("format", "jpg"))
+            fps = _safe_float(parameters.get("fps", 1.0), 1.0, min_val=0.01, max_val=10.0)
+            fmt = sanitize_format(parameters.get("format"), {"jpg", "jpeg", "png", "webp"}, "jpg")
             res = await ffmpeg_engine.extract_frames(input_path, out_sub_d, fps=fps, format=fmt)
             return out_sub_d, res
 
@@ -137,7 +173,7 @@ class VideoProcessor(BaseProcessor):
             else:
                 vids = [in_p]
 
-            fmt = str(parameters.get("format", "mp4")).lower().lstrip(".")
+            fmt = sanitize_format(parameters.get("format"), ALLOWED_VIDEO_FORMATS, "mp4")
             out_file = str(out_d / f"{in_p.stem}_concat_{job_id[:8]}.{fmt}")
 
             if not vids:
@@ -148,22 +184,25 @@ class VideoProcessor(BaseProcessor):
                 shutil.copyfile(str(vids[0]), out_file)
                 return out_file, ProcessResult(returncode=0, stdout="Single video copied", stderr="", success=True, command=["copy", str(vids[0]), out_file])
 
-            # Write concat file
+            # Write concat file safely with quote escaping
             concat_txt = out_d / f"concat_{job_id[:8]}.txt"
-            with open(concat_txt, "w", encoding="utf-8") as f:
-                for v in vids:
-                    f.write(f"file '{v.resolve().as_posix()}'\n")
+            try:
+                with open(concat_txt, "w", encoding="utf-8") as f:
+                    for v in vids:
+                        safe_v_path = v.resolve().as_posix().replace("'", "'\\''")
+                        f.write(f"file '{safe_v_path}'\n")
 
-            cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c", "copy", out_file]
-            res = await ffmpeg_engine.execute(cmd)
-            if not res.success or not os.path.exists(out_file) or os.path.getsize(out_file) == 0:
-                # Fallback to re-encoding if streams are mismatched
-                cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c:v", "libx264", "-c:a", "aac", out_file]
+                cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c", "copy", out_file]
                 res = await ffmpeg_engine.execute(cmd)
+                if not res.success or not os.path.exists(out_file) or os.path.getsize(out_file) == 0:
+                    # Fallback to re-encoding if streams are mismatched
+                    cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_txt), "-c:v", "libx264", "-c:a", "aac", out_file]
+                    res = await ffmpeg_engine.execute(cmd)
 
-            if concat_txt.exists():
-                concat_txt.unlink(missing_ok=True)
-            return out_file, res
+                return out_file, res
+            finally:
+                if concat_txt.exists():
+                    concat_txt.unlink(missing_ok=True)
 
         # Default fallback
         out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.mp4")

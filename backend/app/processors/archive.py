@@ -4,6 +4,9 @@ from typing import Dict, Any, Optional, Tuple, List
 from app.processors.base import BaseProcessor
 from app.engines.wrappers.sevenzip import sevenzip_engine
 from app.engines.wrappers.base import ProcessResult
+from app.security.path_validation import sanitize_format
+
+ALLOWED_ARCHIVE_FORMATS = {"zip", "7z", "tar", "gz", "bz2", "xz"}
 
 class ArchiveProcessor(BaseProcessor):
     async def process(
@@ -27,11 +30,11 @@ class ArchiveProcessor(BaseProcessor):
 
         # 2. Archive Create
         elif operation in ["archive_create", "create_archive"]:
-            fmt = str(parameters.get("format", "zip")).lower().lstrip(".")
+            fmt = sanitize_format(parameters.get("format"), ALLOWED_ARCHIVE_FORMATS, "zip")
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.{fmt}")
             if in_p.is_dir():
-                items = [str(p) for p in in_p.glob("*")]
-                res = await sevenzip_engine.create(out_file, items or [input_path], password=password)
+                # Pass directory directly or wildcard to prevent ARG_MAX overflow
+                res = await sevenzip_engine.create(out_file, [f"{input_path}/*"], password=password)
             else:
                 res = await sevenzip_engine.create(out_file, [input_path], password=password)
             return out_file, res

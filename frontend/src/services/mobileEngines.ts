@@ -99,11 +99,24 @@ export const mobileEngines = {
 
     onProgress?.(50);
 
-    // Create Canvas
+    // Create Canvas with Mobile Hardware Safety Clamp (Max 4096px)
     const canvas = document.createElement('canvas');
     const isSideways = rotation === 90 || rotation === 270;
-    canvas.width = isSideways ? height : width;
-    canvas.height = isSideways ? width : height;
+    const MAX_CANVAS_DIM = 4096;
+    let targetW = isSideways ? height : width;
+    let targetH = isSideways ? width : height;
+
+    if (targetW > MAX_CANVAS_DIM || targetH > MAX_CANVAS_DIM) {
+      const ratio = Math.min(MAX_CANVAS_DIM / targetW, MAX_CANVAS_DIM / targetH);
+      targetW = Math.round(targetW * ratio);
+      targetH = Math.round(targetH * ratio);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+      logs.push(`Clamped dimensions to safe mobile canvas bounds: ${targetW}x${targetH}`);
+    }
+
+    canvas.width = targetW;
+    canvas.height = targetH;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not acquire 2D Canvas rendering context');
@@ -497,27 +510,35 @@ export const mobileEngines = {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass();
 
-      const arrayBuf = await blob.arrayBuffer();
-      onProgress?.(30);
+      try {
+        const arrayBuf = await blob.arrayBuffer();
+        onProgress?.(30);
 
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
-      logs.push(`Decoded audio: ${audioBuffer.numberOfChannels} ch, ${audioBuffer.sampleRate} Hz, ${audioBuffer.duration.toFixed(2)}s`);
-      onProgress?.(60);
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+        logs.push(`Decoded audio: ${audioBuffer.numberOfChannels} ch, ${audioBuffer.sampleRate} Hz, ${audioBuffer.duration.toFixed(2)}s`);
+        onProgress?.(60);
 
-      // Encode to 16-bit PCM WAV
-      const wavBytes = encodeWAV(audioBuffer);
-      const outBlob = new Blob([wavBytes as any], { type: 'audio/wav' });
+        // Encode to 16-bit PCM WAV
+        const wavBytes = encodeWAV(audioBuffer);
+        const outBlob = new Blob([wavBytes as any], { type: 'audio/wav' });
 
-      onProgress?.(100);
-      const outName = `${filename.replace(/\.[^/.]+$/, '')}.wav`;
-      logs.push(`Exported lossless WAV: ${outName} (${outBlob.size} bytes)`);
+        onProgress?.(100);
+        const outName = `${filename.replace(/\.[^/.]+$/, '')}.wav`;
+        logs.push(`Exported lossless WAV: ${outName} (${outBlob.size} bytes)`);
 
-      return {
-        outputBlob: outBlob,
-        outputFilename: outName,
-        outputMime: 'audio/wav',
-        logs,
-      };
+        return {
+          outputBlob: outBlob,
+          outputFilename: outName,
+          outputMime: 'audio/wav',
+          logs,
+        };
+      } finally {
+        try {
+          await audioCtx.close();
+        } catch {
+          // AudioContext cleanup
+        }
+      }
     }
 
     throw new Error(`Unsupported mobile audio/video operation: ${operation}`);
@@ -541,8 +562,16 @@ export const mobileEngines = {
 
     if (operation === 'markdown_to_html' || (filename.endsWith('.md') && params.target_format === 'html')) {
       logs.push('Parsing Markdown to HTML...');
-      // Clean pure client markdown-to-html converter
-      let html = text
+      // Sanitize raw text to prevent Stored Cross-Site Scripting (XSS)
+      const sanitizedText = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+      // Clean client markdown-to-html converter
+      let html = sanitizedText
         .replace(/^### (.*$)/gim, '<h3>$1</h3>')
         .replace(/^## (.*$)/gim, '<h2>$1</h2>')
         .replace(/^# (.*$)/gim, '<h1>$1</h1>')

@@ -162,11 +162,7 @@ class ProcessorRegistry:
         if any(term in operation for term in ["doc", "sheet", "slide", "presentation", "office"]):
             return await document_processor.process(operation, input_path, out_dir_path, job_id, parameters, file_info)
 
-        # Generic copy fallback
-        in_p = Path(input_path)
-        out_f = str(out_dir_path / f"{in_p.stem}_{job_id[:8]}{in_p.suffix}")
-        with open(in_p, "rb") as s, open(out_f, "wb") as d:
-            d.write(s.read())
-        return out_f, ProcessResult(0, "Pass-through copy completed.", "", True, ["ufs_copy", input_path, out_f])
+        # Explicitly reject unknown operations to prevent silent corruption or memory exhaustion
+        raise ValueError(f"Operation '{operation}' is not recognized or supported by Universal File Studio.")
 
 processor_registry = ProcessorRegistry()

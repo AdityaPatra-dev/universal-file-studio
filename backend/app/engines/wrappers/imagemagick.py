@@ -10,8 +10,12 @@ class ImageMagickEngine(BaseEngine):
         info = self.get_info()
         return info.path if info and info.path else "magick"
 
+    def _base_cmd(self) -> List[str]:
+        """Provides base binary with strict resource limits against decompression bombs."""
+        return [self._get_bin(), "-limit", "memory", "512MB", "-limit", "map", "1GB", "-limit", "area", "256MB"]
+
     async def convert(self, input_path: str, output_path: str) -> ProcessResult:
-        cmd = [self._get_bin(), input_path, output_path]
+        cmd = [*self._base_cmd(), input_path, output_path]
         return await self.execute(cmd)
 
     async def resize(
@@ -31,7 +35,7 @@ class ImageMagickEngine(BaseEngine):
         else:
             size_str = "100%"
 
-        cmd = [self._get_bin(), input_path, "-resize", size_str, output_path]
+        cmd = [*self._base_cmd(), input_path, "-resize", size_str, output_path]
         return await self.execute(cmd)
 
     async def crop(
@@ -44,15 +48,15 @@ class ImageMagickEngine(BaseEngine):
         y: int = 0
     ) -> ProcessResult:
         geometry = f"{width}x{height}+{x}+{y}"
-        cmd = [self._get_bin(), input_path, "-crop", geometry, "+repage", output_path]
+        cmd = [*self._base_cmd(), input_path, "-crop", geometry, "+repage", output_path]
         return await self.execute(cmd)
 
     async def rotate(self, input_path: str, output_path: str, degrees: float) -> ProcessResult:
-        cmd = [self._get_bin(), input_path, "-rotate", str(degrees), output_path]
+        cmd = [*self._base_cmd(), input_path, "-rotate", str(degrees), output_path]
         return await self.execute(cmd)
 
     async def compress(self, input_path: str, output_path: str, quality: int = 80) -> ProcessResult:
-        cmd = [self._get_bin(), input_path, "-quality", str(quality), output_path]
+        cmd = [*self._base_cmd(), input_path, "-quality", str(quality), output_path]
         return await self.execute(cmd)
 
     async def change_quality(self, input_path: str, output_path: str, quality: int) -> ProcessResult:

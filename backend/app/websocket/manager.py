@@ -67,6 +67,11 @@ class ConnectionManager:
             async with self._lock:
                 for dead in dead_connections:
                     self.active_connections.discard(dead)
+                    # Clean up from job subscriptions to prevent memory leak
+                    for j_id, subscribers in list(self.job_subscriptions.items()):
+                        subscribers.discard(dead)
+                        if not subscribers:
+                            del self.job_subscriptions[j_id]
 
     async def send_to_job(self, job_id: str, event: str, payload: Dict[str, Any]):
         """Send event to subscribers of a specific job and also broadcast globally."""

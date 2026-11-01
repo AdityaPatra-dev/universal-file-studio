@@ -1,3 +1,5 @@
+import os
+import signal
 import asyncio
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
@@ -46,6 +48,25 @@ class BaseEngine(ABC):
         registry = CapabilityRegistry()
         return registry.get(self.name)
 
+    async def _terminate_subprocess(self, process: asyncio.subprocess.Process) -> None:
+        """Kills the entire process group and collects exit status to prevent zombie processes."""
+        try:
+            if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            else:
+                process.kill()
+        except Exception:
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+        try:
+            # Reap exit status so process doesn't become <defunct> zombie
+            await asyncio.shield(process.wait())
+        except Exception:
+            pass
+
     async def execute(
         self,
         command: List[str],
@@ -60,21 +81,26 @@ class BaseEngine(ABC):
             )
 
         actual_timeout = timeout or settings.SUBPROCESS_TIMEOUT_SECONDS
+        process = None
 
         try:
+            # Start in a new session / process group for clean tree termination
             process = await asyncio.create_subprocess_exec(
                 *command,
                 cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
+                start_new_session=True
             )
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 process.communicate(),
                 timeout=actual_timeout
             )
             rc = process.returncode if process.returncode is not None else 0
-            stdout_str = stdout_bytes.decode('utf-8', errors='replace')
-            stderr_str = stderr_bytes.decode('utf-8', errors='replace')
+            # Truncate debug output if excessive to prevent unbounded memory retention
+            max_log = 1024 * 1024  # 1 MB
+            stdout_str = stdout_bytes[:max_log].decode('utf-8', errors='replace')
+            stderr_str = stderr_bytes[:max_log].decode('utf-8', errors='replace')
 
             return ProcessResult(
                 returncode=rc,
@@ -84,14 +110,18 @@ class BaseEngine(ABC):
                 command=command
             )
         except asyncio.TimeoutError:
-            try:
-                process.kill()
-            except Exception:
-                pass
+            if process:
+                await self._terminate_subprocess(process)
             from app.exceptions import SubprocessTimeoutError
             raise SubprocessTimeoutError(
                 f"Engine '{self.name}' operation timed out after {actual_timeout} seconds."
             )
+        except asyncio.CancelledError:
+            if process:
+                await self._terminate_subprocess(process)
+            raise
         except Exception as e:
+            if process:
+                await self._terminate_subprocess(process)
             raise RuntimeError(f"Error executing engine '{self.name}': {str(e)}") from e
 

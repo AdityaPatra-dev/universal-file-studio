@@ -70,7 +70,7 @@ class PdfProcessor(BaseProcessor):
                 res = await qpdf_engine.rotate_pages(input_path, out_file, angle=angle, page_ranges=pages)
             else:
                 # Ghostscript fallback rotate
-                cmd = ["gs", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4", "-dNOPAUSE", "-dQUIET", "-dBATCH", f"-sOutputFile={out_file}", input_path]
+                cmd = ["gs", "-dSAFER", "-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4", "-dNOPAUSE", "-dQUIET", "-dBATCH", f"-sOutputFile={out_file}", input_path]
                 res = await ghostscript_engine.execute(cmd)
             return out_file, res
 
@@ -107,6 +107,7 @@ class PdfProcessor(BaseProcessor):
 
         img_exts = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".bmp", ".tiff", ".gif"}
         temp_dir: Optional[Path] = None
+        list_file_dir: Optional[Path] = None
 
         def natural_sort_key(s):
             return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', str(s))]
@@ -156,13 +157,10 @@ class PdfProcessor(BaseProcessor):
             ]
 
             res = await imagemagick_engine.execute(cmd, timeout=600)
-            shutil.rmtree(list_file_dir, ignore_errors=True)
-
-            if res.success and os.path.exists(out_pdf):
-                return out_pdf, res
-            else:
-                return out_pdf, res
+            return out_pdf, res
         finally:
+            if list_file_dir and list_file_dir.exists():
+                shutil.rmtree(list_file_dir, ignore_errors=True)
             if temp_dir and temp_dir.exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -173,8 +171,13 @@ class PdfProcessor(BaseProcessor):
         job_id: str,
         parameters: Dict[str, Any]
     ) -> Tuple[str, ProcessResult]:
+        from app.security.path_validation import validate_safe_path
+        from app.config import settings
+
         out_d.mkdir(parents=True, exist_ok=True)
         out_pdf = str(out_d / f"{in_p.stem}_merged_{job_id[:8]}.pdf")
+
+        allowed_roots = [Path(settings.STORAGE_DIR), Path(settings.UPLOAD_DIR), Path(tempfile.gettempdir()), Path.cwd()]
 
         if in_p.is_dir():
             pdfs = sorted([p for p in in_p.rglob("*.pdf")], key=lambda x: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', x.name)])
@@ -184,9 +187,13 @@ class PdfProcessor(BaseProcessor):
             if isinstance(extra_files, str):
                 extra_files = [f.strip() for f in extra_files.split(",") if f.strip()]
             for ef in extra_files:
-                p_ef = Path(ef)
-                if p_ef.exists() and p_ef not in pdfs:
-                    pdfs.append(p_ef)
+                try:
+                    safe_ef = validate_safe_path(ef, allowed_roots)
+                    if safe_ef.exists() and safe_ef not in pdfs:
+                        pdfs.append(safe_ef)
+                except Exception:
+                    # Skip files attempting path traversal outside allowed roots
+                    continue
 
         if not pdfs:
             return out_pdf, ProcessResult(
@@ -202,7 +209,7 @@ class PdfProcessor(BaseProcessor):
             return out_pdf, ProcessResult(returncode=0, stdout="Single PDF copied", stderr="", success=True, command=["copy", str(pdfs[0]), out_pdf])
 
         cmd = [
-            "gs", "-dBATCH", "-dNOPAUSE", "-q",
+            "gs", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-q",
             "-sDEVICE=pdfwrite",
             f"-sOutputFile={out_pdf}",
             *[str(p.resolve()) for p in pdfs]
@@ -226,7 +233,7 @@ class PdfProcessor(BaseProcessor):
         if not res.success:
             # Fallback using Ghostscript
             cmd_gs = [
-                "gs", "-dBATCH", "-dNOPAUSE", "-q",
+                "gs", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-q",
                 "-sDEVICE=pdfwrite",
                 f"-sOutputFile={str(split_dir / 'page_%04d.pdf')}",
                 str(in_p)

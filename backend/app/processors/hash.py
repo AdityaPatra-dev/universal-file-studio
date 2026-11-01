@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import zlib
@@ -19,8 +20,8 @@ class HashProcessor(BaseProcessor):
 
     CHUNK_SIZE = 64 * 1024  # 64 KB
 
-    async def compute_hashes(self, file_path: str) -> Dict[str, str]:
-        """Streaming hash calculation over chunks."""
+    def _sync_compute_hashes(self, file_path: str) -> Dict[str, str]:
+        """Synchronous streaming hash calculation over chunks in worker thread."""
         sha256 = hashlib.sha256()
         md5 = hashlib.md5()
         sha1 = hashlib.sha1()
@@ -42,6 +43,10 @@ class HashProcessor(BaseProcessor):
             "sha512": sha512.hexdigest(),
             "crc32": f"{crc & 0xffffffff:08x}",
         }
+
+    async def compute_hashes(self, file_path: str) -> Dict[str, str]:
+        """Asynchronously compute hashes without blocking the event loop."""
+        return await asyncio.to_thread(self._sync_compute_hashes, file_path)
 
     async def process(
         self,

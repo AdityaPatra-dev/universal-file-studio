@@ -133,7 +133,9 @@ app.include_router(developer_router, prefix=settings.API_V1_STR)
 @app.get("/api/info")
 async def api_info():
     return {
+        "status": "healthy",
         "app": settings.PROJECT_NAME,
+        "app_name": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "docs": "/docs",
         "api": settings.API_V1_STR,

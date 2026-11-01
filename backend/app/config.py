@@ -5,7 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Base directory: /home/.../universal-file-studio
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-STORAGE_DIR = PROJECT_ROOT / "storage"
+_STORAGE_DIR = PROJECT_ROOT / "storage"
+STORAGE_DIR = _STORAGE_DIR
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Universal File Studio"
@@ -13,13 +14,14 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Database
-    DATABASE_URL: str = f"sqlite+aiosqlite:///{STORAGE_DIR}/ufs.db"
+    DATABASE_URL: str = f"sqlite+aiosqlite:///{_STORAGE_DIR}/ufs.db"
     
     # Storage Paths
-    UPLOAD_DIR: str = str(STORAGE_DIR / "uploads")
-    OUTPUT_DIR: str = str(STORAGE_DIR / "outputs")
-    TEMP_DIR: str = str(STORAGE_DIR / "temp")
-    THUMBNAIL_DIR: str = str(STORAGE_DIR / "thumbnails")
+    STORAGE_DIR: str = str(_STORAGE_DIR)
+    UPLOAD_DIR: str = str(_STORAGE_DIR / "uploads")
+    OUTPUT_DIR: str = str(_STORAGE_DIR / "outputs")
+    TEMP_DIR: str = str(_STORAGE_DIR / "temp")
+    THUMBNAIL_DIR: str = str(_STORAGE_DIR / "thumbnails")
     
     # Upload & Concurrency
     MAX_UPLOAD_SIZE_MB: int = 4096  # 4 GB
@@ -32,7 +34,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = [
         "*"
     ]
-    DEBUG: bool = True
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() in ("true", "1")
     
     model_config = SettingsConfigDict(
         env_file=".env",

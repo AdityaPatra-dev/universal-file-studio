@@ -14,6 +14,7 @@ from app.schemas.file_schema import FileRecordResponse, FileAnalyzeResponse
 from app.security.path_validation import sanitize_filename, calculate_sha256, validate_safe_path
 from app.detection.file_detector import file_detector
 from app.engines.base import CapabilityRegistry
+from app.exceptions import FileTooLargeError
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -24,6 +25,7 @@ async def upload_files(
 ):
     results = []
     upload_dir = Path(settings.UPLOAD_DIR)
+    max_upload_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     for upload in files:
         if not upload.filename:
@@ -34,12 +36,21 @@ async def upload_files(
         stored_filename = f"{unique_prefix}_{clean_name}"
         dest_path = upload_dir / stored_filename
 
-        # Stream save
+        # Stream save with size limit check
         size_bytes = 0
-        with open(dest_path, "wb") as f:
-            while chunk := await upload.read(65536):
-                size_bytes += len(chunk)
-                f.write(chunk)
+        try:
+            with open(dest_path, "wb") as f:
+                while chunk := await upload.read(65536):
+                    size_bytes += len(chunk)
+                    if size_bytes > max_upload_bytes:
+                        raise FileTooLargeError(
+                            f"Uploaded file exceeds maximum limit of {settings.MAX_UPLOAD_SIZE_MB}MB."
+                        )
+                    f.write(chunk)
+        except Exception:
+            if dest_path.exists():
+                dest_path.unlink(missing_ok=True)
+            raise
 
         # Hash
         sha256 = calculate_sha256(dest_path)

@@ -44,8 +44,10 @@ class LibreOfficeEngine(BaseEngine):
             "--headless",
             "--invisible",
             "--nologo",
+            "--norestore",
             "--nofirststartwizard",
             f"-env:UserInstallation=file://{temp_profile_dir.as_posix()}",
+            "-env:OfficeSettings/MacroSecurity/Level=3",
             "--convert-to", convert_spec,
             "--outdir", output_dir,
             input_path

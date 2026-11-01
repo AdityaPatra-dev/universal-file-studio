@@ -59,7 +59,7 @@ class UniversalEngineService {
 
       if (res.ok) {
         const data = await res.json();
-        if (data.status === 'healthy' || data.app_name) {
+        if (data.status === 'healthy' || data.app_name || data.app) {
           this.setMode('desktop');
           return 'desktop';
         }

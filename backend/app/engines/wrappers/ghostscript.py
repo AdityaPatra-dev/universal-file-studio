@@ -11,6 +11,7 @@ class GhostscriptEngine(BaseEngine):
     async def optimize(self, input_path: str, output_path: str) -> ProcessResult:
         cmd = [
             self._get_bin(),
+            "-dSAFER",
             "-sDEVICE=pdfwrite",
             "-dCompatibilityLevel=1.4",
             "-dNOPAUSE",
@@ -29,6 +30,7 @@ class GhostscriptEngine(BaseEngine):
     ) -> ProcessResult:
         cmd = [
             self._get_bin(),
+            "-dSAFER",
             "-sDEVICE=pdfwrite",
             "-dCompatibilityLevel=1.4",
             f"-dPDFSETTINGS=/{quality_setting}",
@@ -48,6 +50,7 @@ class GhostscriptEngine(BaseEngine):
     ) -> ProcessResult:
         cmd = [
             self._get_bin(),
+            "-dSAFER",
             "-dPDFA=2",
             "-sColorConversionStrategy=UseDeviceIndependentColor",
             "-sDEVICE=pdfwrite",

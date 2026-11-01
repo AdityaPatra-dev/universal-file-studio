@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 
@@ -65,14 +66,13 @@ class MetadataProcessor(BaseProcessor):
                 res = await ghostscript_engine.compress(str(in_p), out_file, quality_setting="prepress")
                 return out_file, res
 
-        # Fallback binary copy with safe header rewrite
-        with open(in_p, "rb") as s, open(out_file, "wb") as d:
-            d.write(s.read())
+        # Fallback: copy file without pretending unhandled formats are stripped
+        shutil.copy2(in_p, out_file)
 
         return out_file, ProcessResult(
             returncode=0,
-            stdout="Metadata stripped via standard sanitization profile.",
-            stderr="",
+            stdout=f"Format '{ext}' does not have dedicated metadata sanitizers; binary copied safely.",
+            stderr=f"Notice: Automated metadata removal is not supported for '{ext}' files.",
             success=True,
             command=["ufs_strip_metadata", str(in_p), out_file]
         )

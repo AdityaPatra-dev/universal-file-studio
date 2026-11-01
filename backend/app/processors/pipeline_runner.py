@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import asyncio
 import tempfile
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional, Callable, Awaitable, Union
@@ -65,8 +66,8 @@ class PipelineRunner:
         file_info: Optional[Dict[str, Any]] = None,
         on_error: str = "stop"  # "stop" | "skip" | "collect"
     ) -> Tuple[str, ProcessResult]:
-        if not steps:
-            raise ValueError("Pipeline must have at least one step.")
+        if not steps or len(steps) > 50:
+            raise ValueError("Pipeline must contain between 1 and 50 steps.")
 
         output_dir_p = Path(output_dir)
         temp_workspace = Path(tempfile.mkdtemp(prefix=f"ufs_pipe_{job_id[:8]}_"))
@@ -103,11 +104,10 @@ class PipelineRunner:
                     "audio_merge", "merge_audio", "concat_audio"
                 ]
 
-                # CASE 1: Directory input and operation is batch-capable (process each file in batch)
+                # CASE 1: Directory input and operation is batch-capable (process files with bounded concurrency)
                 if is_dir_input and batch_capable and not consumes_directory:
                     matching_files = filter_files_for_operation(curr_p, op)
                     if not matching_files:
-                        # Fallback: try all files in folder if no specific match
                         matching_files = [p for p in sorted(curr_p.rglob("*"), key=natsort_key) if p.is_file()]
 
                     if not matching_files:
@@ -119,34 +119,46 @@ class PipelineRunner:
                             command=[op]
                         )
 
-                    processed_count = 0
-                    for sub_idx, sub_file in enumerate(matching_files):
+                    sem = asyncio.Semaphore(4)
+
+                    async def _run_single(sub_idx: int, sub_file: Path):
                         sub_job_id = f"{job_id}_s{step_num}_{sub_idx:04d}"
-                        try:
-                            _, sub_res = await processor_registry.dispatch(
-                                operation=op,
-                                input_path=str(sub_file),
-                                output_dir=str(step_out_dir),
-                                job_id=sub_job_id,
-                                parameters=params,
-                                file_info=file_info
-                            )
-                            if sub_res.success:
-                                processed_count += 1
-                            else:
-                                if on_error == "stop":
-                                    return str(step_out_dir), sub_res
-                                else:
-                                    errors_collected.append({"file": sub_file.name, "error": sub_res.stderr})
-                        except Exception as ex:
+                        async with sem:
+                            try:
+                                return await processor_registry.dispatch(
+                                    operation=op,
+                                    input_path=str(sub_file),
+                                    output_dir=str(step_out_dir),
+                                    job_id=sub_job_id,
+                                    parameters=params,
+                                    file_info=file_info
+                                )
+                            except Exception as ex:
+                                return "", ProcessResult(
+                                    returncode=1,
+                                    stdout="",
+                                    stderr=str(ex),
+                                    success=False,
+                                    command=[op]
+                                )
+
+                    tasks = [_run_single(i, f) for i, f in enumerate(matching_files)]
+                    results = await asyncio.gather(*tasks)
+
+                    processed_count = 0
+                    for (_, sub_res), sub_file in zip(results, matching_files):
+                        if sub_res.success:
+                            processed_count += 1
+                        else:
                             if on_error == "stop":
-                                raise
-                            errors_collected.append({"file": sub_file.name, "error": str(ex)})
+                                return str(step_out_dir), sub_res
+                            else:
+                                errors_collected.append({"file": sub_file.name, "error": sub_res.stderr})
 
                     step_out_path = str(step_out_dir)
                     res = ProcessResult(
                         returncode=0,
-                        stdout=f"Batch processed {processed_count}/{len(matching_files)} files.",
+                        stdout=f"Batch processed {processed_count}/{len(matching_files)} files concurrently.",
                         stderr=f"Errors: {len(errors_collected)}" if errors_collected else "",
                         success=True,
                         command=[op, f"count={processed_count}"]
