@@ -162,7 +162,7 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db)):
     res = await db.execute(stmt)
     job = res.scalar_one_or_none()
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        return {"success": True, "message": "Job already removed"}
 
     if job.output_path and os.path.exists(job.output_path):
         try:

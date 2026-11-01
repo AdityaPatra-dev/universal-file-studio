@@ -187,11 +187,19 @@ class DocumentProcessor(BaseProcessor):
         temp_dir = Path(tempfile.mkdtemp(prefix="ufs_doc_conv_"))
         final_out_path = str(output_dir / f"{in_p.stem}_{job_id[:8]}.{target_fmt}")
 
+        infilter = None
+        if in_ext == ".pdf":
+            if target_fmt in ["docx", "doc", "odt", "rtf", "txt", "html"]:
+                infilter = "writer_pdf_import"
+            elif target_fmt in ["pptx", "ppt", "odp"]:
+                infilter = "impress_pdf_import"
+
         try:
             res = await libreoffice_engine.convert(
                 input_path=str(in_p),
                 output_dir=str(temp_dir),
-                format=target_fmt
+                format=target_fmt,
+                infilter=infilter
             )
 
             if not res.success:

@@ -3,6 +3,8 @@ import { api, setApiBase } from './api';
 import { socketService } from './socket';
 import { mobileStorage } from './mobileStorage';
 import { mobileEngines } from './mobileEngines';
+import { UniversalNativeEngine } from './nativeEngineBridge';
+import { Capacitor } from '@capacitor/core';
 
 export type EngineMode = 'desktop' | 'mobile_standalone';
 

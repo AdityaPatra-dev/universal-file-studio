@@ -129,6 +129,7 @@ class ProcessorRegistry:
             # Phase 5: Advanced (OCR, Metadata, Hashing)
             "ocr_image": ocr_processor,
             "ocr_pdf": ocr_processor,
+            "ocr_extract": ocr_processor,
             "extract_text_ocr": ocr_processor,
 
             "video_strip_metadata": metadata_processor,

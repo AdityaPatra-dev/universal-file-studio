@@ -18,7 +18,8 @@ class LibreOfficeEngine(BaseEngine):
         input_path: str,
         output_dir: str,
         format: str = "pdf",
-        filter_name: Optional[str] = None
+        filter_name: Optional[str] = None,
+        infilter: Optional[str] = None
     ) -> ProcessResult:
         """
         Converts document, spreadsheet, or presentation to target format using headless LibreOffice.
@@ -48,10 +49,16 @@ class LibreOfficeEngine(BaseEngine):
             "--nofirststartwizard",
             f"-env:UserInstallation=file://{temp_profile_dir.as_posix()}",
             "-env:OfficeSettings/MacroSecurity/Level=3",
+        ]
+
+        if infilter:
+            cmd.append(f"--infilter={infilter}")
+
+        cmd.extend([
             "--convert-to", convert_spec,
             "--outdir", output_dir,
             input_path
-        ]
+        ])
 
         try:
             res = await self.execute(cmd, timeout=300)

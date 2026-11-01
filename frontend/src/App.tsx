@@ -22,6 +22,8 @@ import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from './ty
 import { Sparkles, X, GitMerge, Layers, Flame, ArrowRight, Wand2 } from 'lucide-react';
 import { ProcessDirectory } from './components/processes/ProcessDirectory';
 import { ProcessRunnerModal } from './components/processes/ProcessRunnerModal';
+import { UpdateModal } from './components/updates/UpdateModal';
+import { updaterService, UpdateInfo } from './services/updater';
 import { findToolById, StudioTool } from './data/catalog';
 
 export function App() {
@@ -79,10 +81,33 @@ export function App() {
   const [pipelineViewMode, setPipelineViewMode] = useState<'directory' | 'builder'>('directory');
   const [dashboardTool, setDashboardTool] = useState<StudioTool | null>(null);
 
+  // Update checking state
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const checkUpdates = useCallback(async (openModal = false) => {
+    setIsCheckingUpdate(true);
+    try {
+      const info = await updaterService.checkForUpdates();
+      setUpdateInfo(info);
+      if (openModal || info.hasUpdate) {
+        setIsUpdateModalOpen(true);
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkUpdates(false);
+  }, [checkUpdates]);
+
   // Load all initial data
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     try {
+      await universalEngine.detectMode().catch(() => {});
       const isDesk = universalEngine.isDesktop();
       const filesData = await universalEngine.listFiles().catch(() => []);
       setFiles(filesData);
@@ -296,32 +321,36 @@ export function App() {
   };
 
   const handleClearCompletedJobs = async () => {
-    const completed = jobs.filter(j => j.status === 'completed');
     try {
-      await Promise.all(completed.map(j => api.deleteJob(j.id)));
+      await api.deleteJobsBulk('completed').catch(() => {
+        const completed = jobs.filter(j => j.status === 'completed');
+        return Promise.all(completed.map(j => api.deleteJob(j.id).catch(() => {})));
+      });
       setJobs(prev => prev.filter(j => j.status !== 'completed'));
     } catch (err) {
-      alert('Failed to clear some completed jobs');
+      console.warn('Failed to clear completed jobs', err);
     }
   };
 
   const handleCancelAllActiveJobs = async () => {
     const active = jobs.filter(j => ['pending', 'queued', 'running'].includes(j.status));
     try {
-      await Promise.all(active.map(j => api.cancelJob(j.id)));
+      await Promise.all(active.map(j => api.cancelJob(j.id).catch(() => {})));
       const updated = await api.listJobs();
       setJobs(updated);
     } catch (err) {
-      alert('Failed to cancel some active jobs');
+      console.warn('Failed to cancel active jobs', err);
     }
   };
 
   const handleClearAllJobs = async () => {
     try {
-      await Promise.all(jobs.map(j => api.deleteJob(j.id)));
+      await api.deleteJobsBulk().catch(() => {
+        return Promise.all(jobs.map(j => api.deleteJob(j.id).catch(() => {})));
+      });
       setJobs([]);
     } catch (err) {
-      alert('Failed to clear some jobs');
+      console.warn('Failed to clear all jobs', err);
     }
   };
 
@@ -376,6 +405,8 @@ export function App() {
         onNavigateTab={setCurrentTab}
         onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
         onOpenMobileConnect={() => setIsMobileConnectOpen(true)}
+        onOpenUpdates={() => setIsUpdateModalOpen(true)}
+        hasUpdate={Boolean(updateInfo?.hasUpdate)}
       />
 
       <div className="flex flex-1 overflow-hidden relative">
@@ -655,6 +686,15 @@ export function App() {
         onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
+      />
+
+      {/* Software Updates Modal */}
+      <UpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        updateInfo={updateInfo}
+        onRefresh={() => checkUpdates(true)}
+        isChecking={isCheckingUpdate}
       />
     </div>
   );

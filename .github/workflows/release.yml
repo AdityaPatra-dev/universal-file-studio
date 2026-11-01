@@ -1,0 +1,246 @@
+name: Universal Multi-Platform Release Matrix
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ==========================================
+  # 1. ANDROID BUILDS (SPLITS + UNIVERSAL + AAB)
+  # ==========================================
+  build-android:
+    name: Build Android APKs & Bundle
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_PASSWORD: universalfile
+      KEY_ALIAS: universalfile
+      KEY_PASSWORD: universalfile
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Frontend Dependencies & Build Web Assets
+        run: |
+          cd frontend
+          npm ci || npm install
+          npm run build
+          npx cap copy android
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x frontend/android/gradlew
+
+      - name: Build Android Split & Universal APKs
+        run: |
+          cd frontend/android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Build Android App Bundle (.AAB)
+        run: |
+          cd frontend/android
+          ./gradlew bundleRelease --no-daemon
+
+      - name: Organize Android Artifacts
+        run: |
+          mkdir -p release-artifacts/android
+          find frontend/android/app/build/outputs/apk/release/ -name "*.apk" -exec cp {} release-artifacts/android/ \;
+          find frontend/android/app/build/outputs/bundle/release/ -name "*.aab" -exec cp {} release-artifacts/android/ \;
+          ls -lh release-artifacts/android/
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-packages
+          path: release-artifacts/android/
+
+  # ==========================================
+  # 2. LINUX DESKTOP (PORTABLE TAR.GZ)
+  # ==========================================
+  build-linux:
+    name: Build Linux Portable Executable
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Web Frontend
+        run: |
+          cd frontend
+          npm ci || npm install
+          npm run build
+
+      - name: Install Python Desktop Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pyinstaller pywebview
+
+      - name: Package Linux Desktop Application
+        run: |
+          mkdir -p release-artifacts/linux
+          pyinstaller --noconfirm --onedir --windowed \
+            --name "UniversalFileStudio-Linux-x86_64" \
+            --add-data "frontend/dist:frontend/dist" \
+            --add-data "backend/app:app" \
+            backend/app/main.py
+          cd dist
+          tar -czvf ../release-artifacts/linux/UniversalFileStudio-Linux-x86_64.tar.gz UniversalFileStudio-Linux-x86_64/
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: release-artifacts/linux/
+
+  # ==========================================
+  # 3. WINDOWS DESKTOP (PORTABLE ZIP)
+  # ==========================================
+  build-windows:
+    name: Build Windows Desktop App
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Web Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pyinstaller pywebview
+
+      - name: Package Windows Executable
+        run: |
+          mkdir release-artifacts\windows
+          pyinstaller --noconfirm --onedir --windowed `
+            --name "UniversalFileStudio-Windows-x64" `
+            --add-data "frontend/dist;frontend/dist" `
+            --add-data "backend/app;app" `
+            backend/app/main.py
+          Compress-Archive -Path dist\UniversalFileStudio-Windows-x64 -DestinationPath release-artifacts\windows\UniversalFileStudio-Windows-x64.zip
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: release-artifacts/windows/
+
+  # ==========================================
+  # 4. MACOS DESKTOP (ZIP)
+  # ==========================================
+  build-macos:
+    name: Build macOS Desktop App
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Web Frontend
+        run: |
+          cd frontend
+          npm ci || npm install
+          npm run build
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pyinstaller pywebview
+
+      - name: Package macOS App
+        run: |
+          mkdir -p release-artifacts/macos
+          pyinstaller --noconfirm --onedir --windowed \
+            --name "UniversalFileStudio-macOS" \
+            --add-data "frontend/dist:frontend/dist" \
+            --add-data "backend/app:app" \
+            backend/app/main.py
+          cd dist
+          zip -r ../release-artifacts/macos/UniversalFileStudio-macOS-Universal.zip UniversalFileStudio-macOS.app
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: release-artifacts/macos/
+
+  # ==========================================
+  # 5. CREATE GITHUB RELEASE
+  # ==========================================
+  publish-release:
+    name: Publish All-in-One GitHub Release
+    needs: [build-android, build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: always() && needs.build-android.result == 'success'
+    steps:
+      - name: Download All Built Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-dist
+
+      - name: Display & Flatten Release Assets
+        run: |
+          mkdir -p final-release-assets
+          find all-dist -type f -exec cp -v {} final-release-assets/ \;
+          ls -lh final-release-assets/
+
+      - name: Create GitHub Release with Binary Attachments
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: final-release-assets/*

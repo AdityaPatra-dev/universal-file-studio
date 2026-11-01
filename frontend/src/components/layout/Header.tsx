@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   HardDrive, RefreshCw, HelpCircle, 
-  Sun, Moon, ShieldCheck, X
+  Sun, Moon, ShieldCheck, X, Sparkles
 } from 'lucide-react';
 import { TabType } from './Sidebar';
 import { EngineMode } from '../../services/universalEngine';
@@ -16,6 +16,8 @@ interface HeaderProps {
   onNavigateTab: (tab: TabType) => void;
   onOpenHelpGuide?: () => void;
   onOpenMobileConnect?: () => void;
+  onOpenUpdates?: () => void;
+  hasUpdate?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -25,6 +27,8 @@ export const Header: React.FC<HeaderProps> = ({
   isRefreshing,
   onNavigateTab,
   onOpenHelpGuide,
+  onOpenUpdates,
+  hasUpdate = false,
 }) => {
   return (
     <header className="border-b border-surface-800/80 bg-surface-950/80 backdrop-blur-2xl px-4 sm:px-6 sticky top-0 z-30 transition-all safe-top pb-3 sm:py-3.5">
@@ -82,6 +86,22 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <HelpCircle className="h-4 w-4 text-brand-400" />
               <span className="hidden sm:inline">Guide</span>
+            </button>
+          )}
+
+          {/* Software Updates */}
+          {onOpenUpdates && (
+            <button
+              onClick={onOpenUpdates}
+              className={`p-2 sm:px-3 sm:py-1.5 rounded-xl transition-all text-xs font-medium border btn-press flex items-center space-x-1.5 ${
+                hasUpdate
+                  ? 'bg-brand-600/20 text-brand-300 border-brand-500/40 hover:bg-brand-600/30'
+                  : 'bg-surface-900 hover:bg-surface-850 text-slate-300 hover:text-white border-surface-800'
+              }`}
+              title="Check for Software Updates"
+            >
+              <Sparkles className={`h-4 w-4 ${hasUpdate ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline">{hasUpdate ? 'Update' : 'v1.0.0'}</span>
             </button>
           )}
 

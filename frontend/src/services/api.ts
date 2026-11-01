@@ -152,6 +152,12 @@ export const api = {
     await parseResponse(res, 'Failed to delete job');
   },
 
+  async deleteJobsBulk(status?: string): Promise<{ success: boolean; deleted_count: number }> {
+    const url = status ? `${getApiBase()}/jobs?status=${encodeURIComponent(status)}` : `${getApiBase()}/jobs`;
+    const res = await fetchSafe(url, { method: 'DELETE' });
+    return await parseResponse(res, 'Failed to bulk delete jobs');
+  },
+
   getJobDownloadUrl(id: string): string {
     return `${getApiBase()}/jobs/${id}/download`;
   },

@@ -508,10 +508,10 @@ OPERATION_SPECS: Dict[str, Dict[str, Any]] = {
         "name": "Convert Document",
         "category": "document",
         "engine": "libreoffice",
-        "description": "Convert Word and office documents to PDF, DOCX, ODT, HTML, TXT",
+        "description": "Convert Word, PDF, and office documents to PDF, DOCX, ODT, HTML, TXT",
         "accepts": {
-            "categories": ["document", "text"],
-            "formats": [".docx", ".doc", ".odt", ".rtf", ".txt", ".html", ".htm", ".epub", ".md"],
+            "categories": ["document", "text", "pdf"],
+            "formats": [".docx", ".doc", ".odt", ".rtf", ".txt", ".html", ".htm", ".epub", ".md", ".pdf"],
             "directory": True,
         },
         "produces": {

@@ -614,8 +614,8 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-surface-950 border border-surface-750/70 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200 pb-24 sm:pb-4 pt-12 sm:pt-4">
+      <div className="relative w-full max-w-2xl bg-surface-950 border border-surface-750/70 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[78vh] sm:max-h-[85vh] my-auto">
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-surface-800/80 bg-surface-900/60 flex items-start justify-between gap-3">
           <div className="flex items-center space-x-3.5">
