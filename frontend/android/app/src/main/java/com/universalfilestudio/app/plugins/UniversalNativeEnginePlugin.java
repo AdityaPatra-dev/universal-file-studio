@@ -45,6 +45,11 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
+import com.arthenica.ffmpegkit.FFmpegKit;
+import com.arthenica.ffmpegkit.FFmpegSession;
+import com.arthenica.ffmpegkit.ReturnCode;
+import com.googlecode.tesseract.android.TessBaseAPI;
+
 @CapacitorPlugin(name = "UniversalNativeEngine")
 public class UniversalNativeEnginePlugin extends Plugin {
     private static final String TAG = "UniversalNativeEngine";
@@ -497,6 +502,210 @@ public class UniversalNativeEnginePlugin extends Plugin {
             } catch (Exception e) {
                 Log.e(TAG, "downloadAndInstallApk error: " + e.getMessage(), e);
                 call.reject("Failed to download and install update: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Raw FFmpeg Engine Execution (FFmpegKit C++ Native Engine)
+     */
+    @PluginMethod
+    public void executeFFmpeg(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String command = call.getString("command");
+                if (command == null || command.isEmpty()) {
+                    call.reject("Missing command parameter");
+                    return;
+                }
+
+                FFmpegSession session = FFmpegKit.execute(command);
+                if (ReturnCode.isSuccess(session.getReturnCode())) {
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("returnCode", session.getReturnCode().getValue());
+                    res.put("output", session.getOutput());
+                    res.put("durationMs", session.getDuration());
+                    call.resolve(res);
+                } else {
+                    call.reject("FFmpeg failed: " + session.getFailStackTrace());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "executeFFmpeg error: " + e.getMessage(), e);
+                call.reject("FFmpeg execution failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Native Video Operations powered by FFmpegKit Full GPL
+     */
+    @PluginMethod
+    public void processVideoNative(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String inputPath = call.getString("inputPath");
+                String operation = call.getString("operation", "compress_video");
+                JSObject params = call.getObject("parameters", new JSObject());
+
+                if (inputPath == null || !new File(inputPath).exists()) {
+                    call.reject("Input video not found: " + inputPath);
+                    return;
+                }
+
+                File in = new File(inputPath);
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+
+                String outExt = params.optString("format", "mp4").toLowerCase();
+                String outName = in.getName().replaceFirst("[.][^.]+$", "") + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
+                File out = new File(outputDir, outName);
+
+                StringBuilder cmd = new StringBuilder();
+                if ("video_trim".equals(operation)) {
+                    double start = params.optDouble("start_time", 0.0);
+                    double end = params.optDouble("end_time", 10.0);
+                    cmd.append("-ss ").append(start).append(" -to ").append(end).append(" -i \"").append(in.getAbsolutePath()).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("extract_audio".equals(operation)) {
+                    out = new File(outputDir, in.getName().replaceFirst("[.][^.]+$", "") + ".mp3");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -acodec libmp3lame -q:a 2 \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("remove_audio".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("compress_video".equals(operation)) {
+                    int crf = params.optInt("crf", 28);
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vcodec libx264 -crf ").append(crf).append(" -preset fast -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                } else {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" \"").append(out.getAbsolutePath()).append("\"");
+                }
+
+                FFmpegSession session = FFmpegKit.execute(cmd.toString());
+                if (ReturnCode.isSuccess(session.getReturnCode())) {
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("outputPath", out.getAbsolutePath());
+                    res.put("outputFilename", out.getName());
+                    res.put("sizeBytes", out.length());
+                    call.resolve(res);
+                } else {
+                    call.reject("Video operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "processVideoNative error: " + e.getMessage(), e);
+                call.reject("Video operation failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Native Audio Operations powered by FFmpegKit Full GPL
+     */
+    @PluginMethod
+    public void processAudioNative(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String inputPath = call.getString("inputPath");
+                String operation = call.getString("operation", "audio_convert");
+                JSObject params = call.getObject("parameters", new JSObject());
+
+                if (inputPath == null || !new File(inputPath).exists()) {
+                    call.reject("Input audio not found: " + inputPath);
+                    return;
+                }
+
+                File in = new File(inputPath);
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_MUSIC);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+
+                String outExt = params.optString("format", "mp3").toLowerCase();
+                String outName = in.getName().replaceFirst("[.][^.]+$", "") + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
+                File out = new File(outputDir, outName);
+
+                StringBuilder cmd = new StringBuilder();
+                if ("audio_normalize".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -af loudnorm \"").append(out.getAbsolutePath()).append("\"");
+                } else {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" \"").append(out.getAbsolutePath()).append("\"");
+                }
+
+                FFmpegSession session = FFmpegKit.execute(cmd.toString());
+                if (ReturnCode.isSuccess(session.getReturnCode())) {
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("outputPath", out.getAbsolutePath());
+                    res.put("outputFilename", out.getName());
+                    res.put("sizeBytes", out.length());
+                    call.resolve(res);
+                } else {
+                    call.reject("Audio operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "processAudioNative error: " + e.getMessage(), e);
+                call.reject("Audio operation failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Offline Neural OCR powered by Tesseract 5 Native Engine (tesseract4android)
+     */
+    @PluginMethod
+    public void processOcrNative(PluginCall call) {
+        executor.execute(() -> {
+            TessBaseAPI tess = null;
+            try {
+                String inputPath = call.getString("inputPath");
+                if (inputPath == null || !new File(inputPath).exists()) {
+                    call.reject("Input image not found: " + inputPath);
+                    return;
+                }
+
+                // Ensure tessdata/eng.traineddata is in app files directory
+                File filesDir = getContext().getFilesDir();
+                File tessDir = new File(filesDir, "tessdata");
+                if (!tessDir.exists()) tessDir.mkdirs();
+                File trainedData = new File(tessDir, "eng.traineddata");
+
+                if (!trainedData.exists() || trainedData.length() == 0) {
+                    try (InputStream is = getContext().getAssets().open("tessdata/eng.traineddata");
+                         FileOutputStream fos = new FileOutputStream(trainedData)) {
+                        byte[] buffer = new byte[8192];
+                        int read;
+                        while ((read = is.read(buffer)) != -1) {
+                            fos.write(buffer, 0, read);
+                        }
+                        fos.flush();
+                    }
+                }
+
+                tess = new TessBaseAPI();
+                boolean initialized = tess.init(filesDir.getAbsolutePath(), "eng");
+                if (!initialized) {
+                    call.reject("Failed to initialize Tesseract neural engine");
+                    return;
+                }
+
+                Bitmap bitmap = BitmapFactory.decodeFile(inputPath);
+                if (bitmap == null) {
+                    call.reject("Failed to decode image for OCR");
+                    return;
+                }
+
+                tess.setImage(bitmap);
+                String recognizedText = tess.getUTF8Text();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("text", recognizedText != null ? recognizedText : "");
+                res.put("characterCount", recognizedText != null ? recognizedText.length() : 0);
+                call.resolve(res);
+
+            } catch (Exception e) {
+                Log.e(TAG, "processOcrNative error: " + e.getMessage(), e);
+                call.reject("OCR recognition failed: " + e.getMessage());
+            } finally {
+                if (tess != null) {
+                    try { tess.recycle(); } catch (Exception ignored) {}
+                }
             }
         });
     }

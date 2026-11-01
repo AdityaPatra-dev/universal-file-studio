@@ -49,6 +49,22 @@ export interface UniversalNativeEnginePlugin {
   downloadAndInstallApk(options: {
     url: string;
   }): Promise<{ success: boolean; filePath: string }>;
+  executeFFmpeg(options: {
+    command: string;
+  }): Promise<{ success: boolean; returnCode: number; output: string; durationMs: number }>;
+  processVideoNative(options: {
+    inputPath: string;
+    operation: string;
+    parameters?: Record<string, any>;
+  }): Promise<NativeProcessResult>;
+  processAudioNative(options: {
+    inputPath: string;
+    operation: string;
+    parameters?: Record<string, any>;
+  }): Promise<NativeProcessResult>;
+  processOcrNative(options: {
+    inputPath: string;
+  }): Promise<{ success: boolean; text: string; characterCount: number }>;
 }
 
 export const UniversalNativeEngine = registerPlugin<UniversalNativeEnginePlugin>('UniversalNativeEngine');

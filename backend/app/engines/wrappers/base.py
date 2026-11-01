@@ -42,6 +42,13 @@ class BaseEngine(ABC):
         for bin_name in engine_binaries.get(self.name, [self.name]):
             if shutil.which(bin_name):
                 return True
+        if self.name == "ffmpeg":
+            try:
+                import imageio_ffmpeg
+                if imageio_ffmpeg.get_ffmpeg_exe():
+                    return True
+            except Exception:
+                pass
         return False
 
     def get_info(self) -> Optional[EngineInfo]:
@@ -83,10 +90,20 @@ class BaseEngine(ABC):
         actual_timeout = timeout or settings.SUBPROCESS_TIMEOUT_SECONDS
         process = None
 
+        cmd = list(command)
+        if cmd and cmd[0] == "ffmpeg":
+            import shutil
+            if not shutil.which("ffmpeg"):
+                try:
+                    import imageio_ffmpeg
+                    cmd[0] = imageio_ffmpeg.get_ffmpeg_exe()
+                except Exception:
+                    pass
+
         try:
             # Start in a new session / process group for clean tree termination
             process = await asyncio.create_subprocess_exec(
-                *command,
+                *cmd,
                 cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

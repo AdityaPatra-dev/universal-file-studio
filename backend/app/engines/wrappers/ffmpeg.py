@@ -1,10 +1,21 @@
 import os
+import shutil
 from typing import List, Optional
 from pathlib import Path
 from app.engines.wrappers.base import BaseEngine, ProcessResult
 
 class FFmpegEngine(BaseEngine):
     name = "ffmpeg"
+
+    def get_bin(self) -> str:
+        which = shutil.which("ffmpeg")
+        if which:
+            return which
+        try:
+            import imageio_ffmpeg
+            return imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return "ffmpeg"
 
     def get_best_video_encoder(self, format_ext: str) -> str:
         info = self.get_info()
