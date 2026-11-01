@@ -123,6 +123,39 @@ async def download_job_output(job_id: str, db: AsyncSession = Depends(get_db)):
         filename=job.output_filename or p.name
     )
 
+@router.post("/cancel-all")
+async def cancel_all_active_jobs(db: AsyncSession = Depends(get_db)):
+    stmt = select(Job).where(Job.status.in_([JobStatus.PENDING, JobStatus.QUEUED, JobStatus.RUNNING]))
+    res = await db.execute(stmt)
+    active_jobs = res.scalars().all()
+    count = 0
+    for job in active_jobs:
+        await job_manager.cancel_job(job.id)
+        count += 1
+    return {"success": True, "cancelled_count": count}
+
+@router.delete("")
+async def delete_jobs_bulk(
+    status: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Job)
+    if status:
+        stmt = stmt.where(Job.status == status)
+    res = await db.execute(stmt)
+    jobs = res.scalars().all()
+    for j in jobs:
+        if j.output_path and os.path.exists(j.output_path):
+            try:
+                p = Path(j.output_path)
+                if p.is_file():
+                    p.unlink()
+            except Exception:
+                pass
+        await db.delete(j)
+    await db.commit()
+    return {"success": True, "deleted_count": len(jobs)}
+
 @router.delete("/{job_id}")
 async def delete_job(job_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(Job).where(Job.id == job_id)

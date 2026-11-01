@@ -423,7 +423,7 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
                   <button
                     type="button"
                     onClick={() => handleLaunchTool(tool)}
-                    className="px-3 py-1.5 rounded-xl bg-surface-800 hover:bg-brand-600 text-slate-200 hover:text-white font-semibold text-xs border border-surface-700/60 hover:border-brand-500 transition-all btn-press flex items-center gap-1"
+                    className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-sm shadow-brand-600/30 transition-all btn-press flex items-center gap-1.5"
                   >
                     <span>Use Tool</span>
                     <ArrowRight className="h-3 w-3" />

@@ -46,6 +46,27 @@ class JobManager:
             task.cancel()
         self.worker_tasks.clear()
 
+    async def recover_orphaned_jobs(self):
+        """Recover any jobs left in PENDING, QUEUED, or RUNNING state from a previous session."""
+        async with AsyncSessionLocal() as session:
+            stmt = select(Job).where(Job.status.in_([JobStatus.PENDING, JobStatus.QUEUED, JobStatus.RUNNING]))
+            res = await session.execute(stmt)
+            orphaned = res.scalars().all()
+            if not orphaned:
+                return
+            print(f"[UFS] Found {len(orphaned)} pending/queued jobs in database. Enqueueing to worker pool...")
+            for job in orphaned:
+                if job.status == JobStatus.RUNNING:
+                    job.status = JobStatus.FAILED
+                    job.error_message = "Interrupted by system restart."
+                elif job.status in [JobStatus.PENDING, JobStatus.QUEUED]:
+                    if job.input_path and os.path.exists(job.input_path):
+                        await self.queue.put(job.id)
+                    else:
+                        job.status = JobStatus.FAILED
+                        job.error_message = "Input file no longer exists on disk."
+            await session.commit()
+
     async def enqueue_job(self, job_id: str):
         async with AsyncSessionLocal() as session:
             stmt = select(Job).where(Job.id == job_id)
@@ -66,6 +87,7 @@ class JobManager:
             job = res.scalar_one_or_none()
             if job and job.status in [JobStatus.PENDING, JobStatus.QUEUED]:
                 job.status = JobStatus.CANCELLED
+                job.error_message = "Cancelled by user."
                 await session.commit()
                 return True
         return False
@@ -84,7 +106,7 @@ class JobManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                pass
+                print(f"[UFS Worker {worker_id}] Error in worker: {e}")
 
     async def _process_job(self, job_id: str):
         start_time = time.time()
@@ -93,7 +115,7 @@ class JobManager:
             stmt = select(Job).where(Job.id == job_id)
             res = await session.execute(stmt)
             job = res.scalar_one_or_none()
-            if not job:
+            if not job or job.status == JobStatus.CANCELLED:
                 return
 
             job.status = JobStatus.RUNNING

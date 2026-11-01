@@ -305,6 +305,26 @@ export function App() {
     }
   };
 
+  const handleCancelAllActiveJobs = async () => {
+    const active = jobs.filter(j => ['pending', 'queued', 'running'].includes(j.status));
+    try {
+      await Promise.all(active.map(j => api.cancelJob(j.id)));
+      const updated = await api.listJobs();
+      setJobs(updated);
+    } catch (err) {
+      alert('Failed to cancel some active jobs');
+    }
+  };
+
+  const handleClearAllJobs = async () => {
+    try {
+      await Promise.all(jobs.map(j => api.deleteJob(j.id)));
+      setJobs([]);
+    } catch (err) {
+      alert('Failed to clear some jobs');
+    }
+  };
+
   const handleRetryAllFailedJobs = async () => {
     const failed = jobs.filter(j => j.status === 'failed');
     try {
@@ -520,6 +540,8 @@ export function App() {
                   onDownloadOutput={handleDownloadOutput}
                   onClearCompleted={handleClearCompletedJobs}
                   onRetryAllFailed={handleRetryAllFailedJobs}
+                  onCancelAllActive={handleCancelAllActiveJobs}
+                  onClearAll={handleClearAllJobs}
                 />
               </div>
             )}

@@ -15,6 +15,8 @@ interface JobListProps {
   onDownloadOutput: (jobId: string) => void;
   onClearCompleted?: () => void;
   onRetryAllFailed?: () => void;
+  onCancelAllActive?: () => void;
+  onClearAll?: () => void;
 }
 
 export const JobList: React.FC<JobListProps> = ({
@@ -25,6 +27,8 @@ export const JobList: React.FC<JobListProps> = ({
   onDownloadOutput,
   onClearCompleted,
   onRetryAllFailed,
+  onCancelAllActive,
+  onClearAll,
 }) => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLogJob, setSelectedLogJob] = useState<Job | null>(null);
@@ -120,7 +124,18 @@ export const JobList: React.FC<JobListProps> = ({
         </div>
 
         {/* Bulk Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {activeJobs.length > 0 && onCancelAllActive && (
+            <button
+              onClick={onCancelAllActive}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-900 hover:bg-rose-500/10 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all btn-press"
+              title="Cancel all active/queued jobs"
+            >
+              <StopCircle className="h-3.5 w-3.5" />
+              <span>Cancel Active ({activeJobs.length})</span>
+            </button>
+          )}
+
           {failedJobs.length > 0 && onRetryAllFailed && (
             <button
               onClick={onRetryAllFailed}
@@ -140,6 +155,17 @@ export const JobList: React.FC<JobListProps> = ({
             >
               <Trash2 className="h-3.5 w-3.5" />
               <span>Clear Completed ({completedJobs.length})</span>
+            </button>
+          )}
+
+          {jobs.length > 0 && onClearAll && (
+            <button
+              onClick={onClearAll}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-surface-900 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-surface-800 text-xs font-medium transition-all btn-press"
+              title="Clear all jobs history"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Clear All</span>
             </button>
           )}
         </div>
@@ -236,11 +262,11 @@ export const JobList: React.FC<JobListProps> = ({
                     </button>
                   )}
 
-                  {job.status === 'running' && (
+                  {['running', 'queued', 'pending'].includes(job.status) && (
                     <button
                       onClick={() => onCancelJob(job.id)}
                       className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-surface-850 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors btn-press text-xs"
-                      title="Cancel running job"
+                      title="Cancel job"
                     >
                       <StopCircle className="h-3.5 w-3.5" />
                       <span>Cancel</span>

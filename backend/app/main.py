@@ -74,6 +74,9 @@ async def lifespan(app: FastAPI):
     print(f"[UFS] Starting background worker pool (concurrency={settings.MAX_CONCURRENT_JOBS})...")
     job_manager.start_workers(settings.MAX_CONCURRENT_JOBS)
     
+    print("[UFS] Recovering and processing pending/queued jobs from database...")
+    await job_manager.recover_orphaned_jobs()
+    
     print(f"[UFS] Universal File Studio backend ready at http://{settings.HOST}:{settings.PORT}")
     yield
     
