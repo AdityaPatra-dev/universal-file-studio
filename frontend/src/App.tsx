@@ -27,6 +27,25 @@ import { findToolById, StudioTool } from './data/catalog';
 export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('pipelines');
   const [engineMode, setEngineMode] = useState<EngineMode>(universalEngine.getMode());
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('ufs_theme') : null;
+    return saved === 'light' ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    }
+    localStorage.setItem('ufs_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [engines, setEngines] = useState<EngineInfo[]>([]);
@@ -330,8 +349,8 @@ export function App() {
     <div className="flex flex-col h-screen bg-surface-950 text-slate-100 overflow-hidden">
       {/* Global Header */}
       <Header
-        activeJobsCount={activeJobsCount}
-        engineMode={engineMode}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
         onNavigateTab={setCurrentTab}

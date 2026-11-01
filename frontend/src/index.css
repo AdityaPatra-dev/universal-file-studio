@@ -2,13 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --surface-950: 10 13 20;     /* #0a0d14 */
+  --surface-900: 17 23 38;     /* #111726 */
+  --surface-850: 22 31 48;     /* #161f30 */
+  --surface-800: 30 41 59;     /* #1e293b */
+  --surface-750: 36 48 72;     /* #243048 */
+  --surface-700: 51 65 85;     /* #334155 */
+  --surface-600: 71 85 105;    /* #475569 */
+  --surface-500: 100 116 139;  /* #64748b */
+  --surface-400: 148 163 184;  /* #94a3b8 */
+  --surface-300: 203 213 225;  /* #cbd5e1 */
+  --surface-200: 226 232 240;  /* #e2e8f0 */
+  --surface-100: 241 245 249;  /* #f1f5f9 */
+  --surface-50: 248 250 252;   /* #f8fafc */
+}
+
+html.light {
+  --surface-950: 248 250 252;  /* #f8fafc - light background */
+  --surface-900: 255 255 255;  /* #ffffff - pure white card */
+  --surface-850: 241 245 249;  /* #f1f5f9 - light secondary card */
+  --surface-800: 226 232 240;  /* #e2e8f0 - subtle light border */
+  --surface-750: 203 213 225;  /* #cbd5e1 - soft divider */
+  --surface-700: 148 163 184;  /* #94a3b8 */
+  --surface-600: 100 116 139;  /* #64748b */
+  --surface-500: 71 85 105;    /* #475569 */
+  --surface-400: 51 65 85;     /* #334155 */
+  --surface-300: 30 41 59;     /* #1e293b */
+  --surface-200: 15 23 42;     /* #0f172a */
+  --surface-100: 2 6 23;       /* #020617 */
+  --surface-50: 0 0 0;
+}
+
 @layer base {
   body {
     @apply bg-surface-950 text-slate-100 antialiased selection:bg-brand-500 selection:text-white min-h-screen overflow-x-hidden;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #0a0d14;
+    background-color: rgb(var(--surface-950));
     background-image: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.08), transparent 45%);
   }
+}
+
+/* Light mode overrides for high readability and premium feel */
+html.light body {
+  background-color: #f8fafc !important;
+  background-image: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.04), transparent 45%) !important;
+  color: #0f172a !important;
+}
+
+html.light .text-white {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-100 {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* Keep white text on brand colored elements, solid primary buttons, and dark pills */
+html.light .bg-brand-600,
+html.light .bg-brand-600 *,
+html.light .bg-brand-500,
+html.light .bg-brand-500 *,
+html.light button.bg-brand-600,
+html.light button.bg-brand-600 *,
+html.light button[class*="bg-gradient-to-r"],
+html.light button[class*="bg-gradient-to-r"] *,
+html.light .btn-primary,
+html.light .btn-primary *,
+html.light .text-brand-100,
+html.light .badge-accent,
+html.light .bg-black\/20,
+html.light .bg-black\/25 {
+  color: #ffffff !important;
+}
+
+/* Modal and card backdrops in light mode */
+html.light .card-glass {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(226, 232, 240, 0.9);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+}
+
+html.light .card-elevated {
+  background-color: rgba(241, 245, 249, 0.95);
+  border-color: rgba(203, 213, 225, 0.8);
+}
+
+html.light .bg-surface-900\/90,
+html.light .bg-surface-900\/95,
+html.light .bg-surface-950\/80 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
 }
 
 /* Custom Minimalist Scrollbar */
@@ -20,11 +119,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: rgb(var(--surface-800));
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: rgb(var(--surface-700));
 }
 
 /* Mobile Safe Area Insets (Android Notch, Status Bar & Home Pill) */
@@ -48,15 +147,6 @@
 /* Tactile Button Feedback */
 .btn-press {
   @apply transition-all duration-150 active:scale-[0.97] active:opacity-90;
-}
-
-/* Glass Card */
-.card-glass {
-  @apply bg-surface-900/90 border border-surface-800/80 backdrop-blur-xl shadow-lg shadow-black/20;
-}
-
-.card-elevated {
-  @apply bg-surface-850/80 border border-surface-700/60 backdrop-blur-xl;
 }
 
 /* Mobile tap highlight reset */
