@@ -40,7 +40,7 @@ jobs:
           cd frontend
           npm ci || npm install
           npm run build
-          ./node_modules/.bin/cap copy android
+          ./node_modules/.bin/cap sync android
 
       - name: Grant Execute Permission to Gradlew
         run: chmod +x frontend/android/gradlew
