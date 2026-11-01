@@ -10,7 +10,6 @@ import {
   STUDIO_CATEGORIES,
   getToolsByCategory,
   getPinnedTools,
-  getSubCategories,
   StudioCategoryMeta
 } from '../../data/catalog';
 import { parseSearchQuery, SearchIntentMatch } from '../../utils/searchParser';
@@ -25,17 +24,6 @@ interface ProcessDirectoryProps {
   onOpenPipelineEditor?: () => void;
 }
 
-const QUICK_SUGGESTION_CHIPS = [
-  { label: '🔥 Top Tools', query: 'popular' },
-  { label: '📄 PDF to Word', query: 'pdf to word' },
-  { label: '🗜️ Compress PDF', query: 'compress pdf' },
-  { label: '🎬 Trim Video', query: 'cut video' },
-  { label: '🎵 Extract MP3', query: 'extract audio' },
-  { label: '🖼️ Photos to PDF', query: 'photos to pdf' },
-  { label: '📦 Unpack ZIP', query: 'unzip' },
-  { label: '⚡ MP4 to MKV', query: 'mp4 to mkv' },
-];
-
 export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
   libraryFiles = [],
   onJobStarted,
@@ -43,30 +31,19 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
   onOpenPipelineEditor,
 }) => {
   const [activeCategory, setActiveCategory] = useState<ToolCategory | 'all'>('all');
-  const [activeSubCategory, setActiveSubCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeModalTool, setActiveModalTool] = useState<StudioTool | null>(null);
   const [modalInitialParams, setModalInitialParams] = useState<Record<string, any>>({});
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-
-  // Subcategories for current category tab
-  const subCategories = useMemo(() => {
-    return getSubCategories(activeCategory);
-  }, [activeCategory]);
 
   // Parse search query for intent match (e.g. "pdf to word", "cut video")
   const searchIntent: SearchIntentMatch | null = useMemo(() => {
     return parseSearchQuery(searchQuery, ALL_STUDIO_TOOLS);
   }, [searchQuery]);
 
-  // Filter tools based on category, subcategory, and search query
+  // Filter tools based on category and search query
   const filteredTools = useMemo(() => {
     let list = getToolsByCategory(activeCategory);
-
-    // Filter by subcategory
-    if (activeSubCategory !== 'all') {
-      list = list.filter((t) => t.subCategory === activeSubCategory);
-    }
 
     // Filter by text search
     const q = searchQuery.trim().toLowerCase();
@@ -93,7 +70,7 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
       if (!a.isPinnedTop && b.isPinnedTop) return 1;
       return a.rank - b.rank;
     });
-  }, [activeCategory, activeSubCategory, searchQuery]);
+  }, [activeCategory, searchQuery]);
 
   // Pinned top tools for the current view
   const pinnedTopTools = useMemo(() => {
@@ -110,89 +87,27 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-200">
-      {/* Top Banner & Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-surface-900 via-surface-900 to-surface-850 border border-surface-750/70 p-5 sm:p-7 shadow-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none -ml-20 -mb-20" />
-
-        <div className="relative z-10 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center space-x-2.5">
-                <span className="px-2.5 py-1 rounded-xl bg-brand-500/20 text-brand-300 font-bold text-[11px] border border-brand-500/30 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>102+ Offline Local Tools</span>
-                </span>
-                <span className="text-xs text-slate-400 font-mono">100% On-Device Privacy</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-2">
-                Process Directory & Recipes
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                Full 27-tool iLovePDF parity, hardware-accelerated FFmpeg video transcoding, lossless
-                audio mastering, TinyPNG image compression, and multi-format archives. Zero cloud uploads.
-              </p>
-            </div>
-
-            {onOpenPipelineEditor && (
-              <button
-                type="button"
-                onClick={onOpenPipelineEditor}
-                className="px-4 py-2.5 rounded-2xl bg-surface-800 hover:bg-surface-750 border border-surface-700/80 text-xs text-slate-200 font-bold transition-all btn-press flex items-center gap-2 self-start sm:self-center shadow-md flex-shrink-0"
-              >
-                <Layers className="h-4 w-4 text-brand-400" />
-                <span>Multi-Step Pipeline Builder →</span>
-              </button>
-            )}
-          </div>
-
-          {/* Search Bar with Instant Intent Parsing */}
-          <div className="space-y-2.5 pt-2">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                <Search className="h-5 w-5" />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search 102+ tools or type queries like 'pdf to word', 'cut video', 'mp4 to mkv', 'compress pdf'..."
-                className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-surface-950/90 border border-surface-700/80 text-white text-xs sm:text-sm placeholder:text-slate-500 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 shadow-inner transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Quick Suggestion Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-              <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1 flex-shrink-0 mr-1">
-                <Zap className="h-3 w-3 text-brand-400" />
-                <span>Quick:</span>
-              </span>
-              {QUICK_SUGGESTION_CHIPS.map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => setSearchQuery(chip.query)}
-                  className={`px-2.5 py-1 rounded-xl text-[11px] font-medium transition-all btn-press whitespace-nowrap flex-shrink-0 ${
-                    searchQuery === chip.query
-                      ? 'bg-brand-600 text-white font-bold shadow-sm shadow-brand-500/30'
-                      : 'bg-surface-850 hover:bg-surface-800 text-slate-300 border border-surface-700/60'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* Search Bar with Instant Intent Parsing */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+          <Search className="h-5 w-5" />
         </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search 102+ tools or type queries like 'pdf to word', 'cut video', 'mp4 to mkv', 'compress pdf'..."
+          className="w-full pl-11 pr-10 py-3.5 rounded-2xl bg-surface-900 border border-surface-750/80 text-white text-xs sm:text-sm placeholder:text-slate-500 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 shadow-sm transition-all"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* Instant Intent Match Banner (e.g. user typed "pdf to word") */}
@@ -255,7 +170,6 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
             type="button"
             onClick={() => {
               setActiveCategory('all');
-              setActiveSubCategory('all');
             }}
             className={`p-3 rounded-2xl border text-left transition-all btn-press flex flex-col justify-between ${
               activeCategory === 'all'
@@ -300,7 +214,6 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
                 type="button"
                 onClick={() => {
                   setActiveCategory(cat.id);
-                  setActiveSubCategory('all');
                 }}
                 className={`p-3 rounded-2xl border text-left transition-all btn-press flex flex-col justify-between ${
                   isSelected
@@ -340,38 +253,8 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
         </div>
       </div>
 
-      {/* Subcategory Filter Pills */}
-      {subCategories.length > 1 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {subCategories.map((sub) => {
-            const isSelected = activeSubCategory === sub.id;
-            return (
-              <button
-                key={sub.id}
-                type="button"
-                onClick={() => setActiveSubCategory(sub.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all btn-press flex items-center gap-1.5 flex-shrink-0 ${
-                  isSelected
-                    ? 'bg-brand-600 text-white shadow-sm shadow-brand-500/30'
-                    : 'bg-surface-850 hover:bg-surface-800 text-slate-300 border border-surface-700/60'
-                }`}
-              >
-                <span>{sub.label}</span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono ${
-                    isSelected ? 'bg-black/25 text-white' : 'bg-surface-750 text-slate-400'
-                  }`}
-                >
-                  {sub.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* Pinned Top / Most-Used Tools Row (Always pinned at top of active view) */}
-      {pinnedTopTools.length > 0 && activeSubCategory === 'all' && (
+      {pinnedTopTools.length > 0 && (
         <div className="space-y-3 pt-2">
           <div className="flex items-center space-x-2">
             <span className="p-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
@@ -450,9 +333,7 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
-            {activeSubCategory === 'all'
-              ? `All ${activeCategory === 'all' ? 'Tools' : STUDIO_CATEGORIES.find((c) => c.id === activeCategory)?.shortName} (${filteredTools.length})`
-              : `${activeSubCategory} (${filteredTools.length})`}
+            {`All ${activeCategory === 'all' ? 'Tools' : STUDIO_CATEGORIES.find((c) => c.id === activeCategory)?.shortName} (${filteredTools.length})`}
           </h3>
           <span className="text-xs text-slate-400 font-mono">100% Offline Hardware Execution</span>
         </div>
@@ -472,7 +353,6 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
               onClick={() => {
                 setSearchQuery('');
                 setActiveCategory('all');
-                setActiveSubCategory('all');
               }}
               className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs btn-press"
             >

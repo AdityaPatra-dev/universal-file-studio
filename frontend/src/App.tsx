@@ -25,7 +25,7 @@ import { ProcessRunnerModal } from './components/processes/ProcessRunnerModal';
 import { findToolById, StudioTool } from './data/catalog';
 
 export function App() {
-  const [currentTab, setCurrentTab] = useState<TabType>('upload');
+  const [currentTab, setCurrentTab] = useState<TabType>('pipelines');
   const [engineMode, setEngineMode] = useState<EngineMode>(universalEngine.getMode());
   const [files, setFiles] = useState<FileRecord[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -350,171 +350,62 @@ export function App() {
         {/* Main Content View with responsive padding for mobile bottom bar */}
         <main className="flex-1 overflow-y-auto p-3.5 sm:p-6 lg:p-8 pb-24 md:pb-8">
           <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
-            {/* Tab 1: Studio Dashboard / Upload */}
-            {currentTab === 'upload' && (
-              <div className="space-y-6 sm:space-y-8">
-                {/* Post-Upload Action Banner */}
-                {uploadNotification && (
-                  <div className="p-4 rounded-3xl bg-gradient-to-r from-brand-600/20 to-indigo-600/20 border border-brand-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2.5 rounded-2xl bg-brand-500/20 text-brand-300">
-                        <Sparkles className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-white text-xs sm:text-sm">{uploadNotification.message}</div>
-                        <div className="text-[11px] text-slate-400">Choose what you want to do with the uploaded files:</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {uploadNotification.files.length === 1 && (
-                        <button
-                          onClick={() => {
-                            setSelectedFileForProcess(uploadNotification.files[0]);
-                            setUploadNotification(null);
-                          }}
-                          className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all btn-press"
-                        >
-                          Process File Now →
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setPipelinePreSelectedFileIds(uploadNotification.files.map(f => f.id));
-                          setCurrentTab('pipelines');
-                          setUploadNotification(null);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700/60 transition-all btn-press flex items-center gap-1.5"
-                      >
-                        <GitMerge className="h-3.5 w-3.5 text-brand-400" />
-                        <span>Workflows Studio</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCurrentTab('files');
-                          setUploadNotification(null);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700/60 transition-all btn-press"
-                      >
-                        View Library
-                      </button>
-                      <button
-                        onClick={() => setUploadNotification(null)}
-                        className="p-1.5 text-slate-400 hover:text-white btn-press ml-1"
-                        title="Dismiss notification"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
+            {/* Post-Upload Action Banner */}
+            {uploadNotification && (
+              <div className="p-4 rounded-3xl bg-gradient-to-r from-brand-600/20 to-indigo-600/20 border border-brand-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 rounded-2xl bg-brand-500/20 text-brand-300">
+                    <Sparkles className="h-5 w-5" />
                   </div>
-                )}
-
-                <FileDropZone
-                  onFilesSelected={handleFilesSelected}
-                  isUploading={isUploading}
-                  uploadProgress={uploadProgress}
-                />
-
-                {/* Quick 1-Tap Offline Tools */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="p-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        <Flame className="h-3.5 w-3.5" />
-                      </span>
-                      <h3 className="text-sm font-bold text-white tracking-tight">Popular Quick Tools</h3>
-                    </div>
+                  <div>
+                    <div className="font-bold text-white text-xs sm:text-sm">{uploadNotification.message}</div>
+                    <div className="text-[11px] text-slate-400">Choose what you want to do with the uploaded files:</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {uploadNotification.files.length === 1 && (
                     <button
-                      type="button"
                       onClick={() => {
-                        setPipelineViewMode('directory');
-                        setCurrentTab('pipelines');
+                        setSelectedFileForProcess(uploadNotification.files[0]);
+                        setUploadNotification(null);
                       }}
-                      className="text-xs text-brand-400 hover:text-brand-300 font-bold btn-press flex items-center gap-1"
+                      className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all btn-press"
                     >
-                      <span>All 102+ Tools</span>
-                      <ArrowRight className="h-3 w-3" />
+                      Process File Now →
                     </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-                    {[
-                      { id: 'pdf_merge', label: 'Merge PDF', sub: 'iLovePDF Parity', color: 'from-amber-500 to-orange-600' },
-                      { id: 'pdf_to_docx', label: 'PDF to Word', sub: 'Pandoc / Libre', color: 'from-amber-600 to-red-600' },
-                      { id: 'pdf_compress', label: 'Compress PDF', sub: 'Ghostscript Lossless', color: 'from-orange-500 to-amber-600' },
-                      { id: 'video_trim', label: 'Trim Video', sub: 'Fast Seek Cut', color: 'from-indigo-500 to-violet-600' },
-                      { id: 'pdf_images_to_pdf', label: 'Photos to PDF', sub: '1-Tap Document', color: 'from-cyan-500 to-blue-600' },
-                      { id: 'archive_extract', label: 'Unpack Archive', sub: 'ZIP, 7Z, RAR, TAR', color: 'from-emerald-500 to-teal-600' },
-                    ].map((qt) => (
-                      <button
-                        key={qt.id}
-                        type="button"
-                        onClick={() => {
-                          const tool = findToolById(qt.id);
-                          if (tool) setDashboardTool(tool);
-                        }}
-                        className="p-3 rounded-2xl bg-surface-900 border border-surface-750/70 hover:border-brand-500/50 text-left transition-all btn-press group flex flex-col justify-between shadow-sm"
-                      >
-                        <div className={`p-2 rounded-xl bg-gradient-to-br ${qt.color} text-white w-fit shadow-md group-hover:scale-105 transition-transform`}>
-                          <Sparkles className="h-3.5 w-3.5" />
-                        </div>
-                        <div className="mt-2.5">
-                          <div className="text-xs font-bold text-white group-hover:text-brand-300 transition-colors leading-tight truncate">
-                            {qt.label}
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
-                            {qt.sub}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      setPipelinePreSelectedFileIds(uploadNotification.files.map(f => f.id));
+                      setCurrentTab('pipelines');
+                      setUploadNotification(null);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700/60 transition-all btn-press flex items-center gap-1.5"
+                  >
+                    <GitMerge className="h-3.5 w-3.5 text-brand-400" />
+                    <span>Workflows Studio</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentTab('files');
+                      setUploadNotification(null);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700/60 transition-all btn-press"
+                  >
+                    View Library
+                  </button>
+                  <button
+                    onClick={() => setUploadNotification(null)}
+                    className="p-1.5 text-slate-400 hover:text-white btn-press ml-1"
+                    title="Dismiss notification"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-
-                {files.length > 0 && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-bold text-white tracking-tight">Recent Files</h3>
-                      <button
-                        onClick={() => setCurrentTab('files')}
-                        className="text-xs text-brand-400 hover:text-brand-300 font-semibold btn-press"
-                      >
-                        View all {files.length} →
-                      </button>
-                    </div>
-                    <FileList
-                      files={files.slice(0, 5)}
-                      onSelectFileForProcess={setSelectedFileForProcess}
-                      onDeleteFile={handleDeleteFile}
-                      onDownloadFile={handleDownloadFile}
-                      onInspectFile={handleInspectFile}
-                      onBatchPipeline={handleBatchPipeline}
-                    />
-                  </div>
-                )}
               </div>
             )}
 
-            {/* Tab 2: File Library */}
-            {currentTab === 'files' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">File Library</h2>
-                  <span className="text-xs text-slate-400 font-mono">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
-                </div>
-                <FileList
-                  files={files}
-                  onSelectFileForProcess={setSelectedFileForProcess}
-                  onDeleteFile={handleDeleteFile}
-                  onDownloadFile={handleDownloadFile}
-                  onInspectFile={handleInspectFile}
-                  onBatchAction={handleBatchAction}
-                  onBatchDelete={handleBatchDelete}
-                  onBatchPipeline={handleBatchPipeline}
-                />
-              </div>
-            )}
-
-            {/* Tab 3: Tools & Pipelines Studio */}
+            {/* Tab: Tools & Pipelines Studio (Default Front Page) */}
             {currentTab === 'pipelines' && (
               <div className="space-y-6">
                 {/* Mode Switcher */}

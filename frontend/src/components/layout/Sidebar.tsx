@@ -30,10 +30,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const workspaceNavItems = [
     { 
-      id: 'upload', 
-      label: 'Studio Dashboard', 
-      icon: UploadCloud, 
-      desc: 'Drag & Drop Media' 
+      id: 'pipelines', 
+      label: 'Tools & Recipes', 
+      icon: Wand2, 
+      subtext: '102+ Local Tools',
+      desc: 'iLovePDF, Video, Audio, ZIP'
     },
     { 
       id: 'files', 
@@ -41,13 +42,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Files, 
       badge: filesCount > 0 ? filesCount : undefined,
       desc: 'Browse & Inspect'
-    },
-    { 
-      id: 'pipelines', 
-      label: 'Tools & Recipes', 
-      icon: Wand2, 
-      subtext: '102+ Local Tools',
-      desc: 'iLovePDF, Video, Audio, ZIP'
     },
     { 
       id: 'jobs', 

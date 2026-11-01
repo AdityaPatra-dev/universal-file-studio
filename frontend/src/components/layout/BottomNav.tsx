@@ -37,20 +37,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   const mainTabs = [
     {
-      id: 'upload' as TabType,
-      label: 'Studio',
-      icon: UploadCloud,
+      id: 'pipelines' as TabType,
+      label: 'Tools',
+      icon: Wand2,
     },
     {
       id: 'files' as TabType,
       label: 'Files',
       icon: Files,
       badge: filesCount > 0 ? filesCount : undefined,
-    },
-    {
-      id: 'pipelines' as TabType,
-      label: 'Tools',
-      icon: Wand2,
     },
     {
       id: 'jobs' as TabType,
