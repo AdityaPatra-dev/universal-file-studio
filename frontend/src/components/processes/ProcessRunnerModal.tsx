@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X, Play, Sliders, CheckCircle2, AlertCircle, FileText,
   UploadCloud, ArrowRight, Download, RefreshCw, Eye, EyeOff,
-  FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive
+  FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive, Folder, FolderUp, FolderArchive
 } from 'lucide-react';
 import { StudioTool, ToolParameter } from '../../data/catalog/types';
 import { FileRecord, Job } from '../../types/api';
@@ -10,6 +10,57 @@ import { api } from '../../services/api';
 import { universalEngine } from '../../services/universalEngine';
 import { formatBytes } from '../../utils/format';
 import { CatalogIcon } from './CatalogIcon';
+
+const EXT_TO_MIME: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.tiff': 'image/tiff',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.mp3': 'audio/mpeg,audio/mp3',
+  '.wav': 'audio/wav,audio/x-wav',
+  '.aac': 'audio/aac',
+  '.flac': 'audio/flac',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4,audio/x-m4a',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.epub': 'application/epub+zip',
+  '.zip': 'application/zip,application/x-zip-compressed',
+  '.7z': 'application/x-7z-compressed',
+  '.tar': 'application/x-tar',
+  '.gz': 'application/gzip',
+  '.tar.gz': 'application/gzip,application/x-tar',
+  '.csv': 'text/csv',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown,text/plain',
+  '.html': 'text/html',
+};
+
+function getAcceptFilter(formats: string[]): string | undefined {
+  if (!formats || formats.length === 0 || formats.includes('*') || formats.includes('.*')) {
+    return undefined;
+  }
+  const set = new Set<string>();
+  for (const fmt of formats) {
+    const lower = fmt.toLowerCase();
+    set.add(lower);
+    if (EXT_TO_MIME[lower]) {
+      EXT_TO_MIME[lower].split(',').forEach((m) => set.add(m.trim()));
+    }
+  }
+  return Array.from(set).join(',');
+}
 
 interface ProcessRunnerModalProps {
   tool: StudioTool | null;
@@ -44,9 +95,16 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const [showLibraryPicker, setShowLibraryPicker] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const prevOpenRef = useRef(false);
+  const prevToolIdRef = useRef<string | null>(null);
 
-  // Initialize modal state on tool or file change
+  // Initialize modal state on tool or file change (guarded against reference instability)
   useEffect(() => {
+    const isOpening = isOpen && (!prevOpenRef.current || prevToolIdRef.current !== tool?.id);
+    prevOpenRef.current = isOpen;
+    prevToolIdRef.current = tool?.id || null;
+
     if (!isOpen || !tool) {
       setSelectedFiles([]);
       setParameters({});
@@ -56,40 +114,53 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
       return;
     }
 
-    // Initialize default parameters
-    const initial: Record<string, any> = { ...(tool.defaultParameters || {}), ...initialParameters };
-    tool.parameters.forEach((param) => {
-      if (initial[param.name] === undefined) {
-        if (param.default !== undefined) {
-          initial[param.name] = param.default;
-        } else if (param.type === 'select' && param.options && param.options.length > 0) {
-          initial[param.name] = param.options[0].value;
-        } else if (param.type === 'boolean') {
-          initial[param.name] = false;
-        } else if (param.type === 'compression_tier') {
-          initial[param.name] = 'recommended';
-        } else if (param.type === 'alignment_grid') {
-          initial[param.name] = 'center';
+    if (isOpening) {
+      // Initialize default parameters
+      const initial: Record<string, any> = { ...(tool.defaultParameters || {}), ...(initialParameters || {}) };
+      tool.parameters.forEach((param) => {
+        if (initial[param.name] === undefined) {
+          if (param.default !== undefined) {
+            initial[param.name] = param.default;
+          } else if (param.type === 'select' && param.options && param.options.length > 0) {
+            initial[param.name] = param.options[0].value;
+          } else if (param.type === 'boolean') {
+            initial[param.name] = false;
+          } else if (param.type === 'compression_tier') {
+            initial[param.name] = 'recommended';
+          } else if (param.type === 'alignment_grid') {
+            initial[param.name] = 'center';
+          }
         }
-      }
-    });
-    setParameters(initial);
+      });
+      setParameters(initial);
 
-    // Filter preselected files to match tool formats
-    if (preselectedFiles && preselectedFiles.length > 0) {
-      if (tool.acceptsMultipleFiles) {
-        setSelectedFiles(preselectedFiles);
+      // Filter preselected files to match tool formats
+      if (preselectedFiles && preselectedFiles.length > 0) {
+        if (tool.acceptsMultipleFiles) {
+          setSelectedFiles(preselectedFiles);
+        } else {
+          setSelectedFiles([preselectedFiles[0]]);
+        }
       } else {
-        setSelectedFiles([preselectedFiles[0]]);
+        setSelectedFiles([]);
       }
-    } else {
-      setSelectedFiles([]);
-    }
 
-    setCompletedJob(null);
-    setErrorMessage(null);
-    setIsExecuting(false);
-  }, [isOpen, tool, preselectedFiles, initialParameters]);
+      setCompletedJob(null);
+      setErrorMessage(null);
+      setIsExecuting(false);
+    }
+  }, [isOpen, tool?.id]);
+
+  // Detect if any files belong to a selected folder
+  const detectedFolderName = useMemo(() => {
+    for (const f of selectedFiles) {
+      if (f.metadata_json?.folder) return f.metadata_json.folder;
+      if (f.original_filename && f.original_filename.includes('/')) {
+        return f.original_filename.split('/')[0];
+      }
+    }
+    return null;
+  }, [selectedFiles]);
 
   if (!isOpen || !tool) return null;
 
@@ -125,6 +196,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
       setIsUploading(false);
       setExecutionStage('');
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (folderInputRef.current) folderInputRef.current.value = '';
     }
   };
 
@@ -597,6 +669,26 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
             {/* Selected File(s) List */}
             {selectedFiles.length > 0 ? (
               <div className="space-y-2">
+                {/* Folder Identification Banner if files belong to a folder */}
+                {detectedFolderName && (
+                  <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-950/40 border border-indigo-700/50 text-indigo-200">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300">
+                        <FolderArchive className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Folder Selected:</span>
+                          <span className="text-indigo-300 font-mono">{detectedFolderName}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {selectedFiles.length} file{selectedFiles.length === 1 ? '' : 's'} included
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {selectedFiles.map((f, idx) => (
                   <div
                     key={`${f.id}-${idx}`}
@@ -608,8 +700,11 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-white truncate">{f.filename}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {formatBytes(f.size_bytes)} • {f.mime_type || 'binary'}
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
+                          {f.metadata_json?.folder && (
+                            <span className="text-indigo-400 font-semibold font-mono">📁 {f.metadata_json.folder} •</span>
+                          )}
+                          <span>{formatBytes(f.size_bytes)} • {f.mime_type || 'binary'}</span>
                         </div>
                       </div>
                     </div>
@@ -647,14 +742,23 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
 
                 {/* Allow adding more files if multi-file */}
                 {tool.acceptsMultipleFiles && (
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="px-3 py-1.5 rounded-xl bg-surface-900 hover:bg-surface-850 border border-surface-700/60 text-xs text-slate-300 font-semibold btn-press flex items-center gap-1.5"
                     >
                       <UploadCloud className="h-3.5 w-3.5 text-brand-400" />
-                      <span>Add More from Device</span>
+                      <span>Add More Files</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => folderInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-xl bg-surface-900 hover:bg-surface-850 border border-surface-700/60 text-xs text-slate-300 font-semibold btn-press flex items-center gap-1.5"
+                      title="Add an entire folder of files"
+                    >
+                      <FolderArchive className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Add Folder</span>
                     </button>
                     {matchingLibraryFiles.length > 0 && (
                       <button
@@ -676,7 +780,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                   <UploadCloud className="h-6 w-6" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">Select input file to begin</h4>
+                  <h4 className="text-sm font-bold text-white">Select input file or folder to begin</h4>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Choose from your library or import from your device
                   </p>
@@ -686,9 +790,20 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all btn-press"
+                    className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-md shadow-brand-600/30 transition-all btn-press flex items-center gap-1.5"
                   >
-                    {isUploading ? 'Importing...' : 'Browse Device Files'}
+                    <UploadCloud className="h-3.5 w-3.5" />
+                    <span>{isUploading ? 'Importing...' : 'Browse Device Files'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => folderInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="px-3.5 py-2 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-200 font-semibold text-xs border border-surface-700 transition-all btn-press flex items-center gap-1.5"
+                    title="Select an entire folder or directory from device"
+                  >
+                    <FolderArchive className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Select Folder</span>
                   </button>
                   {matchingLibraryFiles.length > 0 && (
                     <button
@@ -704,13 +819,23 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
               </div>
             )}
 
-            {/* Hidden file input */}
+            {/* Hidden file and folder inputs */}
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleDeviceFilesSelected}
               multiple={tool.acceptsMultipleFiles}
-              accept={tool.inputFormats.join(',')}
+              accept={getAcceptFilter(tool.inputFormats)}
+              className="hidden"
+            />
+            <input
+              type="file"
+              ref={folderInputRef}
+              onChange={handleDeviceFilesSelected}
+              multiple
+              // @ts-ignore
+              webkitdirectory="true"
+              directory="true"
               className="hidden"
             />
 

@@ -253,7 +253,13 @@ export const FileList: React.FC<FileListProps> = ({
                         >
                           {file.filename}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 font-mono">
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 font-mono flex-wrap">
+                          {file.metadata_json?.folder && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-indigo-300 font-mono bg-indigo-500/10 px-1.5 py-0.5 rounded-md border border-indigo-500/20">
+                              <FolderArchive className="h-3 w-3 text-indigo-400" />
+                              <span>{file.metadata_json.folder}</span>
+                            </span>
+                          )}
                           <span className="text-brand-400 font-semibold uppercase">
                             {file.detected_format || file.category}
                           </span>
@@ -361,12 +367,20 @@ export const FileList: React.FC<FileListProps> = ({
                             {getFileIcon(file.category)}
                           </div>
                           <div>
-                            <span 
-                              onClick={() => onInspectFile && onInspectFile(file)}
-                              className="font-bold text-white hover:text-brand-300 cursor-pointer text-xs"
-                            >
-                              {file.filename}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span 
+                                onClick={() => onInspectFile && onInspectFile(file)}
+                                className="font-bold text-white hover:text-brand-300 cursor-pointer text-xs"
+                              >
+                                {file.filename}
+                              </span>
+                              {file.metadata_json?.folder && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-indigo-300 font-mono bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                                  <FolderArchive className="h-2.5 w-2.5 text-indigo-400" />
+                                  <span>{file.metadata_json.folder}</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>

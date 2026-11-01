@@ -218,3 +218,4 @@ Universal File Studio processes all files **100% locally** on your device.
 
 if __name__ == "__main__":
     main()
+

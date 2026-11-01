@@ -150,12 +150,22 @@ export function App() {
       setUploadProgress(100);
       setFiles(prev => [...uploaded, ...prev]);
 
+      // Check if files came from a folder
+      const folderNames = Array.from(new Set(
+        selectedFiles
+          .map(f => (f as any).webkitRelativePath ? (f as any).webkitRelativePath.split('/')[0] : null)
+          .filter(Boolean)
+      ));
+      const folderLabel = folderNames.length > 0 ? `folder "${folderNames[0]}" (${uploaded.length} files)` : null;
+
       // Provide non-intrusive action notification banner
       setUploadNotification({
         files: uploaded,
-        message: uploaded.length === 1
-          ? `Imported "${uploaded[0].filename}" successfully!`
-          : `Imported ${uploaded.length} files successfully!`
+        message: folderLabel
+          ? `Imported ${folderLabel} successfully!`
+          : (uploaded.length === 1
+              ? `Imported "${uploaded[0].filename}" successfully!`
+              : `Imported ${uploaded.length} files successfully!`)
       });
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);

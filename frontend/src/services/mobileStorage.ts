@@ -39,7 +39,7 @@ function openDB(): Promise<IDBDatabase> {
 export const mobileStorage = {
   async saveFile(file: File | Blob, filename: string): Promise<FileRecord> {
     const db = await openDB();
-    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const id = Date.now() + Math.floor(Math.random() * 100000);
     const mime = file.type || 'application/octet-stream';
     
     // Categorize
@@ -64,15 +64,22 @@ export const mobileStorage = {
       hash = 'hash-' + Math.random().toString(36).substring(2);
     }
 
+    const relativePath = (file as any).webkitRelativePath || '';
+    const folderName = relativePath ? relativePath.split('/')[0] : undefined;
+    const metadata: Record<string, any> = {};
+    if (folderName) metadata.folder = folderName;
+    if (relativePath) metadata.relative_path = relativePath;
+
     const record: FileRecord = {
       id,
       filename,
-      original_filename: filename,
+      original_filename: relativePath || filename,
       mime_type: mime,
       category,
       size_bytes: file.size,
       hash_sha256: hash,
       upload_path: `mobile://${filename}`,
+      metadata_json: Object.keys(metadata).length > 0 ? metadata : null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

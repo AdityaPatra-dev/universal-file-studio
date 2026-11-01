@@ -119,15 +119,15 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
           <span>Select Files</span>
         </button>
 
-        {/* Folder Upload (Desktop) */}
+        {/* Folder Upload */}
         <button
           onClick={() => folderInputRef.current?.click()}
           disabled={isUploading}
-          className="hidden sm:flex items-center justify-center space-x-2 px-4 py-3 rounded-2xl bg-surface-850 hover:bg-surface-800 text-slate-300 font-medium text-xs sm:text-sm border border-surface-700/60 disabled:opacity-50 btn-press cursor-pointer"
-          title="Upload an entire directory"
+          className="flex-1 min-w-[110px] flex items-center justify-center space-x-2 px-4 py-3 rounded-2xl bg-surface-850 hover:bg-surface-800 text-slate-300 font-medium text-xs sm:text-sm border border-surface-700/60 disabled:opacity-50 btn-press cursor-pointer"
+          title="Upload an entire directory or folder of files"
         >
-          <FolderUp className="h-4 w-4 text-slate-400" />
-          <span>Folder</span>
+          <FolderUp className="h-4 w-4 text-indigo-400" />
+          <span>Select Folder</span>
         </button>
       </div>
 
