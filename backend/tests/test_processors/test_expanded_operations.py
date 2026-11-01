@@ -400,3 +400,4 @@ async def test_expanded_archive_operations(tmp_dir):
     assert res.success is True
     assert os.path.isdir(out_extract)
     assert os.path.exists(os.path.join(out_extract, "doc.txt"))
+
