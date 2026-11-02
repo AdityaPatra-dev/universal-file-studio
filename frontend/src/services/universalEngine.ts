@@ -344,19 +344,28 @@ class UniversalEngineService {
           } else {
             throw new Error('Offline OCR is supported on native Android with Tesseract or via desktop backend.');
           }
-        } else if (category === 'image') {
-          result = await mobileEngines.processImage(
-            fileBlob,
-            fileRecord.filename,
+        } else if (category === 'archive' || op === 'zip' || op === 'create_zip' || op === 'archive' || op === 'compress' || op === 'extract_zip') {
+          result = await mobileEngines.processArchive(
+            [{ blob: fileBlob, filename: fileRecord.filename }],
             op,
             payload.parameters,
             (pct) => {
               mobileStorage.updateJob(jobId, { progress_percent: pct });
             }
           );
-        } else if (category === 'pdf') {
+        } else if (category === 'pdf' || op.includes('pdf') || op === 'watermark' || op === 'split' || op === 'merge') {
           result = await mobileEngines.processPdf(
             [{ blob: fileBlob, filename: fileRecord.filename }],
+            op,
+            payload.parameters,
+            (pct) => {
+              mobileStorage.updateJob(jobId, { progress_percent: pct });
+            }
+          );
+        } else if (category === 'image' || op.startsWith('image_') || op === 'resize' || op === 'crop' || op === 'rotate' || op === 'flip' || op === 'compress_image') {
+          result = await mobileEngines.processImage(
+            fileBlob,
+            fileRecord.filename,
             op,
             payload.parameters,
             (pct) => {
@@ -367,15 +376,6 @@ class UniversalEngineService {
           result = await mobileEngines.processAudioVideo(
             fileBlob,
             fileRecord.filename,
-            op,
-            payload.parameters,
-            (pct) => {
-              mobileStorage.updateJob(jobId, { progress_percent: pct });
-            }
-          );
-        } else if (category === 'archive') {
-          result = await mobileEngines.processArchive(
-            [{ blob: fileBlob, filename: fileRecord.filename }],
             op,
             payload.parameters,
             (pct) => {

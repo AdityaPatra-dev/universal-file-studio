@@ -381,7 +381,7 @@ export const mobileEngines = {
     logs.push(`[Mobile Archive Engine] Operation: ${operation}`);
     onProgress?.(15);
 
-    if (operation === 'create_zip' || operation === 'archive' || operation === 'compress') {
+    if (operation === 'create_zip' || operation === 'archive' || operation === 'compress' || operation === 'zip') {
       logs.push(`Packing ${files.length} files into ZIP archive...`);
       const zip = new JSZip();
 
@@ -560,7 +560,7 @@ export const mobileEngines = {
 
     const text = await blob.text();
 
-    if (operation === 'markdown_to_html' || (filename.endsWith('.md') && params.target_format === 'html')) {
+    if (operation === 'markdown_to_html' || operation === 'md_to_html' || (filename.endsWith('.md') && params.target_format === 'html')) {
       logs.push('Parsing Markdown to HTML...');
       // Sanitize raw text to prevent Stored Cross-Site Scripting (XSS)
       const sanitizedText = text

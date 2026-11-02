@@ -166,6 +166,116 @@ async function run() {
     throw new Error('Test 8 Failed: compression_level setting was not updated');
   }
 
+  // Test 9: Document processing (Markdown to HTML)
+  console.log('[Test 9] Testing standalone Document processing (Markdown -> HTML)...');
+  const docResult = await page.evaluate(async () => {
+    const universalEngine = window.universalEngine;
+    const mobileStorage = window.mobileStorage;
+
+    const mdContent = '# Universal File Studio\\n\\n**100% On-Device Processing** is working cleanly.';
+    const mdBlob = new Blob([mdContent], { type: 'text/markdown' });
+    const uploadedMd = await mobileStorage.saveFile(mdBlob, 'notes.md');
+
+    const job = await universalEngine.createJob({
+      file_id: uploadedMd.id,
+      operation: 'md_to_html',
+      engine_used: 'On-Device Document Engine',
+      parameters: { title: 'UFS Document' },
+    });
+
+    let finished = job;
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      finished = await universalEngine.getJob(job.id);
+      if (finished.status === 'completed' || finished.status === 'failed') break;
+    }
+    return finished;
+  });
+  console.log('[Test 9] Document Job Result:', JSON.stringify(docResult, null, 2));
+  if (docResult.status !== 'completed') {
+    throw new Error(`Test 9 Failed: Document job did not complete (${docResult.error_message || docResult.status})`);
+  }
+
+  // Test 10: PDF processing (watermarking via pdf-lib)
+  console.log('[Test 10] Testing standalone PDF processing (Watermark via pdf-lib)...');
+  const pdfResult = await page.evaluate(async () => {
+    const universalEngine = window.universalEngine;
+    const mobileStorage = window.mobileStorage;
+
+    // Minimal valid PDF 1.4 document
+    const rawPdf = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] >>
+endobj
+xref
+0 4
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+trailer
+<< /Size 4 /Root 1 0 R >>
+startxref
+187
+%%EOF`;
+    const pdfBlob = new Blob([rawPdf], { type: 'application/pdf' });
+    const uploadedPdf = await mobileStorage.saveFile(pdfBlob, 'sample.pdf');
+
+    const job = await universalEngine.createJob({
+      file_id: uploadedPdf.id,
+      operation: 'watermark',
+      engine_used: 'On-Device PDF Engine',
+      parameters: { text: 'CONFIDENTIAL' },
+    });
+
+    let finished = job;
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      finished = await universalEngine.getJob(job.id);
+      if (finished.status === 'completed' || finished.status === 'failed') break;
+    }
+    return finished;
+  });
+  console.log('[Test 10] PDF Job Result:', JSON.stringify(pdfResult, null, 2));
+  if (pdfResult.status !== 'completed') {
+    throw new Error(`Test 10 Failed: PDF job did not complete (${pdfResult.error_message || pdfResult.status})`);
+  }
+
+  // Test 11: Archive processing (ZIP creation via JSZip)
+  console.log('[Test 11] Testing standalone Archive processing (ZIP creation)...');
+  const zipResult = await page.evaluate(async () => {
+    const universalEngine = window.universalEngine;
+    const mobileStorage = window.mobileStorage;
+
+    const dummyBlob = new Blob(['File content inside archive'], { type: 'text/plain' });
+    const uploadedFile = await mobileStorage.saveFile(dummyBlob, 'data.txt');
+
+    const job = await universalEngine.createJob({
+      file_id: uploadedFile.id,
+      operation: 'zip',
+      engine_used: 'On-Device Archive Engine',
+      parameters: { archive_name: 'test_bundle' },
+    });
+
+    let finished = job;
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      finished = await universalEngine.getJob(job.id);
+      if (finished.status === 'completed' || finished.status === 'failed') break;
+    }
+    return finished;
+  });
+  console.log('[Test 11] Archive Job Result:', JSON.stringify(zipResult, null, 2));
+  if (zipResult.status !== 'completed') {
+    throw new Error(`Test 11 Failed: Archive job did not complete (${zipResult.error_message || zipResult.status})`);
+  }
+
   // Refresh page and take final screenshot
   await page.reload({ waitUntil: 'networkidle0' });
   await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'screen_standalone_verified.png') });
