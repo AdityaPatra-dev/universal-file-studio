@@ -1,7 +1,7 @@
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from '../types/api';
 
 const DB_NAME = 'ufs_mobile_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface StoredFile {
   record: FileRecord;
@@ -232,6 +232,49 @@ export const mobileStorage = {
     });
   },
 
+  async cancelJob(id: string): Promise<Job> {
+    return this.updateJob(id, {
+      status: 'cancelled',
+      completed_at: new Date().toISOString(),
+    });
+  },
+
+  async retryJob(id: string): Promise<Job> {
+    return this.updateJob(id, {
+      status: 'running',
+      progress_percent: 10,
+      error_message: undefined,
+      started_at: new Date().toISOString(),
+    });
+  },
+
+  async deleteJobsBulk(status?: string): Promise<{ success: boolean; deleted_count: number }> {
+    const all = await this.getJobs();
+    const toDelete = status ? all.filter(j => j.status === status) : all;
+    for (const job of toDelete) {
+      await this.deleteJob(job.id);
+    }
+    return { success: true, deleted_count: toDelete.length };
+  },
+
+  async updateSetting(key: string, value: string): Promise<AppSetting> {
+    const db = await openDB();
+    const setting: AppSetting = {
+      key,
+      value,
+      type: 'string',
+      category: 'general',
+      description: 'Local on-device configuration',
+    };
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('settings', 'readwrite');
+      const store = tx.objectStore('settings');
+      const req = store.put(setting);
+      req.onsuccess = () => resolve(setting);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
   // Mock Engine Info for Mobile Standalone Mode
   getMobileEngines(): EngineInfo[] {
     const now = new Date().toISOString();
@@ -331,12 +374,30 @@ export const mobileStorage = {
     };
   },
 
-  getMobileSettings(): AppSetting[] {
-    return [
+  async getMobileSettings(): Promise<AppSetting[]> {
+    const defaults: AppSetting[] = [
       { key: 'engine_mode', value: 'auto', type: 'string', category: 'general', description: 'Engine fallback mode (Auto / Server / On-Device)' },
       { key: 'compression_level', value: '80', type: 'number', category: 'image', description: 'Default image compression quality (1-100)' },
       { key: 'pdf_page_orientation', value: 'auto', type: 'string', category: 'pdf', description: 'Default PDF page orientation' },
       { key: 'theme', value: 'dark', type: 'string', category: 'ui', description: 'Application UI Theme' },
     ];
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction('settings', 'readonly');
+        const store = tx.objectStore('settings');
+        const req = store.getAll();
+        req.onsuccess = () => {
+          const stored: AppSetting[] = req.result || [];
+          const map = new Map<string, AppSetting>();
+          defaults.forEach((d) => map.set(d.key, d));
+          stored.forEach((s) => map.set(s.key, s));
+          resolve(Array.from(map.values()));
+        };
+        req.onerror = () => resolve(defaults);
+      });
+    } catch {
+      return defaults;
+    }
   }
 };

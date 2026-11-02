@@ -458,6 +458,70 @@ class UniversalEngineService {
     return URL.createObjectURL(blob);
   }
 
+  async cancelJob(id: string): Promise<void> {
+    if (this.isDesktop()) {
+      try {
+        await api.cancelJob(id);
+        return;
+      } catch (err) {
+        console.warn('Desktop cancelJob failed, falling back:', err);
+      }
+    }
+    await mobileStorage.cancelJob(id);
+  }
+
+  async retryJob(id: string): Promise<Job> {
+    if (this.isDesktop()) {
+      try {
+        return await api.retryJob(id);
+      } catch (err) {
+        console.warn('Desktop retryJob failed, falling back:', err);
+      }
+    }
+    const job = await mobileStorage.getJob(id);
+    if (!job) throw new Error(`Job ${id} not found`);
+    return await this.createJob({
+      file_id: job.file_id,
+      operation: job.operation,
+      engine_used: job.engine_used,
+      parameters: job.parameters,
+    });
+  }
+
+  async deleteJob(id: string): Promise<void> {
+    if (this.isDesktop()) {
+      try {
+        await api.deleteJob(id);
+        return;
+      } catch (err) {
+        console.warn('Desktop deleteJob failed, falling back:', err);
+      }
+    }
+    await mobileStorage.deleteJob(id);
+  }
+
+  async deleteJobsBulk(status?: string): Promise<{ success: boolean; deleted_count: number }> {
+    if (this.isDesktop()) {
+      try {
+        return await api.deleteJobsBulk(status);
+      } catch (err) {
+        console.warn('Desktop deleteJobsBulk failed, falling back:', err);
+      }
+    }
+    return await mobileStorage.deleteJobsBulk(status);
+  }
+
+  async updateSetting(key: string, value: string): Promise<AppSetting> {
+    if (this.isDesktop()) {
+      try {
+        return await api.updateSetting(key, value);
+      } catch (err) {
+        console.warn('Desktop updateSetting failed, falling back:', err);
+      }
+    }
+    return await mobileStorage.updateSetting(key, value);
+  }
+
   // ==========================================
   // SYSTEM & DIAGNOSTICS
   // ==========================================

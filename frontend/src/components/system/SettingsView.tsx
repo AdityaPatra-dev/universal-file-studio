@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Save, Check, RotateCcw, AlertCircle, Shield } from 'lucide-react';
 import { AppSetting } from '../../types/api';
-import { api } from '../../services/api';
+import { universalEngine } from '../../services/universalEngine';
 
 interface SettingsViewProps {
   settings: AppSetting[];
@@ -29,7 +29,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onRefresh 
     try {
       // Save all modified settings
       const modifiedKeys = settings.filter(s => localSettings[s.key] !== s.value);
-      await Promise.all(modifiedKeys.map(s => api.updateSetting(s.key, localSettings[s.key])));
+      await Promise.all(modifiedKeys.map(s => universalEngine.updateSetting(s.key, localSettings[s.key])));
       setIsSaving(false);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);

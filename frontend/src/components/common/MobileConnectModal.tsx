@@ -3,7 +3,7 @@ import {
   X, Smartphone, Wifi, Copy, Check, QrCode, 
   ExternalLink, ArrowRight, ShieldCheck, Download, Share2
 } from 'lucide-react';
-import { api } from '../../services/api';
+import { universalEngine } from '../../services/universalEngine';
 import { NetworkInfo } from '../../types/api';
 
 interface MobileConnectModalProps {
@@ -81,7 +81,7 @@ export const MobileConnectModal: React.FC<MobileConnectModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setIsLoading(true);
-    api.getNetworkInfo()
+    universalEngine.getNetworkInfo()
       .then(setNetworkInfo)
       .catch(() => {
         // Fallback to window location if system endpoint unavailable

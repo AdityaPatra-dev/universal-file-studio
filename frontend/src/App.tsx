@@ -147,16 +147,16 @@ export function App() {
       });
 
       const unsubCompleted = socketService.on('job:completed', () => {
-        api.listJobs().then(setJobs).catch(() => {});
-        api.listFiles().then(setFiles).catch(() => {});
+        universalEngine.listJobs().then(setJobs).catch(() => {});
+        universalEngine.listFiles().then(setFiles).catch(() => {});
       });
 
       const unsubFailed = socketService.on('job:failed', () => {
-        api.listJobs().then(setJobs).catch(() => {});
+        universalEngine.listJobs().then(setJobs).catch(() => {});
       });
 
       const unsubCancelled = socketService.on('job:cancelled', () => {
-        api.listJobs().then(setJobs).catch(() => {});
+        universalEngine.listJobs().then(setJobs).catch(() => {});
       });
 
       return () => {
@@ -223,7 +223,7 @@ export function App() {
 
   const handleDeleteFile = async (id: number) => {
     try {
-      await api.deleteFile(id);
+      await universalEngine.deleteFile(id);
       setFiles(prev => prev.filter(f => f.id !== id));
     } catch (err) {
       alert('Failed to delete file');
@@ -232,7 +232,7 @@ export function App() {
 
   const handleBatchDelete = async (ids: number[]) => {
     try {
-      await Promise.all(ids.map(id => api.deleteFile(id)));
+      await Promise.all(ids.map(id => universalEngine.deleteFile(id)));
       setFiles(prev => prev.filter(f => !ids.includes(f.id)));
     } catch (err) {
       alert('Failed to delete some files');
@@ -259,14 +259,14 @@ export function App() {
 
   const handleTriggerStripMetadata = async (file: FileRecord) => {
     try {
-      await api.createJob({
+      await universalEngine.createJob({
         file_id: file.id,
         operation: 'strip_metadata',
-        engine_used: 'imagemagick',
+        engine_used: 'auto',
         parameters: {},
       });
       setInspectingFile(null);
-      const updatedJobs = await api.listJobs();
+      const updatedJobs = await universalEngine.listJobs();
       setJobs(updatedJobs);
       setCurrentTab('jobs');
     } catch (err: any) {
@@ -291,8 +291,8 @@ export function App() {
 
   const handleCancelJob = async (id: string) => {
     try {
-      await api.cancelJob(id);
-      const updated = await api.listJobs();
+      await universalEngine.cancelJob(id);
+      const updated = await universalEngine.listJobs();
       setJobs(updated);
     } catch (err) {
       alert('Failed to cancel job');
@@ -301,8 +301,8 @@ export function App() {
 
   const handleRetryJob = async (id: string) => {
     try {
-      await api.retryJob(id);
-      const updated = await api.listJobs();
+      await universalEngine.retryJob(id);
+      const updated = await universalEngine.listJobs();
       setJobs(updated);
     } catch (err) {
       alert('Failed to retry job');
@@ -311,7 +311,7 @@ export function App() {
 
   const handleDeleteJob = async (id: string) => {
     try {
-      await api.deleteJob(id);
+      await universalEngine.deleteJob(id);
       setJobs(prev => prev.filter(j => j.id !== id));
     } catch (err) {
       alert('Failed to delete job');
@@ -320,10 +320,7 @@ export function App() {
 
   const handleClearCompletedJobs = async () => {
     try {
-      await api.deleteJobsBulk('completed').catch(() => {
-        const completed = jobs.filter(j => j.status === 'completed');
-        return Promise.all(completed.map(j => api.deleteJob(j.id).catch(() => {})));
-      });
+      await universalEngine.deleteJobsBulk('completed');
       setJobs(prev => prev.filter(j => j.status !== 'completed'));
     } catch (err) {
       console.warn('Failed to clear completed jobs', err);
@@ -333,8 +330,8 @@ export function App() {
   const handleCancelAllActiveJobs = async () => {
     const active = jobs.filter(j => ['pending', 'queued', 'running'].includes(j.status));
     try {
-      await Promise.all(active.map(j => api.cancelJob(j.id).catch(() => {})));
-      const updated = await api.listJobs();
+      await Promise.all(active.map(j => universalEngine.cancelJob(j.id).catch(() => {})));
+      const updated = await universalEngine.listJobs();
       setJobs(updated);
     } catch (err) {
       console.warn('Failed to cancel active jobs', err);
@@ -343,9 +340,7 @@ export function App() {
 
   const handleClearAllJobs = async () => {
     try {
-      await api.deleteJobsBulk().catch(() => {
-        return Promise.all(jobs.map(j => api.deleteJob(j.id).catch(() => {})));
-      });
+      await universalEngine.deleteJobsBulk();
       setJobs([]);
     } catch (err) {
       console.warn('Failed to clear all jobs', err);
@@ -355,8 +350,8 @@ export function App() {
   const handleRetryAllFailedJobs = async () => {
     const failed = jobs.filter(j => j.status === 'failed');
     try {
-      await Promise.all(failed.map(j => api.retryJob(j.id)));
-      const updated = await api.listJobs();
+      await Promise.all(failed.map(j => universalEngine.retryJob(j.id)));
+      const updated = await universalEngine.listJobs();
       setJobs(updated);
     } catch (err) {
       alert('Failed to retry some jobs');
@@ -381,9 +376,9 @@ export function App() {
   const handleRescanEngines = async () => {
     try {
       setIsRefreshing(true);
-      const updatedEngines = await api.rescanEngines();
+      const updatedEngines = await universalEngine.getEngines();
       setEngines(updatedEngines);
-      const updatedDiag = await api.getDiagnostics();
+      const updatedDiag = await universalEngine.getDiagnostics();
       setDiagnostics(updatedDiag);
     } finally {
       setIsRefreshing(false);
@@ -533,7 +528,7 @@ export function App() {
                   <ProcessDirectory
                     libraryFiles={files}
                     onJobStarted={async () => {
-                      const updatedJobs = await api.listJobs();
+                      const updatedJobs = await universalEngine.listJobs();
                       setJobs(updatedJobs);
                       setCurrentTab('jobs');
                     }}
@@ -545,7 +540,7 @@ export function App() {
                     files={files}
                     preSelectedFileIds={pipelinePreSelectedFileIds}
                     onJobStarted={async () => {
-                      const updatedJobs = await api.listJobs();
+                      const updatedJobs = await universalEngine.listJobs();
                       setJobs(updatedJobs);
                       setCurrentTab('jobs');
                     }}
@@ -614,7 +609,7 @@ export function App() {
         file={selectedFileForProcess}
         onClose={() => setSelectedFileForProcess(null)}
         onJobStarted={async () => {
-          const updatedJobs = await api.listJobs();
+          const updatedJobs = await universalEngine.listJobs();
           setJobs(updatedJobs);
           setCurrentTab('jobs');
         }}
@@ -627,7 +622,7 @@ export function App() {
           initialMode={batchModal.mode}
           onClose={() => setBatchModal({ isOpen: false, files: [], mode: 'convert' })}
           onBatchStarted={async () => {
-            const updatedJobs = await api.listJobs();
+            const updatedJobs = await universalEngine.listJobs();
             setJobs(updatedJobs);
             setCurrentTab('jobs');
           }}
@@ -664,7 +659,7 @@ export function App() {
           onClose={() => setDashboardTool(null)}
           libraryFiles={files}
           onJobStarted={async () => {
-            const updatedJobs = await api.listJobs();
+            const updatedJobs = await universalEngine.listJobs();
             setJobs(updatedJobs);
             setCurrentTab('jobs');
           }}
