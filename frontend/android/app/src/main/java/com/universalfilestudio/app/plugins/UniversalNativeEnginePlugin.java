@@ -1,6 +1,13 @@
 package com.universalfilestudio.app.plugins;
 
 import android.content.Context;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.MediaStore;
+import android.webkit.MimeTypeMap;
+import androidx.core.content.FileProvider;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -864,6 +871,229 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 call.reject("Delete error: " + e.getMessage());
             }
         });
+    }
+
+    /**
+     * Save processed output or user file to Android Public Downloads directory (/Download/UniversalFileStudio/)
+     */
+    @PluginMethod
+    public void saveToPublicDownloads(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String fileName = call.getString("fileName");
+                String base64Data = call.getString("base64Data");
+                String tempFilePath = call.getString("tempFilePath");
+
+                if (fileName == null || fileName.trim().isEmpty()) {
+                    fileName = "file_" + System.currentTimeMillis();
+                }
+
+                fileName = fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+
+                Context context = getContext();
+                byte[] data = null;
+
+                if (tempFilePath != null && !tempFilePath.isEmpty()) {
+                    File tempFile = new File(tempFilePath);
+                    if (tempFile.exists()) {
+                        long len = tempFile.length();
+                        data = new byte[(int) len];
+                        try (FileInputStream fis = new FileInputStream(tempFile)) {
+                            int offset = 0;
+                            int read;
+                            while (offset < data.length && (read = fis.read(data, offset, data.length - offset)) >= 0) {
+                                offset += read;
+                            }
+                        }
+                    }
+                }
+
+                if (data == null && base64Data != null && !base64Data.isEmpty()) {
+                    int commaIdx = base64Data.indexOf(',');
+                    if (commaIdx >= 0) {
+                        base64Data = base64Data.substring(commaIdx + 1);
+                    }
+                    data = Base64.decode(base64Data, Base64.DEFAULT);
+                }
+
+                if (data == null || data.length == 0) {
+                    call.reject("No valid data provided to save file");
+                    return;
+                }
+
+                String ext = "";
+                int dotIdx = fileName.lastIndexOf('.');
+                if (dotIdx >= 0) {
+                    ext = fileName.substring(dotIdx + 1).toLowerCase(Locale.ROOT);
+                }
+                String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+                if (mimeType == null) {
+                    mimeType = "application/octet-stream";
+                }
+
+                String savedFilePath = "";
+                String displayPath = "Downloads/" + fileName;
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentResolver resolver = context.getContentResolver();
+                    ContentValues contentValues = new ContentValues();
+                    contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
+                    contentValues.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
+                    contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/UniversalFileStudio");
+                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 1);
+
+                    Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues);
+                    if (uri != null) {
+                        try (OutputStream os = resolver.openOutputStream(uri)) {
+                            if (os != null) {
+                                os.write(data);
+                                os.flush();
+                            }
+                        }
+                        contentValues.clear();
+                        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                        resolver.update(uri, contentValues, null, null);
+                        displayPath = "Downloads/UniversalFileStudio/" + fileName;
+                        savedFilePath = uri.toString();
+                    }
+                }
+
+                File pubDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                File ufsFolder = new File(pubDownloads, "UniversalFileStudio");
+                if (!ufsFolder.exists()) ufsFolder.mkdirs();
+                File targetFile = new File(ufsFolder, fileName);
+                try (FileOutputStream fos = new FileOutputStream(targetFile)) {
+                    fos.write(data);
+                    fos.flush();
+                }
+                savedFilePath = targetFile.getAbsolutePath();
+                displayPath = "Downloads/UniversalFileStudio/" + fileName;
+
+                try {
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        new String[]{targetFile.getAbsolutePath()},
+                        new String[]{mimeType},
+                        null
+                    );
+                } catch (Exception ignored) {}
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("filePath", savedFilePath);
+                res.put("displayPath", displayPath);
+                res.put("sizeBytes", data.length);
+                call.resolve(res);
+            } catch (Exception e) {
+                Log.e(TAG, "saveToPublicDownloads error: " + e.getMessage(), e);
+                call.reject("Failed to save to downloads: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Open a file with the system default viewer app
+     */
+    @PluginMethod
+    public void openFileNative(PluginCall call) {
+        try {
+            String filePath = call.getString("filePath");
+            if (filePath == null || filePath.isEmpty()) {
+                call.reject("Missing filePath");
+                return;
+            }
+
+            Context context = getContext();
+            Uri uri;
+            String mimeType = call.getString("mimeType");
+
+            if (filePath.startsWith("content://")) {
+                uri = Uri.parse(filePath);
+            } else {
+                File file = new File(filePath);
+                if (!file.exists()) {
+                    call.reject("File does not exist: " + filePath);
+                    return;
+                }
+                uri = FileProvider.getUriForFile(
+                    context,
+                    context.getPackageName() + ".fileprovider",
+                    file
+                );
+                if (mimeType == null || mimeType.isEmpty()) {
+                    String ext = MimeTypeMap.getFileExtensionFromUrl(file.getName());
+                    if (ext != null && !ext.isEmpty()) {
+                        mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+
+            if (mimeType == null || mimeType.isEmpty()) {
+                mimeType = "*/*";
+            }
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(uri, mimeType);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(Intent.createChooser(intent, "Open file with..."));
+
+            JSObject res = new JSObject();
+            res.put("success", true);
+            call.resolve(res);
+        } catch (Exception e) {
+            Log.e(TAG, "openFileNative error: " + e.getMessage(), e);
+            call.reject("Unable to open file: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Share file via Android system share sheet (WhatsApp, Gmail, Drive, etc.)
+     */
+    @PluginMethod
+    public void shareFileNative(PluginCall call) {
+        try {
+            String filePath = call.getString("filePath");
+            String title = call.getString("title", "Share File");
+            if (filePath == null || filePath.isEmpty()) {
+                call.reject("Missing filePath");
+                return;
+            }
+
+            Context context = getContext();
+            File file = new File(filePath);
+            if (!file.exists()) {
+                call.reject("File does not exist: " + filePath);
+                return;
+            }
+
+            Uri uri = FileProvider.getUriForFile(
+                context,
+                context.getPackageName() + ".fileprovider",
+                file
+            );
+
+            String ext = MimeTypeMap.getFileExtensionFromUrl(file.getName());
+            String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase(Locale.ROOT));
+            if (mimeType == null) mimeType = "*/*";
+
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType(mimeType);
+            intent.putExtra(Intent.EXTRA_STREAM, uri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            Intent chooser = Intent.createChooser(intent, title);
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(chooser);
+
+            JSObject res = new JSObject();
+            res.put("success", true);
+            call.resolve(res);
+        } catch (Exception e) {
+            Log.e(TAG, "shareFileNative error: " + e.getMessage(), e);
+            call.reject("Unable to share file: " + e.getMessage());
+        }
     }
 }
 

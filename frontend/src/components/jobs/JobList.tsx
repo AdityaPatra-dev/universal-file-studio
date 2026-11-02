@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { 
   Play, CheckCircle2, AlertCircle, XCircle, Clock, 
   RotateCcw, Download, Trash2, StopCircle, Terminal, FileCheck,
-  Check, Copy, Sparkles, Filter
+  Check, Copy, Sparkles, Filter, FolderOpen, ExternalLink, Share2, X, FileText
 } from 'lucide-react';
 import { Job, JobStatus } from '../../types/api';
 import { formatBytes, formatDuration, formatDate } from '../../utils/format';
+import { universalEngine } from '../../services/universalEngine';
 
 interface JobListProps {
   jobs: Job[];
@@ -32,6 +33,7 @@ export const JobList: React.FC<JobListProps> = ({
 }) => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLogJob, setSelectedLogJob] = useState<Job | null>(null);
+  const [locationJob, setLocationJob] = useState<Job | null>(null);
   const [copiedCmd, setCopiedCmd] = useState(false);
 
   // Dynamic status counts
@@ -274,13 +276,26 @@ export const JobList: React.FC<JobListProps> = ({
                   )}
 
                   {job.status === 'completed' && job.output_path && (
-                    <button
-                      onClick={() => onDownloadOutput(job.id)}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-sm shadow-emerald-600/30 btn-press text-xs"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>Download</span>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => onDownloadOutput(job.id)}
+                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-sm shadow-emerald-600/30 btn-press text-xs"
+                        title="Download file to device"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span>Download</span>
+                      </button>
+
+                      {/* File / Folder Location Icon just beside download option */}
+                      <button
+                        type="button"
+                        onClick={() => setLocationJob(job)}
+                        className="p-1.5 rounded-lg bg-surface-850 hover:bg-surface-800 text-brand-400 hover:text-brand-300 transition-colors btn-press border border-surface-700/60"
+                        title="View saved file location"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )}
 
                   {job.status === 'failed' && (
@@ -358,6 +373,90 @@ export const JobList: React.FC<JobListProps> = ({
                   </pre>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File Location Inspector Modal */}
+      {locationJob && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-900 border border-surface-700/80 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
+            <div className="p-4 border-b border-surface-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <FolderOpen className="h-5 w-5 text-brand-400" />
+                <h3 className="font-bold text-sm text-white">File Location & Storage</h3>
+              </div>
+              <button 
+                onClick={() => setLocationJob(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-surface-800"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 rounded-xl bg-surface-950/80 border border-surface-800 space-y-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-bold text-white truncate">
+                    {locationJob.output_filename || `result_${locationJob.id}`}
+                  </span>
+                </div>
+                {locationJob.output_size_bytes && (
+                  <div className="text-[11px] text-slate-400 font-mono">
+                    Size: {formatBytes(locationJob.output_size_bytes)}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
+                  Saved Storage Path
+                </label>
+                <div className="p-3 rounded-xl bg-surface-950 text-brand-200 font-mono text-xs break-all select-all border border-brand-500/30">
+                  {locationJob.output_path || `Downloads/UniversalFileStudio/${locationJob.output_filename || 'result'}`}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Files are saved directly into your device's public <strong>Downloads</strong> folder.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (locationJob.output_path) {
+                      await universalEngine.openFile(locationJob.output_path);
+                    } else {
+                      onDownloadOutput(locationJob.id);
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-colors flex items-center gap-1.5"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Open File</span>
+                </button>
+                {locationJob.output_path && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await universalEngine.shareFile(locationJob.output_path!, locationJob.output_filename);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-surface-800 hover:bg-surface-700 text-slate-200 border border-surface-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5 text-brand-400" />
+                    <span>Share</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setLocationJob(null)}
+                  className="px-3 py-2 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 text-xs font-semibold border border-surface-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { api, setApiBase } from './api';
 import { socketService } from './socket';
 import { mobileStorage } from './mobileStorage';
 import { mobileEngines } from './mobileEngines';
-import { UniversalNativeEngine, writeBlobToNativeTempFile, readNativeFileAsBlob } from './nativeEngineBridge';
+import { UniversalNativeEngine, writeBlobToNativeTempFile, readNativeFileAsBlob, blobToBase64 } from './nativeEngineBridge';
 import { Capacitor } from '@capacitor/core';
 
 export type EngineMode = 'desktop' | 'mobile_standalone';
@@ -456,6 +456,109 @@ class UniversalEngineService {
     const blob = await mobileStorage.getJobOutputBlob(id);
     if (!blob) throw new Error('Job output not found in local storage');
     return URL.createObjectURL(blob);
+  }
+
+  /**
+   * Universal Download: Saves directly to device Public Downloads folder on Android,
+   * or triggers browser download on Desktop. Returns the final file path / display path.
+   */
+  async saveOrDownloadJobOutput(id: string): Promise<{ success: boolean; filePath?: string; displayPath: string }> {
+    const job = await this.getJob(id);
+    const filename = job?.output_filename || `result_${id}`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const blob = await mobileStorage.getJobOutputBlob(id);
+        if (!blob) throw new Error('Job output blob not found in storage');
+        const base64 = await blobToBase64(blob);
+        const res = await UniversalNativeEngine.saveToPublicDownloads({
+          fileName: filename,
+          base64Data: base64,
+        });
+        if (job) {
+          await mobileStorage.updateJob(id, {
+            output_path: res.filePath,
+          });
+        }
+        return { success: true, filePath: res.filePath, displayPath: res.displayPath };
+      } catch (err: any) {
+        console.error('Native saveToPublicDownloads failed, trying web fallback:', err);
+      }
+    }
+
+    // Web / Browser download fallback
+    const url = await this.getJobDownloadUrl(id);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return { success: true, displayPath: `Downloads/${filename}` };
+  }
+
+  /**
+   * Save uploaded user file to device storage
+   */
+  async saveOrDownloadFile(fileId: number): Promise<{ success: boolean; filePath?: string; displayPath: string }> {
+    const files = await this.listFiles();
+    const f = files.find((item) => item.id === fileId);
+    const filename = f?.filename || `file_${fileId}`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const blob = await mobileStorage.getFileBlob(fileId);
+        if (!blob) throw new Error('File blob not found');
+        const base64 = await blobToBase64(blob);
+        const res = await UniversalNativeEngine.saveToPublicDownloads({
+          fileName: filename,
+          base64Data: base64,
+        });
+        return { success: true, filePath: res.filePath, displayPath: res.displayPath };
+      } catch (err: any) {
+        console.error('Native saveToPublicDownloads failed for file:', err);
+      }
+    }
+
+    // Web / Browser fallback
+    const url = await this.getFileDownloadUrl(fileId);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return { success: true, displayPath: `Downloads/${filename}` };
+  }
+
+  /**
+   * Open or reveal file with system viewer
+   */
+  async openFile(filePath: string): Promise<boolean> {
+    if (Capacitor.isNativePlatform() && filePath) {
+      try {
+        const res = await UniversalNativeEngine.openFileNative({ filePath });
+        return res.success;
+      } catch (err) {
+        console.error('openFileNative error:', err);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Share file via Android share sheet
+   */
+  async shareFile(filePath: string, title?: string | null): Promise<boolean> {
+    if (Capacitor.isNativePlatform() && filePath) {
+      try {
+        const res = await UniversalNativeEngine.shareFileNative({ filePath, title });
+        return res.success;
+      } catch (err) {
+        console.error('shareFileNative error:', err);
+      }
+    }
+    return false;
   }
 
   async cancelJob(id: string): Promise<void> {

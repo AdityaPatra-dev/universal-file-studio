@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X, Play, Sliders, CheckCircle2, AlertCircle, FileText,
   UploadCloud, ArrowRight, Download, RefreshCw, Eye, EyeOff,
-  FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive, Folder, FolderUp, FolderArchive
+  FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive, Folder, FolderUp, FolderArchive,
+  Share2, ExternalLink, FileCheck
 } from 'lucide-react';
 import { StudioTool, ToolParameter } from '../../data/catalog/types';
 import { FileRecord, Job } from '../../types/api';
@@ -93,6 +94,10 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const [completedJob, setCompletedJob] = useState<Job | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showLibraryPicker, setShowLibraryPicker] = useState<boolean>(false);
+  const [savedLocation, setSavedLocation] = useState<string | null>(null);
+  const [savedFilePath, setSavedFilePath] = useState<string | null>(null);
+  const [showLocationDetails, setShowLocationDetails] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -301,15 +306,45 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const handleDownloadOutput = async () => {
     if (!completedJob) return;
     try {
-      const url = await universalEngine.getJobDownloadUrl(completedJob.id);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = completedJob.output_filename || `result_${completedJob.id}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch {
-      window.open(api.getJobDownloadUrl(completedJob.id), '_blank');
+      setIsSaving(true);
+      const res = await universalEngine.saveOrDownloadJobOutput(completedJob.id);
+      setSavedLocation(res.displayPath);
+      if (res.filePath) setSavedFilePath(res.filePath);
+      setShowLocationDetails(true);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      try {
+        const url = await universalEngine.getJobDownloadUrl(completedJob.id);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = completedJob.output_filename || `result_${completedJob.id}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setSavedLocation(`Downloads/${completedJob.output_filename || 'processed_file'}`);
+        setShowLocationDetails(true);
+      } catch {
+        window.open(api.getJobDownloadUrl(completedJob.id), '_blank');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOpenFile = async () => {
+    if (savedFilePath) {
+      await universalEngine.openFile(savedFilePath);
+    } else if (completedJob) {
+      try {
+        const url = await universalEngine.getJobDownloadUrl(completedJob.id);
+        window.open(url, '_blank');
+      } catch {}
+    }
+  };
+
+  const handleShareFile = async () => {
+    if (savedFilePath) {
+      await universalEngine.shareFile(savedFilePath, completedJob?.output_filename);
     }
   };
 
@@ -944,14 +979,81 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={handleDownloadOutput}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all btn-press flex items-center gap-1.5"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Download File</span>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={handleDownloadOutput}
+                    disabled={isSaving}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all btn-press flex items-center gap-1.5"
+                    title="Download and save file to device"
+                  >
+                    {isSaving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    <span>{isSaving ? 'Saving...' : 'Download File'}</span>
+                  </button>
+
+                  {/* File / Folder Location Icon just beside download option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!savedLocation && completedJob) {
+                        setSavedLocation(completedJob.output_path || `Downloads/${completedJob.output_filename || 'result'}`);
+                      }
+                      setShowLocationDetails(!showLocationDetails);
+                    }}
+                    className={`p-1.5 px-2 rounded-xl border transition-all btn-press flex items-center gap-1.5 text-xs font-semibold ${
+                      showLocationDetails
+                        ? 'bg-brand-500/25 text-brand-300 border-brand-500/50 shadow-sm'
+                        : 'bg-surface-800 hover:bg-surface-750 text-slate-300 hover:text-white border-surface-700/70'
+                    }`}
+                    title="View file location & details"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 text-brand-400" />
+                    <span className="text-[11px]">Location</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Saved File Location & Storage Inspection Card */}
+              {(showLocationDetails || savedLocation) && (
+                <div className="p-3 rounded-xl bg-surface-950/80 border border-brand-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 animate-in fade-in">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <FileCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0 text-left">
+                      <div className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                        <span>Storage Location:</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {savedLocation ? 'Saved to Device' : 'Ready to Download'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono text-brand-200 truncate select-all mt-0.5">
+                        {savedLocation || completedJob.output_path || `Downloads/${completedJob.output_filename || 'result'}`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                    <button
+                      type="button"
+                      onClick={handleOpenFile}
+                      className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-200 border border-surface-700 text-xs font-medium flex items-center gap-1 transition-colors"
+                      title="Open file with viewer"
+                    >
+                      <ExternalLink className="h-3 w-3 text-brand-400" />
+                      <span>Open</span>
+                    </button>
+                    {savedFilePath && (
+                      <button
+                        type="button"
+                        onClick={handleShareFile}
+                        className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-200 border border-surface-700 text-xs font-medium flex items-center gap-1 transition-colors"
+                        title="Share file"
+                      >
+                        <Share2 className="h-3 w-3 text-brand-400" />
+                        <span>Share</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

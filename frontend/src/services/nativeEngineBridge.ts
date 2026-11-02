@@ -80,6 +80,19 @@ export interface UniversalNativeEnginePlugin {
   deleteTempFile(options: {
     filePath: string;
   }): Promise<{ success: boolean }>;
+  saveToPublicDownloads(options: {
+    fileName: string;
+    base64Data?: string;
+    tempFilePath?: string;
+  }): Promise<{ success: boolean; filePath: string; displayPath: string; sizeBytes: number }>;
+  openFileNative(options: {
+    filePath: string;
+    mimeType?: string;
+  }): Promise<{ success: boolean }>;
+  shareFileNative(options: {
+    filePath: string;
+    title?: string | null;
+  }): Promise<{ success: boolean }>;
 }
 
 export const UniversalNativeEngine = registerPlugin<UniversalNativeEnginePlugin>('UniversalNativeEngine');
@@ -135,7 +148,7 @@ export async function readNativeFileAsBlob(filePath: string, mimeType = 'applica
   return await response.blob();
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
+export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {

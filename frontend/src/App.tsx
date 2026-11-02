@@ -276,14 +276,8 @@ export function App() {
 
   const handleDownloadFile = async (id: number) => {
     try {
-      const url = await universalEngine.getFileDownloadUrl(id);
-      const a = document.createElement('a');
-      a.href = url;
-      const f = files.find((item) => item.id === id);
-      a.download = f?.filename || `file_${id}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const res = await universalEngine.saveOrDownloadFile(id);
+      console.log('File saved to:', res.displayPath);
     } catch {
       window.open(api.getFileDownloadUrl(id), '_blank');
     }
@@ -360,14 +354,8 @@ export function App() {
 
   const handleDownloadOutput = async (id: string) => {
     try {
-      const url = await universalEngine.getJobDownloadUrl(id);
-      const a = document.createElement('a');
-      a.href = url;
-      const job = jobs.find((j) => j.id === id);
-      a.download = job?.output_filename || `result_${id}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const res = await universalEngine.saveOrDownloadJobOutput(id);
+      console.log('Output saved to:', res.displayPath);
     } catch {
       window.open(api.getJobDownloadUrl(id), '_blank');
     }
