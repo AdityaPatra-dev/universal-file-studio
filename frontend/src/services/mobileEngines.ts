@@ -644,7 +644,11 @@ export const mobileEngines = {
       };
     }
 
-    throw new Error(`Unsupported mobile document operation: ${operation}`);
+    if (operation.includes('docx') || operation.includes('pptx') || operation.includes('xlsx') || operation.includes('libreoffice') || operation.includes('pandoc')) {
+      throw new Error(`The "${operation}" operation requires a desktop office engine (LibreOffice / Pandoc). Connect your phone to your PC Studio via "Mobile Connect" in the header to run this operation seamlessly.`);
+    }
+
+    throw new Error(`The operation "${operation}" is currently only supported when connected to Desktop Studio, or choose from the available on-device image, audio, video, PDF, archive, and text tools.`);
   },
 
   // ==========================================
