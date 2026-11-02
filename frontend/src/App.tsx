@@ -112,18 +112,16 @@ export function App() {
       const filesData = await universalEngine.listFiles().catch(() => []);
       setFiles(filesData);
 
-      if (isDesk) {
-        const [jobsData, enginesData, diagData, settingsData] = await Promise.all([
-          api.listJobs().catch(() => []),
-          api.getEngines().catch(() => []),
-          api.getDiagnostics().catch(() => null),
-          api.getSettings().catch(() => []),
-        ]);
-        setJobs(jobsData);
-        setEngines(enginesData);
-        if (diagData) setDiagnostics(diagData);
-        setSettings(settingsData);
-      }
+      const [jobsData, enginesData, diagData, settingsData] = await Promise.all([
+        universalEngine.listJobs().catch(() => []),
+        universalEngine.getEngines().catch(() => []),
+        universalEngine.getDiagnostics().catch(() => null),
+        universalEngine.getSettings().catch(() => []),
+      ]);
+      setJobs(jobsData);
+      setEngines(enginesData);
+      if (diagData) setDiagnostics(diagData);
+      setSettings(settingsData);
     } catch (err) {
       console.error('Failed to load application data:', err);
     } finally {
@@ -181,7 +179,7 @@ export function App() {
     if (!hasActiveJobs) return;
 
     const interval = setInterval(() => {
-      api.listJobs().then(setJobs).catch(() => {});
+      universalEngine.listJobs().then(setJobs).catch(() => {});
     }, 800);
 
     return () => clearInterval(interval);

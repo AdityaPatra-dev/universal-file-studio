@@ -4,7 +4,7 @@ import {
   Film, Music, Image as ImageIcon, FileText, Check, ArrowRight
 } from 'lucide-react';
 import { FileRecord, Operation, Preset } from '../../types/api';
-import { api } from '../../services/api';
+import { universalEngine } from '../../services/universalEngine';
 import { formatBytes, formatDuration } from '../../utils/format';
 
 interface FileProcessModalProps {
@@ -28,7 +28,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
   useEffect(() => {
     if (!file) return;
     setError(null);
-    api.getFileOperations(file.id)
+    universalEngine.getFileOperations(file.id, file.category)
       .then((ops) => {
         setOperations(ops);
         if (ops.length > 0) {
@@ -43,7 +43,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
       })
       .catch(() => setError('Failed to load available operations for this file.'));
 
-    api.listPresets()
+    universalEngine.listPresets()
       .then(setPresets)
       .catch(() => {});
   }, [file]);
@@ -73,7 +73,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
     setIsSubmitting(true);
     setError(null);
     try {
-      await api.createJob({
+      await universalEngine.createJob({
         file_id: file.id,
         operation: selectedOp.id,
         engine_used: selectedOp.engine,

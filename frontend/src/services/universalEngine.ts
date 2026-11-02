@@ -1,9 +1,9 @@
-import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting, NetworkInfo } from '../types/api';
+import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting, NetworkInfo, Operation, Preset, FileHashesResponse } from '../types/api';
 import { api, setApiBase } from './api';
 import { socketService } from './socket';
 import { mobileStorage } from './mobileStorage';
 import { mobileEngines } from './mobileEngines';
-import { UniversalNativeEngine } from './nativeEngineBridge';
+import { UniversalNativeEngine, writeBlobToNativeTempFile, readNativeFileAsBlob } from './nativeEngineBridge';
 import { Capacitor } from '@capacitor/core';
 
 export type EngineMode = 'desktop' | 'mobile_standalone';
@@ -174,7 +174,7 @@ class UniversalEngineService {
     return URL.createObjectURL(blob);
   }
 
-  async getFileHashes(id: number): Promise<{ sha256: string; md5: string; sha1: string; size_bytes: number }> {
+  async getFileHashes(id: number): Promise<FileHashesResponse> {
     if (this.isDesktop()) {
       try {
         return await api.getFileHashes(id);
@@ -182,13 +182,18 @@ class UniversalEngineService {
         console.warn('Desktop getFileHashes failed, falling back to local computation:', err);
       }
     }
+    const rec = await mobileStorage.getFileRecord(id);
     const blob = await mobileStorage.getFileBlob(id);
     if (!blob) throw new Error('File not found');
     const hashes = await mobileEngines.computeChecksums(blob);
     return {
+      file_id: id,
+      filename: rec?.filename || 'file',
       sha256: hashes.sha256,
       sha1: hashes.sha1,
       md5: hashes.sha256.substring(0, 32),
+      sha512: hashes.sha256,
+      crc32: hashes.sha256.substring(0, 8),
       size_bytes: hashes.size,
     };
   }
@@ -259,8 +264,87 @@ class UniversalEngineService {
         let result: any = null;
         const op = payload.operation;
         const category = fileRecord.category;
+        const isNative = Capacitor.isNativePlatform();
 
-        if (category === 'image') {
+        // 1. Android Native Engine Execution (FFmpegKit & Tesseract OCR)
+        if (
+          isNative &&
+          (category === 'video' ||
+            category === 'audio' ||
+            op.startsWith('video_') ||
+            op.startsWith('audio_') ||
+            op.includes('compress_video') ||
+            op.includes('extract_audio') ||
+            op.startsWith('ocr'))
+        ) {
+          const tempInputPath = await writeBlobToNativeTempFile(fileBlob, fileRecord.filename);
+          try {
+            if (op.startsWith('ocr') || op === 'ocr_image' || op === 'ocr_pdf') {
+              const ocrRes = await UniversalNativeEngine.processOcrNative({ inputPath: tempInputPath });
+              const textBlob = new Blob([ocrRes.text || ''], { type: 'text/plain' });
+              const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.txt`;
+              result = {
+                outputBlob: textBlob,
+                outputFilename: outName,
+                outputMime: 'text/plain',
+                logs: [`[Native Tesseract 5] OCR extracted ${ocrRes.characterCount} characters.`],
+              };
+            } else if (category === 'audio' || op.startsWith('audio_')) {
+              const audioRes = await UniversalNativeEngine.processAudioNative({
+                inputPath: tempInputPath,
+                operation: op,
+                parameters: payload.parameters,
+              });
+              if (!audioRes.outputPath) throw new Error('Audio operation produced no output path');
+              const mime = payload.parameters?.format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+              const outBlob = await readNativeFileAsBlob(audioRes.outputPath, mime);
+              result = {
+                outputBlob: outBlob,
+                outputFilename: audioRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.mp3`,
+                outputMime: mime,
+                logs: [`[Native FFmpegKit GPL] Audio ${op} finished successfully.`],
+              };
+            } else {
+              // Video operation
+              const videoRes = await UniversalNativeEngine.processVideoNative({
+                inputPath: tempInputPath,
+                operation: op,
+                parameters: payload.parameters,
+              });
+              if (!videoRes.outputPath) throw new Error('Video operation produced no output path');
+              const isAudioExtract = op === 'extract_audio';
+              const mime = isAudioExtract ? 'audio/mpeg' : 'video/mp4';
+              const outBlob = await readNativeFileAsBlob(videoRes.outputPath, mime);
+              result = {
+                outputBlob: outBlob,
+                outputFilename: videoRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.${isAudioExtract ? 'mp3' : 'mp4'}`,
+                outputMime: mime,
+                logs: [`[Native FFmpegKit GPL] Video ${op} finished successfully.`],
+              };
+            }
+          } finally {
+            UniversalNativeEngine.deleteTempFile({ filePath: tempInputPath }).catch(() => {});
+          }
+        } else if (category === 'image' && (op.startsWith('ocr') || op === 'ocr_image')) {
+          if (isNative) {
+            const tempInputPath = await writeBlobToNativeTempFile(fileBlob, fileRecord.filename);
+            try {
+              const ocrRes = await UniversalNativeEngine.processOcrNative({ inputPath: tempInputPath });
+              const textBlob = new Blob([ocrRes.text || ''], { type: 'text/plain' });
+              const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.txt`;
+              result = {
+                outputBlob: textBlob,
+                outputFilename: outName,
+                outputMime: 'text/plain',
+                logs: [`[Native Tesseract 5] OCR extracted ${ocrRes.characterCount} characters.`],
+              };
+            } finally {
+              UniversalNativeEngine.deleteTempFile({ filePath: tempInputPath }).catch(() => {});
+            }
+          } else {
+            throw new Error('Offline OCR is supported on native Android with Tesseract or via desktop backend.');
+          }
+        } else if (category === 'image') {
           result = await mobileEngines.processImage(
             fileBlob,
             fileRecord.filename,
@@ -426,6 +510,302 @@ class UniversalEngineService {
       mobile_url: 'http://localhost:8000',
       is_lan_available: false,
     };
+  }
+
+  // ==========================================
+  // UNIFIED OPERATIONS & PRESETS
+  // ==========================================
+  async getFileOperations(fileId: number, category?: string): Promise<Operation[]> {
+    if (this.isDesktop()) {
+      try {
+        return await api.getFileOperations(fileId);
+      } catch (err) {
+        console.warn('Desktop getFileOperations failed, falling back:', err);
+      }
+    }
+
+    let cat = category;
+    if (!cat) {
+      const rec = await mobileStorage.getFileRecord(fileId);
+      cat = rec?.category || 'general';
+    }
+
+    return this.getOfflineOperations(cat);
+  }
+
+  getOfflineOperations(category: string): Operation[] {
+    const isNative = Capacitor.isNativePlatform();
+    const ops: Operation[] = [];
+
+    if (category === 'video') {
+      ops.push({
+        id: 'video_convert',
+        name: 'Convert Video',
+        engine: isNative ? 'ffmpeg-kit' : 'canvas',
+        category: 'video',
+        description: 'Convert video to MP4, WebM, MKV, or GIF animation',
+        parameters: [
+          { name: 'format', type: 'select', options: ['mp4', 'webm', 'mkv', 'avi', 'mov', 'gif'], default: 'mp4' },
+        ],
+      });
+      ops.push({
+        id: 'compress_video',
+        name: 'Compress Video',
+        engine: isNative ? 'ffmpeg-kit' : 'canvas',
+        category: 'video',
+        description: 'Reduce video file size with intelligent CRF compression',
+        parameters: [{ name: 'crf', type: 'number', default: 28, min: 18, max: 35 }],
+      });
+      ops.push({
+        id: 'extract_audio',
+        name: 'Extract Audio',
+        engine: isNative ? 'ffmpeg-kit' : 'webaudio',
+        category: 'video',
+        description: 'Extract audio track to MP3 or WAV',
+        parameters: [{ name: 'format', type: 'select', options: ['mp3', 'wav', 'aac'], default: 'mp3' }],
+      });
+      ops.push({
+        id: 'video_trim',
+        name: 'Trim Video',
+        engine: isNative ? 'ffmpeg-kit' : 'canvas',
+        category: 'video',
+        description: 'Trim segment with precise start and end times',
+        parameters: [
+          { name: 'start_time', type: 'number', default: 0 },
+          { name: 'end_time', type: 'number', default: 10 },
+        ],
+      });
+      ops.push({
+        id: 'extract_frame',
+        name: 'Extract Frame (Thumbnail)',
+        engine: isNative ? 'android-media' : 'canvas',
+        category: 'video',
+        description: 'Capture full-resolution still frame at timestamp',
+        parameters: [{ name: 'time', type: 'number', default: 1.0 }],
+      });
+    } else if (category === 'audio') {
+      ops.push({
+        id: 'audio_convert',
+        name: 'Convert Audio',
+        engine: isNative ? 'ffmpeg-kit' : 'webaudio',
+        category: 'audio',
+        description: 'Convert audio to MP3, WAV, AAC, or FLAC',
+        parameters: [{ name: 'format', type: 'select', options: ['mp3', 'wav', 'aac', 'flac'], default: 'mp3' }],
+      });
+      ops.push({
+        id: 'audio_normalize',
+        name: 'Normalize Audio (Loudness)',
+        engine: isNative ? 'ffmpeg-kit' : 'webaudio',
+        category: 'audio',
+        description: 'Normalize loudness to broadcast standards',
+        parameters: [],
+      });
+    } else if (category === 'image') {
+      ops.push({
+        id: 'image_convert',
+        name: 'Convert Image',
+        engine: isNative ? 'android-skia' : 'canvas',
+        category: 'image',
+        description: 'Convert image to WebP, PNG, JPEG',
+        parameters: [{ name: 'format', type: 'select', options: ['webp', 'png', 'jpg'], default: 'webp' }],
+      });
+      ops.push({
+        id: 'resize_image',
+        name: 'Resize Image',
+        engine: isNative ? 'android-skia' : 'canvas',
+        category: 'image',
+        description: 'Scale dimensions or percentage',
+        parameters: [
+          { name: 'width', type: 'number', default: 1920 },
+          { name: 'height', type: 'number', default: 1080 },
+        ],
+      });
+      ops.push({
+        id: 'compress_image',
+        name: 'Compress Image',
+        engine: isNative ? 'android-skia' : 'canvas',
+        category: 'image',
+        description: 'Optimize image quality and reduce file size',
+        parameters: [{ name: 'quality', type: 'number', default: 80, min: 10, max: 100 }],
+      });
+      if (isNative) {
+        ops.push({
+          id: 'ocr_image',
+          name: 'OCR Extract Text',
+          engine: 'tesseract',
+          category: 'image',
+          description: 'Extract printed text from image using on-device Tesseract OCR',
+          parameters: [{ name: 'language', type: 'select', options: ['eng'], default: 'eng' }],
+        });
+      }
+    } else if (category === 'pdf') {
+      ops.push({
+        id: 'split_pdf',
+        name: 'Split PDF Pages',
+        engine: 'pdf-lib',
+        category: 'pdf',
+        description: 'Extract page ranges into new PDF',
+        parameters: [{ name: 'pages', type: 'text', default: '1' }],
+      });
+      ops.push({
+        id: 'watermark_pdf',
+        name: 'Watermark PDF',
+        engine: 'pdf-lib',
+        category: 'pdf',
+        description: 'Overlay custom watermark text',
+        parameters: [
+          { name: 'text', type: 'text', default: 'CONFIDENTIAL' },
+          { name: 'opacity', type: 'text', default: '0.35' },
+        ],
+      });
+    } else if (category === 'archive') {
+      ops.push({
+        id: 'archive_extract',
+        name: 'Extract Archive',
+        engine: isNative ? 'android-zip' : 'jszip',
+        category: 'archive',
+        description: 'Decompress files from archive',
+        parameters: [],
+      });
+      ops.push({
+        id: 'create_zip',
+        name: 'Compress to ZIP',
+        engine: isNative ? 'android-zip' : 'jszip',
+        category: 'archive',
+        description: 'Package into standard ZIP container',
+        parameters: [{ name: 'archive_name', type: 'text', default: 'archive.zip' }],
+      });
+    }
+
+    ops.push({
+      id: 'file_hash',
+      name: 'Calculate Checksums (SHA-256 / SHA-1)',
+      engine: 'crypto',
+      category: 'general',
+      description: 'Calculate cryptographic integrity digests',
+      parameters: [],
+    });
+
+    return ops;
+  }
+
+  async listPresets(): Promise<Preset[]> {
+    if (this.isDesktop()) {
+      try {
+        const p = await api.listPresets();
+        if (p && p.length > 0) return p;
+      } catch {
+        // Fallback
+      }
+    }
+    return [
+      {
+        id: 1,
+        name: 'Optimize for Web (WebP)',
+        description: 'Compress image into fast modern WebP at 80% quality',
+        operation: 'image_convert',
+        engine: 'auto',
+        parameters: { format: 'webp', quality: 80 },
+        is_default: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 2,
+        name: 'High-Quality MP4 (CRF 24)',
+        description: 'Compress video to standard MP4 with CRF 24',
+        operation: 'compress_video',
+        engine: 'auto',
+        parameters: { crf: 24, format: 'mp4' },
+        is_default: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 3,
+        name: 'Rip MP3 Audio',
+        description: 'Extract audio track from video as 192kbps MP3',
+        operation: 'extract_audio',
+        engine: 'auto',
+        parameters: { format: 'mp3' },
+        is_default: true,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: 4,
+        name: 'OCR Text Extractor',
+        description: 'Recognize and extract text from images into TXT',
+        operation: 'ocr_image',
+        engine: 'auto',
+        parameters: { language: 'eng' },
+        is_default: true,
+        created_at: new Date().toISOString(),
+      },
+    ];
+  }
+
+  async batchConvert(fileIds: number[], targetFormat: string, parameters: Record<string, any> = {}): Promise<any> {
+    if (this.isDesktop()) {
+      try {
+        return await api.batchConvert(fileIds, targetFormat, parameters);
+      } catch (err) {
+        console.warn('Desktop batchConvert failed, falling back:', err);
+      }
+    }
+    const jobs = [];
+    for (const id of fileIds) {
+      const rec = await mobileStorage.getFileRecord(id);
+      const op =
+        rec?.category === 'video'
+          ? 'video_convert'
+          : rec?.category === 'audio'
+          ? 'audio_convert'
+          : 'image_convert';
+      jobs.push(
+        await this.createJob({
+          file_id: id,
+          operation: op,
+          parameters: { format: targetFormat, ...parameters },
+        })
+      );
+    }
+    return jobs;
+  }
+
+  async batchCompress(fileIds: number[], qualityOrCrf?: number): Promise<any> {
+    if (this.isDesktop()) {
+      try {
+        return await api.batchCompress(fileIds, qualityOrCrf);
+      } catch (err) {
+        console.warn('Desktop batchCompress failed, falling back:', err);
+      }
+    }
+    const jobs = [];
+    for (const id of fileIds) {
+      const rec = await mobileStorage.getFileRecord(id);
+      const isVid = rec?.category === 'video';
+      const op = isVid ? 'compress_video' : 'compress_image';
+      const params = isVid ? { crf: qualityOrCrf || 28 } : { quality: qualityOrCrf || 80 };
+      jobs.push(await this.createJob({ file_id: id, operation: op, parameters: params }));
+    }
+    return jobs;
+  }
+
+  async batchArchive(fileIds: number[], archiveFormat = 'zip', archiveName = 'ufs_archive'): Promise<any> {
+    if (this.isDesktop()) {
+      try {
+        return await api.batchArchive(fileIds, archiveFormat, archiveName);
+      } catch (err) {
+        console.warn('Desktop batchArchive failed, falling back:', err);
+      }
+    }
+    const blobsWithNames: { blob: Blob; filename: string }[] = [];
+    for (const id of fileIds) {
+      const rec = await mobileStorage.getFileRecord(id);
+      const b = await mobileStorage.getFileBlob(id);
+      if (rec && b) blobsWithNames.push({ blob: b, filename: rec.filename });
+    }
+    const res = await mobileEngines.processArchive(blobsWithNames, 'create_zip', { archive_name: archiveName });
+    const saved = await mobileStorage.saveFile(res.outputBlob, res.outputFilename);
+    return saved;
   }
 }
 

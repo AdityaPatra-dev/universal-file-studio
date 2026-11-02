@@ -8,7 +8,7 @@ import {
   FileCheck, Wand2, ArrowDown
 } from 'lucide-react';
 import { Pipeline, FileRecord, Operation, OperationSpec, PipelineValidationIssue } from '../../types/api';
-import { api } from '../../services/api';
+import { universalEngine } from '../../services/universalEngine';
 
 interface PipelineEditorProps {
   files: FileRecord[];
@@ -194,7 +194,7 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
       // Execute steps for each selected file
       for (const fileId of selectedFileIds) {
         for (const step of selectedRecipe.steps) {
-          await api.createJob({
+          await universalEngine.createJob({
             file_id: fileId,
             operation: step.operation,
             parameters: step.parameters,

@@ -4,7 +4,7 @@ import {
   AlertCircle, Film, Music, Image as ImageIcon, FileText, Lock
 } from 'lucide-react';
 import { FileRecord, Preset } from '../../types/api';
-import { api } from '../../services/api';
+import { universalEngine } from '../../services/universalEngine';
 import { formatBytes } from '../../utils/format';
 
 interface BatchProcessModalProps {
@@ -35,7 +35,7 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
   const primaryCategory = categoriesInBatch.length === 1 ? categoriesInBatch[0] : 'mixed';
 
   useEffect(() => {
-    api.listPresets()
+    universalEngine.listPresets()
       .then(setPresets)
       .catch(() => {});
 
@@ -92,11 +92,11 @@ export const BatchProcessModal: React.FC<BatchProcessModalProps> = ({
 
     try {
       if (mode === 'convert') {
-        await api.batchConvert(fileIds, targetFormat);
+        await universalEngine.batchConvert(fileIds, targetFormat);
       } else if (mode === 'compress') {
-        await api.batchCompress(fileIds, compressionQuality);
+        await universalEngine.batchCompress(fileIds, compressionQuality);
       } else if (mode === 'archive') {
-        await api.batchArchive(fileIds, archiveFormat, archiveName || 'ufs_archive');
+        await universalEngine.batchArchive(fileIds, archiveFormat, archiveName || 'ufs_archive');
       }
 
       setIsSubmitting(false);

@@ -562,20 +562,30 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 File out = new File(outputDir, outName);
 
                 StringBuilder cmd = new StringBuilder();
-                if ("video_trim".equals(operation)) {
+                if ("video_trim".equals(operation) || "trim".equals(operation)) {
                     double start = params.optDouble("start_time", 0.0);
                     double end = params.optDouble("end_time", 10.0);
                     cmd.append("-ss ").append(start).append(" -to ").append(end).append(" -i \"").append(in.getAbsolutePath()).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
                 } else if ("extract_audio".equals(operation)) {
-                    out = new File(outputDir, in.getName().replaceFirst("[.][^.]+$", "") + ".mp3");
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -acodec libmp3lame -q:a 2 \"").append(out.getAbsolutePath()).append("\"");
-                } else if ("remove_audio".equals(operation)) {
+                    String audioFmt = params.optString("format", "mp3").toLowerCase();
+                    outName = in.getName().replaceFirst("[.][^.]+$", "") + "." + audioFmt;
+                    out = new File(outputDir, outName);
+                    if ("wav".equals(audioFmt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -acodec pcm_s16le \"").append(out.getAbsolutePath()).append("\"");
+                    } else if ("aac".equals(audioFmt) || "m4a".equals(audioFmt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a aac -b:a 192k \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a libmp3lame -q:a 2 \"").append(out.getAbsolutePath()).append("\"");
+                    }
+                } else if ("remove_audio".equals(operation) || "mute".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
-                } else if ("compress_video".equals(operation)) {
+                } else if ("compress_video".equals(operation) || "video_compress".equals(operation)) {
                     int crf = params.optInt("crf", 28);
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vcodec libx264 -crf ").append(crf).append(" -preset fast -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("gif".equals(outExt)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"fps=12,scale=480:-1:flags=lanczos\" \"").append(out.getAbsolutePath()).append("\"");
                 } else {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" \"").append(out.getAbsolutePath()).append("\"");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -preset fast -c:a aac \"").append(out.getAbsolutePath()).append("\"");
                 }
 
                 FFmpegSession session = FFmpegKit.execute(cmd.toString());
@@ -693,10 +703,23 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 tess.setImage(bitmap);
                 String recognizedText = tess.getUTF8Text();
 
+                // Also save recognized text to a file for seamless workflow chaining
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+                String outName = new File(inputPath).getName().replaceFirst("[.][^.]+$", "") + "_ocr.txt";
+                File outFile = new File(outputDir, outName);
+                try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                    fos.write(recognizedText != null ? recognizedText.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+                    fos.flush();
+                }
+
                 JSObject res = new JSObject();
                 res.put("success", true);
                 res.put("text", recognizedText != null ? recognizedText : "");
                 res.put("characterCount", recognizedText != null ? recognizedText.length() : 0);
+                res.put("outputPath", outFile.getAbsolutePath());
+                res.put("outputFilename", outFile.getName());
+                res.put("sizeBytes", outFile.length());
                 call.resolve(res);
 
             } catch (Exception e) {
@@ -706,6 +729,139 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if (tess != null) {
                     try { tess.recycle(); } catch (Exception ignored) {}
                 }
+            }
+        });
+    }
+
+    /**
+     * Write input file into app cache so native C++ engines (FFmpeg, Tesseract) can read it
+     */
+    @PluginMethod
+    public void writeTempFile(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String fileName = call.getString("fileName", "ufs_temp_" + System.currentTimeMillis());
+                String base64Data = call.getString("base64Data");
+                if (base64Data == null) {
+                    call.reject("Missing base64Data parameter");
+                    return;
+                }
+
+                File cacheDir = getContext().getCacheDir();
+                File tempFile = new File(cacheDir, System.currentTimeMillis() + "_" + fileName);
+                byte[] decoded = Base64.decode(base64Data, Base64.DEFAULT);
+
+                try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                    fos.write(decoded);
+                    fos.flush();
+                }
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("path", tempFile.getAbsolutePath());
+                res.put("sizeBytes", tempFile.length());
+                call.resolve(res);
+            } catch (Exception e) {
+                Log.e(TAG, "writeTempFile error: " + e.getMessage(), e);
+                call.reject("Failed to write temp file: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void appendTempFileChunk(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String path = call.getString("path");
+                String chunkBase64 = call.getString("chunkBase64");
+                boolean isFirst = call.getBoolean("isFirst", false);
+
+                if (path == null || chunkBase64 == null) {
+                    call.reject("Missing path or chunkBase64");
+                    return;
+                }
+
+                File file = new File(path);
+                if (isFirst && file.exists()) {
+                    file.delete();
+                }
+
+                byte[] decoded = Base64.decode(chunkBase64, Base64.DEFAULT);
+                try (FileOutputStream fos = new FileOutputStream(file, !isFirst)) {
+                    fos.write(decoded);
+                    fos.flush();
+                }
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("path", file.getAbsolutePath());
+                res.put("sizeBytes", file.length());
+                call.resolve(res);
+            } catch (Exception e) {
+                Log.e(TAG, "appendTempFileChunk error: " + e.getMessage(), e);
+                call.reject("Failed to append chunk: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void readTempFileBase64(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String filePath = call.getString("filePath");
+                if (filePath == null || !new File(filePath).exists()) {
+                    call.reject("File not found: " + filePath);
+                    return;
+                }
+
+                File file = new File(filePath);
+                long len = file.length();
+                if (len > 30 * 1024 * 1024) {
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("filePath", file.getAbsolutePath());
+                    res.put("isTooLargeForBase64", true);
+                    res.put("sizeBytes", len);
+                    call.resolve(res);
+                    return;
+                }
+
+                byte[] bytes = new byte[(int) len];
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    int offset = 0;
+                    int read;
+                    while (offset < bytes.length && (read = fis.read(bytes, offset, bytes.length - offset)) >= 0) {
+                        offset += read;
+                    }
+                }
+
+                String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("base64Data", base64);
+                res.put("sizeBytes", len);
+                call.resolve(res);
+            } catch (Exception e) {
+                Log.e(TAG, "readTempFileBase64 error: " + e.getMessage(), e);
+                call.reject("Failed to read file: " + e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void deleteTempFile(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                String filePath = call.getString("filePath");
+                if (filePath != null) {
+                    File f = new File(filePath);
+                    if (f.exists()) f.delete();
+                }
+                JSObject res = new JSObject();
+                res.put("success", true);
+                call.resolve(res);
+            } catch (Exception e) {
+                call.reject("Delete error: " + e.getMessage());
             }
         });
     }

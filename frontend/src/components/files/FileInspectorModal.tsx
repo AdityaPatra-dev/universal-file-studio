@@ -4,7 +4,7 @@ import {
   Search, ShieldAlert, Code2, Table, Eye, CheckCircle2 
 } from 'lucide-react';
 import { FileRecord, FileHashesResponse, FileMetadataResponse } from '../../types/api';
-import { api } from '../../services/api';
+import { universalEngine } from '../../services/universalEngine';
 import { formatBytes } from '../../utils/format';
 
 interface FileInspectorModalProps {
@@ -34,8 +34,8 @@ export const FileInspectorModal: React.FC<FileInspectorModalProps> = ({
     if (!file) return;
     setIsLoading(true);
     Promise.all([
-      api.getFileHashes(file.id).catch(() => null),
-      api.getFileMetadata(file.id).catch(() => null),
+      universalEngine.getFileHashes(file.id).catch(() => null),
+      universalEngine.getFileMetadata(file.id).catch(() => null),
     ]).then(([h, m]) => {
       setHashes(h);
       setDeepMeta(m);
