@@ -311,6 +311,10 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
       setSavedLocation(res.displayPath);
       if (res.filePath) setSavedFilePath(res.filePath);
       setShowLocationDetails(true);
+      // Automatically prompt to open file in system viewer app (like WhatsApp)
+      if (res.filePath) {
+        await universalEngine.openFile(res.filePath, undefined, completedJob.output_filename || undefined);
+      }
     } catch (err: any) {
       console.error('Download error:', err);
       try {
@@ -332,9 +336,22 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   };
 
   const handleOpenFile = async () => {
-    if (savedFilePath) {
-      await universalEngine.openFile(savedFilePath);
-    } else if (completedJob) {
+    if (!completedJob) return;
+    try {
+      let targetPath = savedFilePath || completedJob.output_path || completedJob.id;
+      if (!savedFilePath && (!completedJob.output_path || !completedJob.output_path.startsWith('/'))) {
+        try {
+          const res = await universalEngine.saveOrDownloadJobOutput(completedJob.id);
+          setSavedLocation(res.displayPath);
+          if (res.filePath) {
+            targetPath = res.filePath;
+            setSavedFilePath(res.filePath);
+          }
+        } catch {}
+      }
+      await universalEngine.openFile(targetPath, undefined, completedJob.output_filename || undefined);
+    } catch (err: any) {
+      console.error('Failed to open file in viewer:', err);
       try {
         const url = await universalEngine.getJobDownloadUrl(completedJob.id);
         window.open(url, '_blank');
@@ -343,8 +360,16 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   };
 
   const handleShareFile = async () => {
-    if (savedFilePath) {
-      await universalEngine.shareFile(savedFilePath, completedJob?.output_filename);
+    if (!completedJob) return;
+    try {
+      let targetPath = savedFilePath || completedJob.output_path || completedJob.id;
+      if (!savedFilePath && (!completedJob.output_path || !completedJob.output_path.startsWith('/'))) {
+        const res = await universalEngine.saveOrDownloadJobOutput(completedJob.id);
+        if (res.filePath) targetPath = res.filePath;
+      }
+      await universalEngine.shareFile(targetPath, completedJob.output_filename);
+    } catch (err: any) {
+      console.error('Failed to share file:', err);
     }
   };
 
@@ -968,26 +993,47 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                 </span>
               </div>
 
-              <div className="p-3 rounded-xl bg-surface-900/80 border border-surface-700/60 flex items-center justify-between">
-                <div className="truncate mr-2">
-                  <div className="text-xs font-bold text-white truncate">
-                    {completedJob.output_filename || 'Processed Output'}
+              <div className="p-3 rounded-xl bg-surface-900/90 border border-surface-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div 
+                  onClick={handleOpenFile}
+                  className="truncate mr-2 cursor-pointer group flex items-center gap-2.5 flex-1 select-none"
+                  title="Click to directly open file in external viewer"
+                >
+                  <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-300 group-hover:bg-emerald-500/30 transition-colors shrink-0">
+                    <FileCheck className="h-5 w-5" />
                   </div>
-                  {completedJob.output_size_bytes && (
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      {formatBytes(completedJob.output_size_bytes)}
+                  <div className="truncate">
+                    <div className="text-xs font-bold text-white truncate group-hover:text-emerald-300 transition-colors flex items-center gap-1.5">
+                      <span>{completedJob.output_filename || 'Processed Output'}</span>
+                      <ExternalLink className="h-3 w-3 opacity-60 group-hover:opacity-100" />
                     </div>
-                  )}
+                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-2">
+                      {completedJob.output_size_bytes && <span>{formatBytes(completedJob.output_size_bytes)}</span>}
+                      <span className="text-emerald-400/90 font-sans">• Tap to open in viewer</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {/* Primary Direct Opener Button (Like WhatsApp) */}
+                  <button
+                    type="button"
+                    onClick={handleOpenFile}
+                    className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-md shadow-brand-600/30 transition-all btn-press flex items-center gap-1.5"
+                    title="Open directly with viewer app (Google PDF, Photos, MX Player)"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Open</span>
+                  </button>
+
                   <button
                     onClick={handleDownloadOutput}
                     disabled={isSaving}
-                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all btn-press flex items-center gap-1.5"
-                    title="Download and save file to device"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition-all btn-press flex items-center gap-1.5"
+                    title="Save to Public Downloads folder"
                   >
                     {isSaving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    <span>{isSaving ? 'Saving...' : 'Download File'}</span>
+                    <span>{isSaving ? 'Saving...' : 'Download'}</span>
                   </button>
 
                   {/* File / Folder Location Icon just beside download option */}
@@ -999,12 +1045,12 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                       }
                       setShowLocationDetails(!showLocationDetails);
                     }}
-                    className={`p-1.5 px-2 rounded-xl border transition-all btn-press flex items-center gap-1.5 text-xs font-semibold ${
+                    className={`p-1.5 px-2 rounded-xl border transition-all btn-press flex items-center gap-1 text-xs font-semibold ${
                       showLocationDetails
                         ? 'bg-brand-500/25 text-brand-300 border-brand-500/50 shadow-sm'
                         : 'bg-surface-800 hover:bg-surface-750 text-slate-300 hover:text-white border-surface-700/70'
                     }`}
-                    title="View file location & details"
+                    title="View file location on device"
                   >
                     <FolderOpen className="h-3.5 w-3.5 text-brand-400" />
                     <span className="text-[11px]">Location</span>

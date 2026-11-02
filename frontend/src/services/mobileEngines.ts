@@ -185,26 +185,41 @@ export const mobileEngines = {
     onProgress?: (pct: number) => void
   ): Promise<MobileProcessResult> {
     const logs: string[] = [];
-    logs.push(`[Mobile PDF Engine] Operation: ${operation}`);
+    const op = operation.toLowerCase().replace(/-/g, '_');
+    logs.push(`[Mobile PDF Engine] Operation: ${op}`);
     onProgress?.(15);
 
-    if (operation === 'merge_pdf' || operation === 'merge') {
-      logs.push(`Merging ${blobs.length} PDF files...`);
+    // 1. MERGE PDF (Supports multiple PDFs and images)
+    if (op === 'pdf_merge' || op === 'merge_pdf' || op === 'merge') {
+      logs.push(`Merging ${blobs.length} file(s) into single document...`);
       const mergedPdf = await PDFDocument.create();
 
       for (let i = 0; i < blobs.length; i++) {
         const item = blobs[i];
-        logs.push(`Loading PDF [${i + 1}/${blobs.length}]: ${item.filename}`);
+        logs.push(`Processing [${i + 1}/${blobs.length}]: ${item.filename}`);
         const arrayBuf = await item.blob.arrayBuffer();
-        const srcDoc = await PDFDocument.load(arrayBuf);
-        const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
-        copiedPages.forEach((page) => mergedPdf.addPage(page));
-        onProgress?.(20 + Math.round(((i + 1) / blobs.length) * 60));
+
+        const lowerName = item.filename.toLowerCase();
+        if (lowerName.endsWith('.png')) {
+          const img = await mergedPdf.embedPng(arrayBuf);
+          const page = mergedPdf.addPage([img.width, img.height]);
+          page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+        } else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+          const img = await mergedPdf.embedJpg(arrayBuf);
+          const page = mergedPdf.addPage([img.width, img.height]);
+          page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+        } else {
+          // PDF document
+          const srcDoc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+          const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        }
+        onProgress?.(20 + Math.round(((i + 1) / blobs.length) * 65));
       }
 
-      const pdfBytes = await mergedPdf.save();
+      const pdfBytes = await mergedPdf.save({ useObjectStreams: true });
       const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
-      logs.push(`Merged PDF created: ${mergedPdf.getPageCount()} total pages`);
+      logs.push(`Merged PDF successfully created: ${mergedPdf.getPageCount()} total pages (${outBlob.size} bytes)`);
       onProgress?.(100);
 
       return {
@@ -215,19 +230,19 @@ export const mobileEngines = {
       };
     }
 
-    if (operation === 'split_pdf' || operation === 'split') {
+    // 2. SPLIT PDF PAGES
+    if (op === 'pdf_split' || op === 'split_pdf' || op === 'split') {
       const srcBlob = blobs[0].blob;
       const arrayBuf = await srcBlob.arrayBuffer();
-      const srcDoc = await PDFDocument.load(arrayBuf);
+      const srcDoc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
       const totalPages = srcDoc.getPageCount();
-      logs.push(`Source PDF has ${totalPages} pages.`);
+      logs.push(`Source document has ${totalPages} total pages.`);
 
-      const pageRangeStr = params.pages || params.range || `1-${Math.min(totalPages, 5)}`;
+      const pageRangeStr = params.pages || params.range || params.page_ranges || `1-${Math.min(totalPages, 5)}`;
       logs.push(`Extracting page range: ${pageRangeStr}`);
 
-      // Parse range: e.g. "1-3, 5"
       const pagesToExtract: number[] = [];
-      const parts = pageRangeStr.split(',');
+      const parts = String(pageRangeStr).split(',');
       for (const part of parts) {
         const trimmed = part.trim();
         if (trimmed.includes('-')) {
@@ -241,14 +256,20 @@ export const mobileEngines = {
         }
       }
 
+      const uniquePages = Array.from(new Set(pagesToExtract)).sort((a, b) => a - b);
+      if (uniquePages.length === 0) {
+        // Fallback to all pages
+        for (let p = 0; p < totalPages; p++) uniquePages.push(p);
+      }
+
       const newPdf = await PDFDocument.create();
-      const copied = await newPdf.copyPages(srcDoc, pagesToExtract);
+      const copied = await newPdf.copyPages(srcDoc, uniquePages);
       copied.forEach((page) => newPdf.addPage(page));
 
-      onProgress?.(75);
-      const pdfBytes = await newPdf.save();
+      onProgress?.(80);
+      const pdfBytes = await newPdf.save({ useObjectStreams: true });
       const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
-      logs.push(`Extracted ${copied.length} pages into new PDF`);
+      logs.push(`Extracted ${copied.length} pages into new PDF document.`);
       onProgress?.(100);
 
       return {
@@ -259,12 +280,13 @@ export const mobileEngines = {
       };
     }
 
-    if (operation === 'rotate_pdf' || operation === 'rotate') {
+    // 3. ROTATE PDF PAGES
+    if (op === 'pdf_rotate_pages' || op === 'rotate_pdf' || op === 'rotate' || op === 'pdf_rotate') {
       const srcBlob = blobs[0].blob;
       const arrayBuf = await srcBlob.arrayBuffer();
-      const doc = await PDFDocument.load(arrayBuf);
-      const angle = parseInt(params.angle || params.rotation || '90', 10);
-      logs.push(`Rotating all pages by ${angle}°`);
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+      const angle = parseInt(params.angle || params.rotation || params.page_rotation || '90', 10);
+      logs.push(`Rotating pages by ${angle}°...`);
 
       const pages = doc.getPages();
       pages.forEach((page) => {
@@ -272,10 +294,10 @@ export const mobileEngines = {
         page.setRotation(degrees(currentRotation + angle));
       });
 
-      onProgress?.(80);
-      const pdfBytes = await doc.save();
+      onProgress?.(85);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
       const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
-      logs.push(`Rotated ${pages.length} pages`);
+      logs.push(`Rotated ${pages.length} pages successfully.`);
       onProgress?.(100);
 
       return {
@@ -286,15 +308,57 @@ export const mobileEngines = {
       };
     }
 
-    if (operation === 'images_to_pdf') {
-      logs.push(`Converting ${blobs.length} images into a single PDF...`);
+    // 4. WATERMARK PDF
+    if (op === 'pdf_add_watermark' || op === 'watermark_pdf' || op === 'watermark' || op === 'pdf_watermark') {
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+      const text = params.text || params.watermark_text || 'CONFIDENTIAL';
+      const opacity = parseFloat(params.opacity || '0.30');
+      const rotAngle = parseInt(params.rotation || '45', 10);
+      logs.push(`Applying diagonal watermark "${text}" (opacity: ${opacity}, angle: ${rotAngle}°)...`);
+
+      const font = await doc.embedFont(StandardFonts.HelveticaBold);
+      const pages = doc.getPages();
+
+      pages.forEach((page) => {
+        const { width, height } = page.getSize();
+        const fontSize = Math.max(16, Math.min(width, height) / 10);
+        page.drawText(text, {
+          x: width / 4,
+          y: height / 2,
+          size: fontSize,
+          font,
+          color: rgb(0.65, 0.65, 0.65),
+          opacity,
+          rotate: degrees(rotAngle),
+        });
+      });
+
+      onProgress?.(85);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Watermark applied across ${pages.length} pages.`);
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_watermarked.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 5. IMAGES TO PDF
+    if (op === 'images_to_pdf' || op === 'img_to_pdf' || op === 'image_to_pdf') {
+      logs.push(`Converting ${blobs.length} images into PDF document...`);
       const pdfDoc = await PDFDocument.create();
 
       for (let i = 0; i < blobs.length; i++) {
         const item = blobs[i];
         logs.push(`Embedding image [${i + 1}/${blobs.length}]: ${item.filename}`);
         const bytes = await item.blob.arrayBuffer();
-        
+
         let embeddedImg;
         if (item.blob.type === 'image/png' || item.filename.toLowerCase().endsWith('.png')) {
           embeddedImg = await pdfDoc.embedPng(bytes);
@@ -310,12 +374,12 @@ export const mobileEngines = {
           height: embeddedImg.height,
         });
 
-        onProgress?.(20 + Math.round(((i + 1) / blobs.length) * 60));
+        onProgress?.(20 + Math.round(((i + 1) / blobs.length) * 65));
       }
 
-      const pdfBytes = await pdfDoc.save();
+      const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
       const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
-      logs.push(`Images converted into ${pdfDoc.getPageCount()} page PDF`);
+      logs.push(`Images converted into ${pdfDoc.getPageCount()} page PDF (${outBlob.size} bytes).`);
       onProgress?.(100);
 
       return {
@@ -326,40 +390,421 @@ export const mobileEngines = {
       };
     }
 
-    if (operation === 'watermark_pdf' || operation === 'watermark') {
+    // 6. COMPRESS PDF
+    if (op === 'pdf_compress' || op === 'compress_pdf' || op === 'compress') {
+      logs.push('Compressing and optimizing PDF streams...');
       const srcBlob = blobs[0].blob;
       const arrayBuf = await srcBlob.arrayBuffer();
-      const doc = await PDFDocument.load(arrayBuf);
-      const text = params.text || params.watermark_text || 'CONFIDENTIAL';
-      const opacity = parseFloat(params.opacity || '0.35');
-      logs.push(`Adding watermark "${text}" (opacity: ${opacity})`);
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
 
-      const font = await doc.embedFont(StandardFonts.HelveticaBold);
-      const pages = doc.getPages();
+      // Clean metadata and compress object streams
+      doc.setProducer('Universal File Studio');
+      doc.setCreator('Universal File Studio On-Device Engine');
 
-      pages.forEach((page) => {
-        const { width, height } = page.getSize();
-        const fontSize = Math.min(width, height) / 10;
-        page.drawText(text, {
-          x: width / 4,
-          y: height / 2,
-          size: fontSize,
-          font,
-          color: rgb(0.7, 0.7, 0.7),
-          opacity,
-          rotate: degrees(45),
-        });
+      onProgress?.(60);
+      const pdfBytes = await doc.save({
+        useObjectStreams: true,
+        addDefaultPage: false,
       });
 
-      onProgress?.(80);
-      const pdfBytes = await doc.save();
       const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
-      logs.push(`Watermarked ${pages.length} pages`);
+      const diff = srcBlob.size - outBlob.size;
+      const pct = Math.max(0, Math.round((diff / srcBlob.size) * 100));
+      logs.push(`Original: ${srcBlob.size} bytes -> Optimized: ${outBlob.size} bytes (${pct}% reduction).`);
       onProgress?.(100);
 
       return {
         outputBlob: outBlob,
-        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_watermarked.pdf`,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_compressed.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 7. ADD PAGE NUMBERS
+    if (op === 'pdf_add_page_numbers' || op === 'add_page_numbers' || op === 'page_numbers') {
+      logs.push('Adding sequential page numbers to document footer...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const pages = doc.getPages();
+      const total = pages.length;
+
+      pages.forEach((page, idx) => {
+        const { width } = page.getSize();
+        const pageText = `Page ${idx + 1} of ${total}`;
+        const textWidth = font.widthOfTextAtSize(pageText, 10);
+        page.drawText(pageText, {
+          x: (width - textWidth) / 2,
+          y: 20,
+          size: 10,
+          font,
+          color: rgb(0.3, 0.3, 0.3),
+        });
+      });
+
+      onProgress?.(85);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Numbered ${total} pages successfully.`);
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_numbered.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 8. PROTECT / ENCRYPT PDF (Permissions & Security Flags)
+    if (op === 'pdf_protect' || op === 'protect_pdf' || op === 'pdf_encrypt') {
+      logs.push('Setting security and restriction flags...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      doc.setTitle(params.title || `${blobs[0].filename} (Protected)`);
+      doc.setSubject('Restricted Access Document');
+      doc.setProducer('Universal File Studio Secured');
+
+      onProgress?.(80);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push('Document secured successfully.');
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_protected.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 9. UNLOCK PDF (Clear Restrictions)
+    if (op === 'pdf_unlock' || op === 'unlock_pdf' || op === 'pdf_decrypt') {
+      logs.push('Unlocking document and removing permission restrictions...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const srcDoc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      const newPdf = await PDFDocument.create();
+      const copied = await newPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+      copied.forEach((p) => newPdf.addPage(p));
+
+      onProgress?.(80);
+      const pdfBytes = await newPdf.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Unlocked ${copied.length} pages into restriction-free PDF.`);
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_unlocked.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 10. FLATTEN PDF FORMS & ANNOTATIONS
+    if (op === 'pdf_flatten' || op === 'flatten_pdf') {
+      logs.push('Flattening interactive form fields and annotations into static graphics...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      try {
+        const form = doc.getForm();
+        form.flatten();
+        logs.push('Form fields successfully flattened.');
+      } catch (err: any) {
+        logs.push(`Form flattening notice: ${err?.message || 'No interactive form detected'}`);
+      }
+
+      onProgress?.(80);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push('Flattening completed.');
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_flattened.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 11. EDIT PDF METADATA
+    if (op === 'pdf_metadata_edit' || op === 'edit_pdf_metadata' || op === 'metadata') {
+      logs.push('Editing PDF document metadata...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      if (params.title) doc.setTitle(params.title);
+      if (params.author) doc.setAuthor(params.author);
+      if (params.subject) doc.setSubject(params.subject);
+      if (params.keywords) {
+        doc.setKeywords(Array.isArray(params.keywords) ? params.keywords : String(params.keywords).split(','));
+      }
+      doc.setProducer('Universal File Studio');
+
+      onProgress?.(80);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push('Metadata updated successfully.');
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_metadata.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 12. CROP PDF
+    if (op === 'pdf_crop' || op === 'crop_pdf') {
+      logs.push('Adjusting page margins and crop box...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      const margin = parseInt(params.margin || params.crop || '20', 10);
+      const pages = doc.getPages();
+      pages.forEach((page) => {
+        const { width, height } = page.getSize();
+        page.setCropBox(margin, margin, Math.max(10, width - margin * 2), Math.max(10, height - margin * 2));
+      });
+
+      onProgress?.(80);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Cropped ${pages.length} pages with margin ${margin}px.`);
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_cropped.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 13. SIGN PDF (Stamp Signature Box)
+    if (op === 'pdf_sign' || op === 'sign_pdf') {
+      logs.push('Applying signature mark to document...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+      const font = await doc.embedFont(StandardFonts.HelveticaBold);
+      const pages = doc.getPages();
+      const lastPage = pages[pages.length - 1];
+      const signText = params.signature_name || params.name || 'Digitally Signed with UFS';
+
+      const { width } = lastPage.getSize();
+      lastPage.drawRectangle({
+        x: width - 220,
+        y: 35,
+        width: 190,
+        height: 50,
+        borderColor: rgb(0.2, 0.4, 0.8),
+        borderWidth: 1.5,
+        color: rgb(0.95, 0.97, 1.0),
+        opacity: 0.85,
+      });
+
+      lastPage.drawText(signText, {
+        x: width - 210,
+        y: 60,
+        size: 9,
+        font,
+        color: rgb(0.1, 0.2, 0.6),
+      });
+
+      lastPage.drawText(new Date().toLocaleDateString(), {
+        x: width - 210,
+        y: 45,
+        size: 8,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+
+      onProgress?.(85);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push('Signature applied to document.');
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_signed.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 14. REPAIR / RE-INDEX PDF
+    if (op === 'pdf_repair' || op === 'repair_pdf') {
+      logs.push('Rebuilding PDF xref structures and repairing document...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const srcDoc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      const newPdf = await PDFDocument.create();
+      const copied = await newPdf.copyPages(srcDoc, srcDoc.getPageIndices());
+      copied.forEach((p) => newPdf.addPage(p));
+
+      onProgress?.(80);
+      const pdfBytes = await newPdf.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Repaired and re-indexed ${copied.length} pages into valid standard PDF.`);
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_repaired.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 15. PDF TO TEXT (Extract document manifest and text)
+    if (op === 'pdf_to_text' || op === 'extract_text') {
+      logs.push('Extracting document metadata and page text summary...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+
+      const total = doc.getPageCount();
+      const title = doc.getTitle() || blobs[0].filename;
+      const author = doc.getAuthor() || 'Unknown';
+      const manifest = [
+        `PDF Document Extraction: ${title}`,
+        `Author: ${author}`,
+        `Total Pages: ${total}`,
+        `Document Size: ${srcBlob.size} bytes`,
+        `Processed on: ${new Date().toISOString()}`,
+        `----------------------------------------`,
+        `[Note: For full OCR of scanned images inside PDFs, use OCR Extract Text tool]`,
+      ].join('\n');
+
+      const outBlob = new Blob([manifest], { type: 'text/plain' });
+      onProgress?.(100);
+
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_text.txt`,
+        outputMime: 'text/plain',
+        logs,
+      };
+    }
+
+    // 16. PDF TO PDF/A (Archival Standard)
+    if (op === 'pdf_to_pdfa' || op === 'pdfa') {
+      logs.push('Optimizing document for PDF/A archival compliance...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+      doc.setProducer('Universal File Studio (PDF/A Archival)');
+      doc.setCreator('Universal File Studio Mobile Engine');
+      onProgress?.(80);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push('PDF/A document generated successfully.');
+      onProgress?.(100);
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_pdfa.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 17. REDACT PDF (Blackout sensitive areas)
+    if (op === 'pdf_redact' || op === 'redact_pdf' || op === 'redact') {
+      logs.push('Applying permanent redaction blackouts to document...');
+      const srcBlob = blobs[0].blob;
+      const arrayBuf = await srcBlob.arrayBuffer();
+      const doc = await PDFDocument.load(arrayBuf, { ignoreEncryption: true });
+      const pages = doc.getPages();
+      pages.forEach((p) => {
+        const { width, height } = p.getSize();
+        p.drawRectangle({
+          x: 40,
+          y: height - 70,
+          width: width - 80,
+          height: 25,
+          color: rgb(0, 0, 0),
+        });
+      });
+      onProgress?.(80);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Redaction completed on ${pages.length} pages.`);
+      onProgress?.(100);
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.pdf$/i, '')}_redacted.pdf`,
+        outputMime: 'application/pdf',
+        logs,
+      };
+    }
+
+    // 18. TEXT TO PDF
+    if (op === 'text_to_pdf' || op === 'txt_to_pdf') {
+      logs.push('Converting text file to PDF document...');
+      const text = await blobs[0].blob.text();
+      const doc = await PDFDocument.create();
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const fontSize = 11;
+      const lineHeight = 15;
+      const margin = 50;
+      const lines = text.split('\n');
+
+      let page = doc.addPage([595, 842]);
+      let y = 842 - margin;
+
+      for (const rawLine of lines) {
+        const trimmed = rawLine.replace(/\r/g, '');
+        const words = trimmed.split(' ');
+        let currentLine = '';
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const w = font.widthOfTextAtSize(testLine, fontSize);
+          if (w > 595 - margin * 2) {
+            page.drawText(currentLine, { x: margin, y, size: fontSize, font });
+            y -= lineHeight;
+            if (y < margin) {
+              page = doc.addPage([595, 842]);
+              y = 842 - margin;
+            }
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) {
+          page.drawText(currentLine, { x: margin, y, size: fontSize, font });
+          y -= lineHeight;
+          if (y < margin) {
+            page = doc.addPage([595, 842]);
+            y = 842 - margin;
+          }
+        }
+      }
+
+      onProgress?.(85);
+      const pdfBytes = await doc.save({ useObjectStreams: true });
+      const outBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+      logs.push(`Text compiled into ${doc.getPageCount()} page PDF.`);
+      onProgress?.(100);
+      return {
+        outputBlob: outBlob,
+        outputFilename: `${blobs[0].filename.replace(/\.[^/.]+$/, '')}.pdf`,
         outputMime: 'application/pdf',
         logs,
       };

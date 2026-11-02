@@ -353,9 +353,30 @@ class UniversalEngineService {
               mobileStorage.updateJob(jobId, { progress_percent: pct });
             }
           );
-        } else if (category === 'pdf' || op.includes('pdf') || op === 'watermark' || op === 'split' || op === 'merge') {
+        } else if (category === 'pdf' || op.includes('pdf') || op === 'watermark' || op === 'split' || op === 'merge' || op === 'images_to_pdf' || op === 'text_to_pdf' || op === 'pdf_repair') {
+          const allBlobs: { blob: Blob; filename: string }[] = [
+            { blob: fileBlob, filename: fileRecord.filename },
+          ];
+
+          const additionalIds: any[] = payload.parameters?.additional_file_ids || 
+            (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
+
+          if (Array.isArray(additionalIds) && additionalIds.length > 0) {
+            for (const addId of additionalIds) {
+              try {
+                const addRec = await mobileStorage.getFileRecord(Number(addId));
+                const addBlob = await mobileStorage.getFileBlob(Number(addId));
+                if (addRec && addBlob) {
+                  allBlobs.push({ blob: addBlob, filename: addRec.filename });
+                }
+              } catch (err) {
+                console.warn('Failed to load additional file for multi-file PDF job:', addId, err);
+              }
+            }
+          }
+
           result = await mobileEngines.processPdf(
-            [{ blob: fileBlob, filename: fileRecord.filename }],
+            allBlobs,
             op,
             payload.parameters,
             (pct) => {
@@ -532,26 +553,68 @@ class UniversalEngineService {
   }
 
   /**
-   * Open or reveal file with system viewer
+   * Open or reveal file with system viewer (Launches Android Intent Chooser / Opener like WhatsApp)
    */
-  async openFile(filePath: string): Promise<boolean> {
-    if (Capacitor.isNativePlatform() && filePath) {
+  async openFile(filePathOrJobId: string, outputBlob?: Blob, filename?: string | null): Promise<boolean> {
+    if (Capacitor.isNativePlatform()) {
       try {
-        const res = await UniversalNativeEngine.openFileNative({ filePath });
+        let filePath = filePathOrJobId;
+        let base64Data: string | undefined = undefined;
+        let fname = filename || 'document';
+
+        if (filePathOrJobId.startsWith('mob_')) {
+          const job = await this.getJob(filePathOrJobId);
+          fname = job?.output_filename || `result_${filePathOrJobId}`;
+          const blob = outputBlob || await mobileStorage.getJobOutputBlob(filePathOrJobId);
+          if (blob) {
+            base64Data = await blobToBase64(blob);
+          }
+        } else if (outputBlob) {
+          base64Data = await blobToBase64(outputBlob);
+        }
+
+        const res = await UniversalNativeEngine.openFileNative({
+          filePath,
+          base64Data,
+          fileName: fname,
+        });
         return res.success;
       } catch (err) {
         console.error('openFileNative error:', err);
       }
+    } else {
+      try {
+        if (filePathOrJobId.startsWith('mob_')) {
+          const url = await this.getJobDownloadUrl(filePathOrJobId);
+          window.open(url, '_blank');
+          return true;
+        }
+      } catch {}
     }
     return false;
   }
 
   /**
-   * Share file via Android share sheet
+   * Share file via Android system share sheet (WhatsApp, Gmail, Drive, etc.)
    */
-  async shareFile(filePath: string, title?: string | null): Promise<boolean> {
-    if (Capacitor.isNativePlatform() && filePath) {
+  async shareFile(filePathOrJobId: string, title?: string | null, outputBlob?: Blob): Promise<boolean> {
+    if (Capacitor.isNativePlatform()) {
       try {
+        let filePath = filePathOrJobId;
+        if (filePathOrJobId.startsWith('mob_')) {
+          const job = await this.getJob(filePathOrJobId);
+          const fname = job?.output_filename || `result_${filePathOrJobId}`;
+          const blob = outputBlob || await mobileStorage.getJobOutputBlob(filePathOrJobId);
+          if (blob) {
+            const base64 = await blobToBase64(blob);
+            const saved = await UniversalNativeEngine.saveToPublicDownloads({
+              fileName: fname,
+              base64Data: base64,
+            });
+            filePath = saved.filePath;
+          }
+        }
+
         const res = await UniversalNativeEngine.shareFileNative({ filePath, title });
         return res.success;
       } catch (err) {

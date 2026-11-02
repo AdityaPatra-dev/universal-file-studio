@@ -4,10 +4,13 @@ import android.content.Context;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.webkit.MimeTypeMap;
 import androidx.core.content.FileProvider;
+import java.util.List;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -991,6 +994,79 @@ public class UniversalNativeEnginePlugin extends Plugin {
         });
     }
 
+    private File resolveFile(Context context, String path) {
+        if (path == null || path.isEmpty()) return null;
+
+        if (path.startsWith("mobile://")) path = path.substring(9);
+        if (path.startsWith("file://")) path = path.substring(7);
+
+        File f = new File(path);
+        if (f.exists() && f.isFile()) return f;
+
+        File pubDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        File f1 = new File(pubDownloads, path);
+        if (f1.exists() && f1.isFile()) return f1;
+
+        File ufs = new File(pubDownloads, "UniversalFileStudio");
+        File f2 = new File(ufs, path);
+        if (f2.exists() && f2.isFile()) return f2;
+        File f2b = new File(ufs, new File(path).getName());
+        if (f2b.exists() && f2b.isFile()) return f2b;
+
+        File extDownloads = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+        if (extDownloads != null) {
+            File f3 = new File(extDownloads, path);
+            if (f3.exists() && f3.isFile()) return f3;
+            File f3b = new File(extDownloads, new File(path).getName());
+            if (f3b.exists() && f3b.isFile()) return f3b;
+        }
+
+        File cacheDir = context.getExternalCacheDir() != null ? context.getExternalCacheDir() : context.getCacheDir();
+        File f4 = new File(cacheDir, path);
+        if (f4.exists() && f4.isFile()) return f4;
+        File f4b = new File(cacheDir, new File(path).getName());
+        if (f4b.exists() && f4b.isFile()) return f4b;
+
+        File f5 = new File(context.getFilesDir(), path);
+        if (f5.exists() && f5.isFile()) return f5;
+        File f5b = new File(context.getFilesDir(), new File(path).getName());
+        if (f5b.exists() && f5b.isFile()) return f5b;
+
+        return null;
+    }
+
+    private String resolveMimeType(File file, String overrideMime) {
+        if (overrideMime != null && !overrideMime.isEmpty() && !"*/*".equals(overrideMime)) {
+            return overrideMime;
+        }
+        String name = file.getName().toLowerCase(Locale.ROOT);
+        int dot = name.lastIndexOf('.');
+        if (dot >= 0) {
+            String ext = name.substring(dot + 1);
+            String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
+            if (mime != null) return mime;
+            if ("pdf".equals(ext)) return "application/pdf";
+            if ("webp".equals(ext)) return "image/webp";
+            if ("png".equals(ext)) return "image/png";
+            if ("jpg".equals(ext) || "jpeg".equals(ext)) return "image/jpeg";
+            if ("gif".equals(ext)) return "image/gif";
+            if ("svg".equals(ext)) return "image/svg+xml";
+            if ("mp4".equals(ext)) return "video/mp4";
+            if ("webm".equals(ext)) return "video/webm";
+            if ("mkv".equals(ext)) return "video/x-matroska";
+            if ("mp3".equals(ext)) return "audio/mpeg";
+            if ("wav".equals(ext)) return "audio/wav";
+            if ("aac".equals(ext)) return "audio/aac";
+            if ("flac".equals(ext)) return "audio/flac";
+            if ("zip".equals(ext)) return "application/zip";
+            if ("txt".equals(ext)) return "text/plain";
+            if ("html".equals(ext)) return "text/html";
+            if ("csv".equals(ext)) return "text/csv";
+            if ("json".equals(ext)) return "application/json";
+        }
+        return "*/*";
+    }
+
     /**
      * Open a file with the system default viewer app
      */
@@ -998,48 +1074,59 @@ public class UniversalNativeEnginePlugin extends Plugin {
     public void openFileNative(PluginCall call) {
         try {
             String filePath = call.getString("filePath");
-            if (filePath == null || filePath.isEmpty()) {
-                call.reject("Missing filePath");
+            String base64Data = call.getString("base64Data");
+            String fileName = call.getString("fileName", "document");
+
+            Context context = getContext();
+            File file = resolveFile(context, filePath);
+
+            if (file == null && base64Data != null && !base64Data.isEmpty()) {
+                int commaIdx = base64Data.indexOf(',');
+                if (commaIdx >= 0) base64Data = base64Data.substring(commaIdx + 1);
+                byte[] data = Base64.decode(base64Data, Base64.DEFAULT);
+                File cacheDir = context.getExternalCacheDir() != null ? context.getExternalCacheDir() : context.getCacheDir();
+                file = new File(cacheDir, fileName);
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    fos.write(data);
+                    fos.flush();
+                }
+            }
+
+            if (file == null || !file.exists()) {
+                call.reject("File does not exist: " + filePath);
                 return;
             }
 
-            Context context = getContext();
-            Uri uri;
-            String mimeType = call.getString("mimeType");
+            String mimeType = resolveMimeType(file, call.getString("mimeType"));
 
-            if (filePath.startsWith("content://")) {
-                uri = Uri.parse(filePath);
-            } else {
-                File file = new File(filePath);
-                if (!file.exists()) {
-                    call.reject("File does not exist: " + filePath);
-                    return;
-                }
-                uri = FileProvider.getUriForFile(
-                    context,
-                    context.getPackageName() + ".fileprovider",
-                    file
-                );
-                if (mimeType == null || mimeType.isEmpty()) {
-                    String ext = MimeTypeMap.getFileExtensionFromUrl(file.getName());
-                    if (ext != null && !ext.isEmpty()) {
-                        mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase(Locale.ROOT));
-                    }
-                }
-            }
-
-            if (mimeType == null || mimeType.isEmpty()) {
-                mimeType = "*/*";
-            }
+            Uri uri = FileProvider.getUriForFile(
+                context,
+                context.getPackageName() + ".fileprovider",
+                file
+            );
 
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri, mimeType);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(Intent.createChooser(intent, "Open file with..."));
+
+            Intent chooser = Intent.createChooser(intent, "Open file with...");
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            PackageManager pm = context.getPackageManager();
+            List<ResolveInfo> resInfoList = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+
+            context.startActivity(chooser);
 
             JSObject res = new JSObject();
             res.put("success", true);
+            res.put("resolvedPath", file.getAbsolutePath());
             call.resolve(res);
         } catch (Exception e) {
             Log.e(TAG, "openFileNative error: " + e.getMessage(), e);
@@ -1055,27 +1142,21 @@ public class UniversalNativeEnginePlugin extends Plugin {
         try {
             String filePath = call.getString("filePath");
             String title = call.getString("title", "Share File");
-            if (filePath == null || filePath.isEmpty()) {
-                call.reject("Missing filePath");
-                return;
-            }
-
             Context context = getContext();
-            File file = new File(filePath);
-            if (!file.exists()) {
+            File file = resolveFile(context, filePath);
+
+            if (file == null || !file.exists()) {
                 call.reject("File does not exist: " + filePath);
                 return;
             }
+
+            String mimeType = resolveMimeType(file, null);
 
             Uri uri = FileProvider.getUriForFile(
                 context,
                 context.getPackageName() + ".fileprovider",
                 file
             );
-
-            String ext = MimeTypeMap.getFileExtensionFromUrl(file.getName());
-            String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.toLowerCase(Locale.ROOT));
-            if (mimeType == null) mimeType = "*/*";
 
             Intent intent = new Intent(Intent.ACTION_SEND);
             intent.setType(mimeType);
@@ -1084,7 +1165,16 @@ public class UniversalNativeEnginePlugin extends Plugin {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
             Intent chooser = Intent.createChooser(intent, title);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            PackageManager pm = context.getPackageManager();
+            List<ResolveInfo> resInfoList = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+
             context.startActivity(chooser);
 
             JSObject res = new JSObject();

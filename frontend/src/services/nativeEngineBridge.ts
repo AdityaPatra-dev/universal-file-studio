@@ -86,9 +86,11 @@ export interface UniversalNativeEnginePlugin {
     tempFilePath?: string;
   }): Promise<{ success: boolean; filePath: string; displayPath: string; sizeBytes: number }>;
   openFileNative(options: {
-    filePath: string;
+    filePath?: string;
+    base64Data?: string;
+    fileName?: string;
     mimeType?: string;
-  }): Promise<{ success: boolean }>;
+  }): Promise<{ success: boolean; resolvedPath?: string }>;
   shareFileNative(options: {
     filePath: string;
     title?: string | null;

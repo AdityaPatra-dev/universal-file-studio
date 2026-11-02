@@ -276,14 +276,25 @@ export const JobList: React.FC<JobListProps> = ({
                   )}
 
                   {job.status === 'completed' && job.output_path && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
+                      {/* Direct Viewer Opener Button */}
+                      <button
+                        type="button"
+                        onClick={() => universalEngine.openFile(job.output_path || job.id, undefined, job.output_filename || undefined)}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold transition-colors btn-press text-xs shadow-sm shadow-brand-600/30"
+                        title="Open directly with viewer app (Google PDF, Photos, etc.)"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>Open</span>
+                      </button>
+
                       <button
                         onClick={() => onDownloadOutput(job.id)}
-                        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-sm shadow-emerald-600/30 btn-press text-xs"
-                        title="Download file to device"
+                        className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors shadow-sm shadow-emerald-600/30 btn-press text-xs"
+                        title="Save to Public Downloads folder"
                       >
                         <Download className="h-3.5 w-3.5" />
-                        <span>Download</span>
+                        <span className="hidden sm:inline">Save</span>
                       </button>
 
                       {/* File / Folder Location Icon just beside download option */}
