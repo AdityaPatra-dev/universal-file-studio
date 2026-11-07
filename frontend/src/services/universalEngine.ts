@@ -505,7 +505,19 @@ class UniversalEngineService {
               mobileStorage.updateJob(jobId, { progress_percent: pct });
             }
           );
-        } else if (category === 'image' || op.startsWith('image_') || op === 'resize' || op === 'crop' || op === 'rotate' || op === 'flip' || op === 'compress_image') {
+        } else if (
+          category === 'image' ||
+          op.startsWith('image_') ||
+          op === 'resize' ||
+          op === 'crop' ||
+          op === 'rotate' ||
+          op === 'flip' ||
+          op === 'compress_image' ||
+          op === 'heic_to_jpg' ||
+          op === 'strip_metadata' ||
+          op === 'svg_to_png' ||
+          op === 'create_favicon'
+        ) {
           result = await mobileEngines.processImage(
             fileBlob,
             fileRecord.filename,

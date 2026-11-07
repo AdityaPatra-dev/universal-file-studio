@@ -111,7 +111,39 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 int width = bitmap.getWidth();
                 int height = bitmap.getHeight();
 
-                // 1. Resize / Scale
+                // 1. Crop Handling
+                if ("image_crop".equals(operation) || "crop".equals(operation) || params.has("ratio") || params.has("aspect_ratio")) {
+                    String ratio = params.optString("ratio", params.optString("aspect_ratio", "1:1"));
+                    double targetRatio = 1.0;
+                    if ("16:9".equals(ratio)) targetRatio = 16.0 / 9.0;
+                    else if ("4:3".equals(ratio)) targetRatio = 4.0 / 3.0;
+                    else if ("9:16".equals(ratio)) targetRatio = 9.0 / 16.0;
+
+                    int curW = bitmap.getWidth();
+                    int curH = bitmap.getHeight();
+                    double curRatio = (double) curW / (double) curH;
+                    int cropW = curW;
+                    int cropH = curH;
+                    int cropX = 0;
+                    int cropY = 0;
+
+                    if (curRatio > targetRatio) {
+                        cropW = (int) Math.round(curH * targetRatio);
+                        cropH = curH;
+                        cropX = (curW - cropW) / 2;
+                    } else {
+                        cropW = curW;
+                        cropH = (int) Math.round(curW / targetRatio);
+                        cropY = (curH - cropH) / 2;
+                    }
+                    if (cropW > 0 && cropH > 0 && cropX + cropW <= curW && cropY + cropH <= curH) {
+                        bitmap = Bitmap.createBitmap(bitmap, cropX, cropY, cropW, cropH);
+                        width = bitmap.getWidth();
+                        height = bitmap.getHeight();
+                    }
+                }
+
+                // 2. Resize / Scale
                 if (params.has("width") || params.has("height") || params.has("scale")) {
                     int targetW = params.optInt("width", width);
                     int targetH = params.optInt("height", height);
@@ -125,7 +157,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     }
                 }
 
-                // 2. Rotate / Flip
+                // 3. Rotate / Flip
                 boolean isRotateOp = "image_rotate".equals(operation) || "rotate".equals(operation);
                 boolean hasRotateParam = params.has("degrees") || params.has("rotate") || params.has("rotation") || params.has("angle");
                 if (isRotateOp || hasRotateParam || params.optBoolean("flipH", false) || params.optBoolean("flipV", false)) {
@@ -145,8 +177,8 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
                 }
 
-                // 3. Color Filters (Grayscale, Invert)
-                if ("grayscale".equals(operation) || params.optBoolean("grayscale", false)) {
+                // 4. Color Filters (Grayscale, Invert)
+                if ("image_grayscale".equals(operation) || "grayscale".equals(operation) || params.optBoolean("grayscale", false)) {
                     Bitmap grayBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(grayBitmap);
                     Paint paint = new Paint();
@@ -155,17 +187,72 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     paint.setColorFilter(new ColorMatrixColorFilter(cm));
                     canvas.drawBitmap(bitmap, 0, 0, paint);
                     bitmap = grayBitmap;
+                } else if ("image_invert".equals(operation) || "invert".equals(operation) || params.optBoolean("invert", false)) {
+                    Bitmap invertBitmap = Bitmap.createBitmap(bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(invertBitmap);
+                    Paint paint = new Paint();
+                    ColorMatrix cm = new ColorMatrix(new float[] {
+                        -1,  0,  0,  0, 255,
+                         0, -1,  0,  0, 255,
+                         0,  0, -1,  0, 255,
+                         0,  0,  0,  1,   0
+                    });
+                    paint.setColorFilter(new ColorMatrixColorFilter(cm));
+                    canvas.drawBitmap(bitmap, 0, 0, paint);
+                    bitmap = invertBitmap;
                 }
 
-                // 4. Output Format & Quality
+                // 5. Watermark
+                if ("image_watermark".equals(operation) || params.has("text") || params.has("watermark_text")) {
+                    String markText = params.optString("text", params.optString("watermark_text", "COPYRIGHT"));
+                    Bitmap watermarked = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                    Canvas canvas = new Canvas(watermarked);
+                    Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    float textSize = Math.max(24f, watermarked.getWidth() / 25f);
+                    paint.setTextSize(textSize);
+                    paint.setColor(0xFFFFFFFF);
+                    float textW = paint.measureText(markText);
+                    float pad = 20f;
+                    float boxW = textW + pad * 2;
+                    float boxH = textSize + pad * 2;
+                    float boxX = watermarked.getWidth() - boxW - 30f;
+                    float boxY = watermarked.getHeight() - boxH - 30f;
+
+                    Paint bgPaint = new Paint();
+                    bgPaint.setColor(0x88000000);
+                    canvas.drawRect(boxX, boxY, boxX + boxW, boxY + boxH, bgPaint);
+                    canvas.drawText(markText, boxX + pad, boxY + pad + textSize * 0.8f, paint);
+                    bitmap = watermarked;
+                }
+
+                // 6. Border
+                if ("image_add_border".equals(operation)) {
+                    Bitmap bordered = bitmap.copy(Bitmap.Config.ARGB_8888, true);
+                    Canvas canvas = new Canvas(bordered);
+                    Paint borderPaint = new Paint();
+                    borderPaint.setStyle(Paint.Style.STROKE);
+                    float bWidth = Math.max(12f, bordered.getWidth() / 35f);
+                    borderPaint.setStrokeWidth(bWidth);
+                    borderPaint.setColor(0xFFFFFFFF);
+                    canvas.drawRect(bWidth / 2, bWidth / 2, bordered.getWidth() - bWidth / 2, bordered.getHeight() - bWidth / 2, borderPaint);
+                    bitmap = bordered;
+                }
+
+                // 7. Output Format & Quality
                 String formatStr = params.optString("format", "webp").toLowerCase();
                 int quality = params.optInt("quality", 85);
                 Bitmap.CompressFormat compressFormat = Bitmap.CompressFormat.JPEG;
                 String ext = "jpg";
 
-                if (formatStr.contains("png")) {
+                if ("create_favicon".equals(operation)) {
+                    bitmap = Bitmap.createScaledBitmap(bitmap, 48, 48, true);
+                    formatStr = "png";
+                    ext = "ico";
+                }
+
+                if (formatStr.contains("png") || "ico".equals(ext)) {
                     compressFormat = Bitmap.CompressFormat.PNG;
-                    ext = "png";
+                    if (!"ico".equals(ext)) ext = "png";
                 } else if (formatStr.contains("webp")) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         compressFormat = quality >= 100 ? Bitmap.CompressFormat.WEBP_LOSSLESS : Bitmap.CompressFormat.WEBP_LOSSY;

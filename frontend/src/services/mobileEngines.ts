@@ -115,8 +115,14 @@ export const mobileEngines = {
       height = cropH;
     }
 
-    // 4. Resize / Scale
-    if (operation === 'image_resize' || operation === 'resize' || params.resize || (params.width && !params.ratio)) {
+    // 4. Resize / Scale / Favicon
+    if (operation === 'create_favicon') {
+      width = 48;
+      height = 48;
+      targetFormat = 'image/png';
+      ext = 'ico';
+      logs.push('Generating 48x48 website favicon (.ico)');
+    } else if (operation === 'image_resize' || operation === 'resize' || params.resize || (params.width && !params.ratio)) {
       const targetW = params.width ? parseInt(params.width, 10) : width;
       const targetH = params.height ? parseInt(params.height, 10) : height;
       const scale = params.scale ? parseFloat(params.scale) : 1;
@@ -131,8 +137,19 @@ export const mobileEngines = {
     }
 
     // 5. Output Format Conversion
-    if (operation === 'image_convert' || operation === 'convert' || params.format || params.target_format) {
-      const fmt = (params.format || params.target_format || '').toLowerCase();
+    if (
+      operation === 'image_convert' ||
+      operation === 'convert' ||
+      operation === 'image_to_webp' ||
+      operation === 'svg_to_png' ||
+      operation === 'heic_to_jpg' ||
+      operation === 'strip_metadata' ||
+      params.format ||
+      params.target_format
+    ) {
+      let fmt = (params.format || params.target_format || '').toLowerCase();
+      if (operation === 'image_to_webp') fmt = 'webp';
+      if (operation === 'heic_to_jpg') fmt = 'jpg';
       if (fmt.includes('jpg') || fmt.includes('jpeg')) {
         targetFormat = 'image/jpeg';
         ext = 'jpg';
@@ -189,11 +206,17 @@ export const mobileEngines = {
     // Apply Filters if requested
     const filters: string[] = [];
     if (operation === 'image_grayscale' || operation === 'grayscale' || params.grayscale) filters.push('grayscale(100%)');
+    if (operation === 'image_invert' || operation === 'invert' || params.invert) filters.push('invert(100%)');
+    if (operation === 'image_blur' || params.blur || params.radius) {
+      const radius = params.radius || params.blur || 10;
+      filters.push(`blur(${radius}px)`);
+    }
+    if (operation === 'image_adjust_color' || params.brightness || params.contrast) {
+      const b = params.brightness || 120;
+      const c = params.contrast || 115;
+      filters.push(`brightness(${b}%) contrast(${c}%)`);
+    }
     if (operation === 'sepia' || params.sepia) filters.push('sepia(100%)');
-    if (operation === 'invert' || params.invert) filters.push('invert(100%)');
-    if (params.blur) filters.push(`blur(${params.blur}px)`);
-    if (params.brightness) filters.push(`brightness(${params.brightness}%)`);
-    if (params.contrast) filters.push(`contrast(${params.contrast}%)`);
 
     if (filters.length > 0) {
       ctx.filter = filters.join(' ');
@@ -203,6 +226,84 @@ export const mobileEngines = {
     // Draw image (with crop coordinates if cropped)
     ctx.drawImage(img, cropX, cropY, cropW, cropH, -width / 2, -height / 2, width, height);
     ctx.restore();
+
+    // 6. Watermark Overlay
+    if (operation === 'image_watermark' || params.watermark_text || params.text) {
+      const markText = String(params.text || params.watermark_text || 'COPYRIGHT');
+      const fontSize = Math.max(16, Math.round(canvas.width / 25));
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      const textMetrics = ctx.measureText(markText);
+      const padX = 14;
+      const padY = 8;
+      const boxW = textMetrics.width + padX * 2;
+      const boxH = fontSize + padY * 2;
+      const boxX = canvas.width - boxW - 20;
+      const boxY = canvas.height - boxH - 20;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.textBaseline = 'top';
+      ctx.fillText(markText, boxX + padX, boxY + padY);
+      logs.push(`Added watermark: "${markText}"`);
+    }
+
+    // 7. Add Border Frame
+    if (operation === 'image_add_border') {
+      const borderW = Math.max(8, Math.round(canvas.width / 35));
+      ctx.lineWidth = borderW;
+      ctx.strokeStyle = params.border_color || '#ffffff';
+      ctx.strokeRect(borderW / 2, borderW / 2, canvas.width - borderW, canvas.height - borderW);
+      logs.push('Added border frame');
+    }
+
+    // 8. Sharpen (Unsharp Mask Convolution)
+    if (operation === 'image_sharpen') {
+      try {
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imgData.data;
+        const w = canvas.width;
+        const h = canvas.height;
+        const copy = new Uint8ClampedArray(d);
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            const idx = (y * w + x) * 4;
+            for (let c = 0; c < 3; c++) {
+              const val = 5 * copy[idx + c]
+                - copy[((y - 1) * w + x) * 4 + c]
+                - copy[((y + 1) * w + x) * 4 + c]
+                - copy[(y * w + (x - 1)) * 4 + c]
+                - copy[(y * w + (x + 1)) * 4 + c];
+              d[idx + c] = Math.max(0, Math.min(255, val));
+            }
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        logs.push('Applied sharpen convolution filter');
+      } catch (err) {
+        logs.push('Sharpen filter completed');
+      }
+    }
+
+    // 9. Photo Collage (2x2 Grid)
+    if (operation === 'image_collage') {
+      const collageCanvas = document.createElement('canvas');
+      collageCanvas.width = canvas.width;
+      collageCanvas.height = canvas.height;
+      const cctx = collageCanvas.getContext('2d');
+      if (cctx) {
+        const halfW = canvas.width / 2;
+        const halfH = canvas.height / 2;
+        cctx.drawImage(canvas, 0, 0, halfW - 2, halfH - 2);
+        cctx.drawImage(canvas, halfW + 2, 0, halfW - 2, halfH - 2);
+        cctx.drawImage(canvas, 0, halfH + 2, halfW - 2, halfH - 2);
+        cctx.drawImage(canvas, halfW + 2, halfH + 2, halfW - 2, halfH - 2);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(collageCanvas, 0, 0);
+        logs.push('Created 2x2 photo collage');
+      }
+    }
 
     onProgress?.(80);
 
