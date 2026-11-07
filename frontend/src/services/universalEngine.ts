@@ -282,6 +282,8 @@ class UniversalEngineService {
             op.startsWith('ocr') ||
             op === 'pdf_ocr' ||
             op === 'pdf_ocr_to_word' ||
+            op === 'pdf_to_word' ||
+            op === 'pdf_to_text' ||
             op === 'pdf_to_images' ||
             op === 'pdf_extract_images')
         ) {
@@ -293,29 +295,31 @@ class UniversalEngineService {
               op === 'ocr_image' ||
               op === 'ocr_pdf' ||
               op === 'pdf_ocr' ||
-              op === 'pdf_ocr_to_word'
+              op === 'pdf_ocr_to_word' ||
+              op === 'pdf_to_word' ||
+              op === 'pdf_to_text'
             ) {
               const ocrRes = await UniversalNativeEngine.processOcrNative({ inputPath: tempInputPath });
-              if (op === 'pdf_ocr_to_word') {
+              if (op === 'pdf_ocr_to_word' || op === 'pdf_to_word') {
                 const docxBlob = await createDocxFromText(
                   ocrRes.text || '',
                   fileRecord.filename.replace(/\.[^/.]+$/, '')
                 );
-                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.docx`;
+                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.docx`;
                 result = {
                   outputBlob: docxBlob,
                   outputFilename: outName,
                   outputMime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                  logs: [`[Native Tesseract 5] OCR extracted and converted text to Microsoft Word (.DOCX).`],
+                  logs: [`[Native Tesseract 5] OCR extracted full PDF content and created Microsoft Word (.DOCX).`],
                 };
               } else {
                 const textBlob = new Blob([ocrRes.text || ''], { type: 'text/plain' });
-                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.txt`;
+                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.txt`;
                 result = {
                   outputBlob: textBlob,
                   outputFilename: outName,
                   outputMime: 'text/plain',
-                  logs: [`[Native Tesseract 5] OCR extracted ${ocrRes.characterCount} characters.`],
+                  logs: [`[Native Tesseract 5] Extracted ${ocrRes.characterCount} characters of full text from PDF.`],
                 };
               }
             } else if (op === 'pdf_to_images' || op === 'pdf_extract_images') {
@@ -594,6 +598,23 @@ class UniversalEngineService {
           op === 'svg_to_png' ||
           op === 'create_favicon'
         ) {
+          const additionalBlobs: { blob: Blob; filename: string }[] = [];
+          const additionalIds: any[] = payload.parameters?.additional_file_ids || 
+            (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
+          if (Array.isArray(additionalIds) && additionalIds.length > 0) {
+            for (const addId of additionalIds) {
+              try {
+                const addRec = await mobileStorage.getFileRecord(Number(addId));
+                const addBlob = await mobileStorage.getFileBlob(Number(addId));
+                if (addRec && addBlob) {
+                  additionalBlobs.push({ blob: addBlob, filename: addRec.filename });
+                }
+              } catch (err) {
+                console.warn('Failed to load additional image for job:', addId, err);
+              }
+            }
+          }
+
           result = await mobileEngines.processImage(
             fileBlob,
             fileRecord.filename,
@@ -601,7 +622,8 @@ class UniversalEngineService {
             payload.parameters,
             (pct) => {
               mobileStorage.updateJob(jobId, { progress_percent: pct });
-            }
+            },
+            additionalBlobs
           );
         } else if (
           category === 'video' ||

@@ -17,7 +17,8 @@ export const mobileEngines = {
     filename: string,
     operation: string,
     params: Record<string, any> = {},
-    onProgress?: (pct: number) => void
+    onProgress?: (pct: number) => void,
+    additionalBlobs: { blob: Blob; filename: string }[] = []
   ): Promise<MobileProcessResult> {
     const logs: string[] = [];
     logs.push(`[Mobile Image Engine] Starting operation: ${operation}`);
@@ -296,15 +297,48 @@ export const mobileEngines = {
       collageCanvas.height = canvas.height;
       const cctx = collageCanvas.getContext('2d');
       if (cctx) {
+        cctx.fillStyle = '#ffffff';
+        cctx.fillRect(0, 0, canvas.width, canvas.height);
         const halfW = canvas.width / 2;
         const halfH = canvas.height / 2;
-        cctx.drawImage(canvas, 0, 0, halfW - 2, halfH - 2);
-        cctx.drawImage(canvas, halfW + 2, 0, halfW - 2, halfH - 2);
-        cctx.drawImage(canvas, 0, halfH + 2, halfW - 2, halfH - 2);
-        cctx.drawImage(canvas, halfW + 2, halfH + 2, halfW - 2, halfH - 2);
+
+        // Load all available images (primary image + additionalBlobs)
+        const allImgs: HTMLImageElement[] = [img];
+        for (const add of additionalBlobs) {
+          try {
+            const addImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+              const url = URL.createObjectURL(add.blob);
+              const i = new Image();
+              i.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve(i);
+              };
+              i.onerror = () => {
+                URL.revokeObjectURL(url);
+                reject();
+              };
+              i.src = url;
+            });
+            allImgs.push(addImg);
+          } catch {}
+        }
+
+        const quadrants = [
+          { x: 0, y: 0, w: halfW - 2, h: halfH - 2 },
+          { x: halfW + 2, y: 0, w: halfW - 2, h: halfH - 2 },
+          { x: 0, y: halfH + 2, w: halfW - 2, h: halfH - 2 },
+          { x: halfW + 2, y: halfH + 2, w: halfW - 2, h: halfH - 2 },
+        ];
+
+        for (let q = 0; q < 4; q++) {
+          const targetImg = allImgs[q % allImgs.length];
+          const quad = quadrants[q];
+          cctx.drawImage(targetImg, quad.x, quad.y, quad.w, quad.h);
+        }
+
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(collageCanvas, 0, 0);
-        logs.push('Created 2x2 photo collage');
+        logs.push(`Created 2x2 photo collage from ${allImgs.length} image(s)`);
       }
     }
 

@@ -853,37 +853,55 @@ public class UniversalNativeEnginePlugin extends Plugin {
                        .append("-vf \"deshake\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_burn_subtitles".equals(operation) || "burn_subtitles".equals(operation)) {
+                    String videoPath = in.getAbsolutePath();
                     String subPath = null;
                     if (filesArray != null && filesArray.length() > 1) {
-                        subPath = filesArray.getString(1);
+                        for (int i = 0; i < filesArray.length(); i++) {
+                            String p = filesArray.getString(i);
+                            String lower = p.toLowerCase();
+                            if (lower.endsWith(".srt") || lower.endsWith(".vtt") || lower.endsWith(".ass")) {
+                                subPath = p;
+                            } else if (lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".mov") || lower.endsWith(".webm")) {
+                                videoPath = p;
+                            }
+                        }
                     } else if (params.has("subtitle_path")) {
                         subPath = params.optString("subtitle_path", "");
                     }
                     if (subPath != null && !subPath.isEmpty() && new File(subPath).exists()) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                        cmd.append("-i \"").append(videoPath).append("\" ")
                            .append("-vf \"subtitles='").append(subPath.replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
                            .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                           .append("-vf \"subtitles='").append(in.getAbsolutePath().replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
+                        cmd.append("-i \"").append(videoPath).append("\" ")
+                           .append("-vf \"subtitles='").append(videoPath.replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
                            .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("video_add_audio".equals(operation) || "add_audio".equals(operation)) {
+                    String videoPath = in.getAbsolutePath();
                     String audioPath = null;
                     if (filesArray != null && filesArray.length() > 1) {
-                        audioPath = filesArray.getString(1);
+                        for (int i = 0; i < filesArray.length(); i++) {
+                            String p = filesArray.getString(i);
+                            String lower = p.toLowerCase();
+                            if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".aac") || lower.endsWith(".m4a") || lower.endsWith(".flac") || lower.endsWith(".ogg")) {
+                                audioPath = p;
+                            } else if (lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".mkv") || lower.endsWith(".webm") || lower.endsWith(".avi")) {
+                                videoPath = p;
+                            }
+                        }
                     } else if (params.has("audio_path")) {
                         audioPath = params.optString("audio_path", "");
                     }
                     if (audioPath != null && !audioPath.isEmpty() && new File(audioPath).exists()) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                        cmd.append("-i \"").append(videoPath).append("\" ")
                            .append("-i \"").append(audioPath).append("\" ")
                            .append("-c:v copy -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest \"")
                            .append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                        cmd.append("-i \"").append(videoPath).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("video_concat".equals(operation) || "concat".equals(operation)) {
                     if (filesArray != null && filesArray.length() > 1) {
