@@ -45,14 +45,80 @@ export const mobileEngines = {
     let rotation = 0;
     let flipH = false;
     let flipV = false;
+
+    // Detect input format to preserve original format instead of converting to PNG
+    const lowerFilename = filename.toLowerCase();
     let targetFormat = 'image/png';
     let ext = 'png';
+    if (lowerFilename.endsWith('.jpg') || lowerFilename.endsWith('.jpeg')) {
+      targetFormat = 'image/jpeg';
+      ext = 'jpg';
+    } else if (lowerFilename.endsWith('.webp')) {
+      targetFormat = 'image/webp';
+      ext = 'webp';
+    }
+
     let quality = 0.9;
 
-    // Handle Operation & Params
-    if (operation === 'resize' || params.resize) {
-      const targetW = params.width ? parseInt(params.width) : width;
-      const targetH = params.height ? parseInt(params.height) : height;
+    // 1. Rotation Handling
+    if (
+      operation === 'image_rotate' ||
+      operation === 'rotate' ||
+      operation.includes('rotate') ||
+      params.degrees !== undefined ||
+      params.rotation !== undefined ||
+      params.angle !== undefined
+    ) {
+      const rawDeg = params.degrees ?? params.rotation ?? params.angle ?? 90;
+      rotation = parseInt(String(rawDeg), 10);
+      if (isNaN(rotation)) rotation = 90;
+      rotation = ((rotation % 360) + 360) % 360;
+      logs.push(`Rotating by: ${rotation}°`);
+    }
+
+    // 2. Flip Handling
+    if (operation === 'flip' || params.flip || params.direction) {
+      if (params.flip === 'horizontal' || params.flip === 'h' || params.direction === 'horizontal') flipH = true;
+      if (params.flip === 'vertical' || params.flip === 'v' || params.direction === 'vertical') flipV = true;
+      logs.push(`Flipping: horizontal=${flipH}, vertical=${flipV}`);
+    }
+
+    // 3. Aspect Ratio Crop
+    let cropX = 0;
+    let cropY = 0;
+    let cropW = width;
+    let cropH = height;
+
+    if (operation === 'image_crop' || operation === 'crop' || params.ratio) {
+      const ratio = params.ratio || '1:1';
+      logs.push(`Applying aspect ratio crop: ${ratio}`);
+      let targetRatio = 1;
+      if (ratio === '1:1') targetRatio = 1;
+      else if (ratio === '16:9') targetRatio = 16 / 9;
+      else if (ratio === '4:3') targetRatio = 4 / 3;
+      else if (ratio === '9:16') targetRatio = 9 / 16;
+      else if (typeof ratio === 'number') targetRatio = ratio;
+
+      const currentRatio = width / height;
+      if (currentRatio > targetRatio) {
+        cropW = Math.round(height * targetRatio);
+        cropH = height;
+        cropX = Math.round((width - cropW) / 2);
+        cropY = 0;
+      } else {
+        cropW = width;
+        cropH = Math.round(width / targetRatio);
+        cropX = 0;
+        cropY = Math.round((height - cropH) / 2);
+      }
+      width = cropW;
+      height = cropH;
+    }
+
+    // 4. Resize / Scale
+    if (operation === 'image_resize' || operation === 'resize' || params.resize || (params.width && !params.ratio)) {
+      const targetW = params.width ? parseInt(params.width, 10) : width;
+      const targetH = params.height ? parseInt(params.height, 10) : height;
       const scale = params.scale ? parseFloat(params.scale) : 1;
       if (params.scale) {
         width = Math.round(width * scale);
@@ -64,32 +130,20 @@ export const mobileEngines = {
       logs.push(`Resizing to: ${width}x${height}`);
     }
 
-    if (operation === 'rotate' || params.rotation) {
-      rotation = parseInt(params.rotation || params.angle || '90', 10);
-      logs.push(`Rotating by: ${rotation}°`);
-    }
-
-    if (operation === 'flip' || params.flip) {
-      if (params.flip === 'horizontal' || params.flip === 'h') flipH = true;
-      if (params.flip === 'vertical' || params.flip === 'v') flipV = true;
-      if (params.direction === 'horizontal') flipH = true;
-      if (params.direction === 'vertical') flipV = true;
-      logs.push(`Flipping: horizontal=${flipH}, vertical=${flipV}`);
-    }
-
-    if (operation === 'convert' || params.format || params.target_format) {
-      const fmt = (params.format || params.target_format || 'png').toLowerCase();
+    // 5. Output Format Conversion
+    if (operation === 'image_convert' || operation === 'convert' || params.format || params.target_format) {
+      const fmt = (params.format || params.target_format || '').toLowerCase();
       if (fmt.includes('jpg') || fmt.includes('jpeg')) {
         targetFormat = 'image/jpeg';
         ext = 'jpg';
       } else if (fmt.includes('webp')) {
         targetFormat = 'image/webp';
         ext = 'webp';
-      } else {
+      } else if (fmt.includes('png')) {
         targetFormat = 'image/png';
         ext = 'png';
       }
-      logs.push(`Converting to format: ${ext}`);
+      logs.push(`Output format: ${ext}`);
     }
 
     if (params.quality) {
@@ -103,20 +157,20 @@ export const mobileEngines = {
     const canvas = document.createElement('canvas');
     const isSideways = rotation === 90 || rotation === 270;
     const MAX_CANVAS_DIM = 4096;
-    let targetW = isSideways ? height : width;
-    let targetH = isSideways ? width : height;
+    let targetCanvasW = isSideways ? height : width;
+    let targetCanvasH = isSideways ? width : height;
 
-    if (targetW > MAX_CANVAS_DIM || targetH > MAX_CANVAS_DIM) {
-      const ratio = Math.min(MAX_CANVAS_DIM / targetW, MAX_CANVAS_DIM / targetH);
-      targetW = Math.round(targetW * ratio);
-      targetH = Math.round(targetH * ratio);
+    if (targetCanvasW > MAX_CANVAS_DIM || targetCanvasH > MAX_CANVAS_DIM) {
+      const ratio = Math.min(MAX_CANVAS_DIM / targetCanvasW, MAX_CANVAS_DIM / targetCanvasH);
+      targetCanvasW = Math.round(targetCanvasW * ratio);
+      targetCanvasH = Math.round(targetCanvasH * ratio);
       width = Math.round(width * ratio);
       height = Math.round(height * ratio);
-      logs.push(`Clamped dimensions to safe mobile canvas bounds: ${targetW}x${targetH}`);
+      logs.push(`Clamped dimensions to safe mobile canvas bounds: ${targetCanvasW}x${targetCanvasH}`);
     }
 
-    canvas.width = targetW;
-    canvas.height = targetH;
+    canvas.width = targetCanvasW;
+    canvas.height = targetCanvasH;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Could not acquire 2D Canvas rendering context');
@@ -134,7 +188,7 @@ export const mobileEngines = {
 
     // Apply Filters if requested
     const filters: string[] = [];
-    if (operation === 'grayscale' || params.grayscale) filters.push('grayscale(100%)');
+    if (operation === 'image_grayscale' || operation === 'grayscale' || params.grayscale) filters.push('grayscale(100%)');
     if (operation === 'sepia' || params.sepia) filters.push('sepia(100%)');
     if (operation === 'invert' || params.invert) filters.push('invert(100%)');
     if (params.blur) filters.push(`blur(${params.blur}px)`);
@@ -146,7 +200,8 @@ export const mobileEngines = {
       logs.push(`Applied filters: ${filters.join(', ')}`);
     }
 
-    ctx.drawImage(img, -width / 2, -height / 2, width, height);
+    // Draw image (with crop coordinates if cropped)
+    ctx.drawImage(img, cropX, cropY, cropW, cropH, -width / 2, -height / 2, width, height);
     ctx.restore();
 
     onProgress?.(80);
@@ -164,7 +219,8 @@ export const mobileEngines = {
 
     onProgress?.(100);
     const baseName = filename.replace(/\.[^/.]+$/, '');
-    const outName = `${baseName}_processed.${ext}`;
+    const opSuffix = operation.replace('image_', '');
+    const outName = `${baseName}_${opSuffix}.${ext}`;
     logs.push(`Successfully generated: ${outName} (${outBlob.size} bytes)`);
 
     return {

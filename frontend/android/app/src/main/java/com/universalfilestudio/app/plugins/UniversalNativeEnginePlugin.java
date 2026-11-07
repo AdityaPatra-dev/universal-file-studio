@@ -58,6 +58,8 @@ import java.util.zip.ZipOutputStream;
 import com.arthenica.ffmpegkit.FFmpegKit;
 import com.arthenica.ffmpegkit.FFmpegSession;
 import com.arthenica.ffmpegkit.ReturnCode;
+import com.arthenica.ffmpegkit.Statistics;
+import com.arthenica.ffmpegkit.StatisticsCallback;
 import com.googlecode.tesseract.android.TessBaseAPI;
 
 @CapacitorPlugin(name = "UniversalNativeEngine")
@@ -124,10 +126,16 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 }
 
                 // 2. Rotate / Flip
-                if (params.has("rotate") || params.optBoolean("flipH", false) || params.optBoolean("flipV", false)) {
+                boolean isRotateOp = "image_rotate".equals(operation) || "rotate".equals(operation);
+                boolean hasRotateParam = params.has("degrees") || params.has("rotate") || params.has("rotation") || params.has("angle");
+                if (isRotateOp || hasRotateParam || params.optBoolean("flipH", false) || params.optBoolean("flipV", false)) {
                     Matrix matrix = new Matrix();
-                    if (params.has("rotate")) {
-                        matrix.postRotate((float) params.optDouble("rotate", 0));
+                    float deg = (float) params.optDouble("degrees", params.optDouble("rotate", params.optDouble("rotation", params.optDouble("angle", 0))));
+                    if (deg == 0f && isRotateOp) {
+                        deg = 90f;
+                    }
+                    if (deg != 0f) {
+                        matrix.postRotate(deg);
                     }
                     float sx = params.optBoolean("flipH", false) ? -1f : 1f;
                     float sy = params.optBoolean("flipV", false) ? -1f : 1f;
@@ -566,49 +574,124 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 File in = new File(inputPath);
                 File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES);
                 if (outputDir == null) outputDir = getContext().getCacheDir();
+                if (!outputDir.exists()) outputDir.mkdirs();
 
                 String outExt = params.optString("format", "mp4").toLowerCase();
-                String outName = in.getName().replaceFirst("[.][^.]+$", "") + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
+                if ("extract_audio".equals(operation)) {
+                    outExt = params.optString("format", "mp3").toLowerCase();
+                } else if ("video_to_gif".equals(operation) || "gif".equals(operation)) {
+                    outExt = "gif";
+                }
+
+                String cleanBase = in.getName().replaceFirst("[.][^.]+$", "").replaceAll("[^a-zA-Z0-9._-]", "_");
+                String outName = cleanBase + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
                 File out = new File(outputDir, outName);
+                if (out.exists()) out.delete();
+
+                // Retrieve video duration using MediaMetadataRetriever for progress tracking
+                long durationMs = 0;
+                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                try {
+                    mmr.setDataSource(in.getAbsolutePath());
+                    String durStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    if (durStr != null) durationMs = Long.parseLong(durStr);
+                } catch (Exception ignored) {
+                } finally {
+                    try { mmr.release(); } catch (Exception ignored) {}
+                }
 
                 StringBuilder cmd = new StringBuilder();
+                cmd.append("-y -nostdin ");
+
                 if ("video_trim".equals(operation) || "trim".equals(operation)) {
-                    double start = params.optDouble("start_time", 0.0);
-                    double end = params.optDouble("end_time", 10.0);
+                    double start = params.optDouble("start_time", params.optDouble("start", 0.0));
+                    double end = params.optDouble("end_time", params.optDouble("end", 10.0));
                     cmd.append("-ss ").append(start).append(" -to ").append(end).append(" -i \"").append(in.getAbsolutePath()).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
                 } else if ("extract_audio".equals(operation)) {
-                    String audioFmt = params.optString("format", "mp3").toLowerCase();
-                    outName = in.getName().replaceFirst("[.][^.]+$", "") + "." + audioFmt;
-                    out = new File(outputDir, outName);
-                    if ("wav".equals(audioFmt)) {
+                    if ("wav".equals(outExt)) {
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -acodec pcm_s16le \"").append(out.getAbsolutePath()).append("\"");
-                    } else if ("aac".equals(audioFmt) || "m4a".equals(audioFmt)) {
+                    } else if ("aac".equals(outExt) || "m4a".equals(outExt)) {
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a aac -b:a 192k \"").append(out.getAbsolutePath()).append("\"");
                     } else {
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a libmp3lame -q:a 2 \"").append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("remove_audio".equals(operation) || "mute".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("video_rotate".equals(operation) || "rotate".equals(operation)) {
+                    int deg = params.optInt("degrees", params.optInt("rotation", 90));
+                    String vf = "transpose=1";
+                    if (deg == 180) vf = "transpose=2,transpose=2";
+                    else if (deg == 270) vf = "transpose=2";
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("video_resize".equals(operation) || "scale".equals(operation)) {
+                    String res = params.optString("resolution", "720p").toLowerCase();
+                    String vf = "scale=-2:720";
+                    if (res.contains("1080")) vf = "scale=-2:1080";
+                    else if (res.contains("480")) vf = "scale=-2:480";
+                    else if (params.has("width") && params.has("height")) {
+                        int w = params.optInt("width", 1280);
+                        int h = params.optInt("height", 720);
+                        vf = "scale=" + w + ":" + h + ":force_original_aspect_ratio=decrease,pad=" + w + ":" + h + ":(ow-iw)/2:(oh-ih)/2";
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("video_crop".equals(operation) || "crop".equals(operation)) {
+                    String aspect = params.optString("ratio", params.optString("aspect", "9:16"));
+                    String vf = "crop=ih*(9/16):ih";
+                    if ("1:1".equals(aspect)) vf = "crop=min(iw\\,ih):min(iw\\,ih)";
+                    else if ("16:9".equals(aspect)) vf = "crop=iw:iw*(9/16)";
+                    else if ("4:3".equals(aspect)) vf = "crop=ih*(4/3):ih";
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("video_change_speed".equals(operation) || "video_speed".equals(operation)) {
+                    double speed = params.optDouble("speed", 1.5);
+                    double setpts = 1.0 / Math.max(0.25, Math.min(4.0, speed));
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -filter_complex \"[0:v]setpts=").append(String.format(Locale.US, "%.3f", setpts)).append("*PTS[v];[0:a]atempo=").append(String.format(Locale.US, "%.3f", speed)).append("[a]\" -map \"[v]\" -map \"[a]\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("video_change_fps".equals(operation)) {
+                    int fps = params.optInt("fps", 30);
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -r ").append(fps).append(" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"").append(out.getAbsolutePath()).append("\"");
                 } else if ("compress_video".equals(operation) || "video_compress".equals(operation)) {
                     int crf = params.optInt("crf", 28);
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vcodec libx264 -crf ").append(crf).append(" -preset fast -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -crf ").append(crf).append(" -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
                 } else if ("gif".equals(outExt)) {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"fps=12,scale=480:-1:flags=lanczos\" \"").append(out.getAbsolutePath()).append("\"");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"fps=12,scale=480:-2:flags=lanczos\" \"").append(out.getAbsolutePath()).append("\"");
                 } else {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -preset fast -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                    if ("webm".equals(outExt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libvpx -b:v 1M -crf 30 -map 0:v:0 -map 0:a? -c:a libvorbis \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                    }
                 }
 
-                FFmpegSession session = FFmpegKit.execute(cmd.toString());
-                if (ReturnCode.isSuccess(session.getReturnCode())) {
-                    JSObject res = new JSObject();
-                    res.put("success", true);
-                    res.put("outputPath", out.getAbsolutePath());
-                    res.put("outputFilename", out.getName());
-                    res.put("sizeBytes", out.length());
-                    call.resolve(res);
-                } else {
-                    call.reject("Video operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
-                }
+                final long finalDur = durationMs;
+                FFmpegKit.executeAsync(
+                    cmd.toString(),
+                    session -> {
+                        if (ReturnCode.isSuccess(session.getReturnCode())) {
+                            JSObject res = new JSObject();
+                            res.put("success", true);
+                            res.put("outputPath", out.getAbsolutePath());
+                            res.put("outputFilename", out.getName());
+                            res.put("sizeBytes", out.length());
+                            call.resolve(res);
+                        } else {
+                            call.reject("Video operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
+                        }
+                    },
+                    log -> {},
+                    statistics -> {
+                        if (statistics != null) {
+                            double timeMs = statistics.getTime();
+                            int pct;
+                            if (finalDur > 0) {
+                                pct = (int) Math.min(95, Math.max(5, (timeMs / finalDur) * 100));
+                            } else {
+                                pct = (int) Math.min(95, 10 + (timeMs / 1000) * 5);
+                            }
+                            JSObject prog = new JSObject();
+                            prog.put("percent", pct);
+                            notifyListeners("videoProgress", prog);
+                        }
+                    }
+                );
             } catch (Exception e) {
                 Log.e(TAG, "processVideoNative error: " + e.getMessage(), e);
                 call.reject("Video operation failed: " + e.getMessage());
@@ -635,29 +718,37 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 File in = new File(inputPath);
                 File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_MUSIC);
                 if (outputDir == null) outputDir = getContext().getCacheDir();
+                if (!outputDir.exists()) outputDir.mkdirs();
 
                 String outExt = params.optString("format", "mp3").toLowerCase();
-                String outName = in.getName().replaceFirst("[.][^.]+$", "") + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
+                String cleanBase = in.getName().replaceFirst("[.][^.]+$", "").replaceAll("[^a-zA-Z0-9._-]", "_");
+                String outName = cleanBase + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
                 File out = new File(outputDir, outName);
+                if (out.exists()) out.delete();
 
                 StringBuilder cmd = new StringBuilder();
+                cmd.append("-y -nostdin ");
                 if ("audio_normalize".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -af loudnorm \"").append(out.getAbsolutePath()).append("\"");
                 } else {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" \"").append(out.getAbsolutePath()).append("\"");
                 }
 
-                FFmpegSession session = FFmpegKit.execute(cmd.toString());
-                if (ReturnCode.isSuccess(session.getReturnCode())) {
-                    JSObject res = new JSObject();
-                    res.put("success", true);
-                    res.put("outputPath", out.getAbsolutePath());
-                    res.put("outputFilename", out.getName());
-                    res.put("sizeBytes", out.length());
-                    call.resolve(res);
-                } else {
-                    call.reject("Audio operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
-                }
+                FFmpegKit.executeAsync(
+                    cmd.toString(),
+                    session -> {
+                        if (ReturnCode.isSuccess(session.getReturnCode())) {
+                            JSObject res = new JSObject();
+                            res.put("success", true);
+                            res.put("outputPath", out.getAbsolutePath());
+                            res.put("outputFilename", out.getName());
+                            res.put("sizeBytes", out.length());
+                            call.resolve(res);
+                        } else {
+                            call.reject("Audio operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
+                        }
+                    }
+                );
             } catch (Exception e) {
                 Log.e(TAG, "processAudioNative error: " + e.getMessage(), e);
                 call.reject("Audio operation failed: " + e.getMessage());
@@ -751,18 +842,22 @@ public class UniversalNativeEnginePlugin extends Plugin {
         executor.execute(() -> {
             try {
                 String fileName = call.getString("fileName", "ufs_temp_" + System.currentTimeMillis());
-                String base64Data = call.getString("base64Data");
-                if (base64Data == null) {
-                    call.reject("Missing base64Data parameter");
-                    return;
+                String base64Data = call.getString("base64Data", "");
+                File cacheDir = getContext().getCacheDir();
+                if (!cacheDir.exists()) cacheDir.mkdirs();
+
+                String cleanName = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+                File tempFile = new File(cacheDir, System.currentTimeMillis() + "_" + cleanName);
+                if (tempFile.getParentFile() != null && !tempFile.getParentFile().exists()) {
+                    tempFile.getParentFile().mkdirs();
                 }
 
-                File cacheDir = getContext().getCacheDir();
-                File tempFile = new File(cacheDir, System.currentTimeMillis() + "_" + fileName);
-                byte[] decoded = Base64.decode(base64Data, Base64.DEFAULT);
+                byte[] decoded = (base64Data != null && !base64Data.isEmpty()) ? Base64.decode(base64Data, Base64.DEFAULT) : new byte[0];
 
                 try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-                    fos.write(decoded);
+                    if (decoded.length > 0) {
+                        fos.write(decoded);
+                    }
                     fos.flush();
                 }
 
@@ -792,6 +887,9 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 }
 
                 File file = new File(path);
+                if (file.getParentFile() != null && !file.getParentFile().exists()) {
+                    file.getParentFile().mkdirs();
+                }
                 if (isFirst && file.exists()) {
                     file.delete();
                 }

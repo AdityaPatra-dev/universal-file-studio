@@ -306,21 +306,38 @@ class UniversalEngineService {
               };
             } else {
               // Video operation
-              const videoRes = await UniversalNativeEngine.processVideoNative({
-                inputPath: tempInputPath,
-                operation: op,
-                parameters: payload.parameters,
-              });
-              if (!videoRes.outputPath) throw new Error('Video operation produced no output path');
-              const isAudioExtract = op === 'extract_audio';
-              const mime = isAudioExtract ? 'audio/mpeg' : 'video/mp4';
-              const outBlob = await readNativeFileAsBlob(videoRes.outputPath, mime);
-              result = {
-                outputBlob: outBlob,
-                outputFilename: videoRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.${isAudioExtract ? 'mp3' : 'mp4'}`,
-                outputMime: mime,
-                logs: [`[Native FFmpegKit GPL] Video ${op} finished successfully.`],
-              };
+              let progressSub: any = null;
+              try {
+                progressSub = await UniversalNativeEngine.addListener('videoProgress', (info: { percent: number }) => {
+                  if (info?.percent) {
+                    mobileStorage.updateJob(jobId, { progress_percent: Math.min(95, Math.max(5, info.percent)) });
+                  }
+                });
+              } catch {}
+
+              try {
+                mobileStorage.updateJob(jobId, { progress_percent: 15 });
+                const videoRes = await UniversalNativeEngine.processVideoNative({
+                  inputPath: tempInputPath,
+                  operation: op,
+                  parameters: payload.parameters,
+                });
+                if (!videoRes.outputPath) throw new Error('Video operation produced no output path');
+                mobileStorage.updateJob(jobId, { progress_percent: 92 });
+                const isAudioExtract = op === 'extract_audio';
+                const mime = isAudioExtract ? 'audio/mpeg' : 'video/mp4';
+                const outBlob = await readNativeFileAsBlob(videoRes.outputPath, mime);
+                result = {
+                  outputBlob: outBlob,
+                  outputFilename: videoRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.${isAudioExtract ? 'mp3' : 'mp4'}`,
+                  outputMime: mime,
+                  logs: [`[Native FFmpegKit GPL] Video ${op} finished successfully.`],
+                };
+              } finally {
+                if (progressSub && typeof progressSub.remove === 'function') {
+                  progressSub.remove();
+                }
+              }
             }
           } finally {
             UniversalNativeEngine.deleteTempFile({ filePath: tempInputPath }).catch(() => {});
@@ -436,6 +453,7 @@ class UniversalEngineService {
         console.error('Mobile on-device processing error:', err);
         await mobileStorage.updateJob(jobId, {
           status: 'failed',
+          progress_percent: 0,
           error_message: err.message || 'On-device processing failed',
           completed_at: new Date().toISOString(),
         });

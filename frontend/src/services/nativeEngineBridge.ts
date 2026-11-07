@@ -95,6 +95,10 @@ export interface UniversalNativeEnginePlugin {
     filePath: string;
     title?: string | null;
   }): Promise<{ success: boolean }>;
+  addListener(
+    eventName: 'videoProgress',
+    listenerFunc: (info: { percent: number }) => void
+  ): Promise<{ remove: () => void }>;
 }
 
 export const UniversalNativeEngine = registerPlugin<UniversalNativeEnginePlugin>('UniversalNativeEngine');
@@ -110,40 +114,57 @@ export async function writeBlobToNativeTempFile(blob: Blob, filename: string): P
     return res.path;
   }
 
-  // Stream in chunks for large files
-  const cachePath = `/data/user/0/com.universalfilestudio.app/cache/${Date.now()}_${filename}`;
-  let offset = 0;
-  let isFirst = true;
+  // Stream in chunks: initialize file on native disk via writeTempFile with first chunk,
+  // then append subsequent chunks directly to the returned native path.
+  const firstSlice = blob.slice(0, CHUNK_SIZE);
+  const firstBase64 = await blobToBase64(firstSlice);
+  const initRes = await UniversalNativeEngine.writeTempFile({ fileName: filename, base64Data: firstBase64 });
+  const realNativePath = initRes.path;
 
+  let offset = CHUNK_SIZE;
   while (offset < blob.size) {
     const slice = blob.slice(offset, Math.min(offset + CHUNK_SIZE, blob.size));
     const chunkBase64 = await blobToBase64(slice);
     await UniversalNativeEngine.appendTempFileChunk({
-      path: cachePath,
+      path: realNativePath,
       chunkBase64,
-      isFirst,
+      isFirst: false,
     });
-    isFirst = false;
     offset += CHUNK_SIZE;
   }
 
-  return cachePath;
+  return realNativePath;
 }
 
 /**
  * Read output file from native filesystem back into a JS Blob
  */
 export async function readNativeFileAsBlob(filePath: string, mimeType = 'application/octet-stream'): Promise<Blob> {
+  // 1. Try streaming directly via Capacitor convertFileSrc HTTP server (Zero base64 memory spike!)
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (Capacitor.isNativePlatform()) {
+      const webSrc = Capacitor.convertFileSrc(filePath);
+      const response = await fetch(webSrc);
+      if (response.ok) {
+        return await response.blob();
+      }
+    }
+  } catch (err) {
+    console.warn('convertFileSrc fetch failed, trying readTempFileBase64:', err);
+  }
+
+  // 2. Fallback to base64 reader if convertFileSrc is unavailable
   try {
     const readRes = await UniversalNativeEngine.readTempFileBase64({ filePath });
     if (readRes.base64Data) {
       return base64ToBlob(readRes.base64Data, mimeType);
     }
   } catch (err) {
-    console.warn('readTempFileBase64 failed, falling back to fetch:', err);
+    console.warn('readTempFileBase64 failed, falling back:', err);
   }
 
-  // Fallback: try Capacitor convertFileSrc
+  // 3. Fallback to standard fetch
   const { Capacitor } = await import('@capacitor/core');
   const webSrc = Capacitor.convertFileSrc(filePath);
   const response = await fetch(webSrc);
