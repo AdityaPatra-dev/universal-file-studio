@@ -63,6 +63,7 @@ export interface UniversalNativeEnginePlugin {
     inputPath: string;
     operation: string;
     parameters?: Record<string, any>;
+    files?: string[];
   }): Promise<NativeProcessResult>;
   processOcrNative(options: {
     inputPath: string;
@@ -98,7 +99,7 @@ export interface UniversalNativeEnginePlugin {
     title?: string | null;
   }): Promise<{ success: boolean }>;
   addListener(
-    eventName: 'videoProgress',
+    eventName: 'videoProgress' | 'audioProgress',
     listenerFunc: (info: { percent: number }) => void
   ): Promise<{ remove: () => void }>;
 }

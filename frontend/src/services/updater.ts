@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { UniversalNativeEngine } from './nativeEngineBridge';
 
-export const CURRENT_VERSION = '1.0.6';
+export const CURRENT_VERSION = '1.0.7';
 export const GITHUB_REPO = 'AdityaPatra-dev/universal-file-studio';
 
 export interface UpdateInfo {

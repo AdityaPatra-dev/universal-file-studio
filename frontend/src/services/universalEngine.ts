@@ -295,20 +295,68 @@ class UniversalEngineService {
                 logs: [`[Native Tesseract 5] OCR extracted ${ocrRes.characterCount} characters.`],
               };
             } else if (category === 'audio' || op.startsWith('audio_')) {
-              const audioRes = await UniversalNativeEngine.processAudioNative({
-                inputPath: tempInputPath,
-                operation: op,
-                parameters: payload.parameters,
-              });
-              if (!audioRes.outputPath) throw new Error('Audio operation produced no output path');
-              const mime = payload.parameters?.format === 'wav' ? 'audio/wav' : 'audio/mpeg';
-              const outBlob = await readNativeFileAsBlob(audioRes.outputPath, mime);
-              result = {
-                outputBlob: outBlob,
-                outputFilename: audioRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.mp3`,
-                outputMime: mime,
-                logs: [`[Native FFmpegKit GPL] Audio ${op} finished successfully.`],
-              };
+              // Multi-file support for audio_merge
+              if (op === 'audio_merge') {
+                const additionalIds: any[] = payload.parameters?.additional_file_ids || 
+                  (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
+                if (Array.isArray(additionalIds) && additionalIds.length > 0) {
+                  for (const addId of additionalIds) {
+                    try {
+                      const addRec = await mobileStorage.getFileRecord(Number(addId));
+                      const addBlob = await mobileStorage.getFileBlob(Number(addId));
+                      if (addRec && addBlob) {
+                        const addPath = await writeBlobToNativeTempFile(addBlob, addRec.filename);
+                        createdTempPaths.push(addPath);
+                      }
+                    } catch (err) {
+                      console.warn('Failed to load additional file for audio_merge:', addId, err);
+                    }
+                  }
+                }
+              }
+
+              let progressSub: any = null;
+              try {
+                progressSub = await UniversalNativeEngine.addListener('audioProgress', (info: { percent: number }) => {
+                  if (info?.percent) {
+                    mobileStorage.updateJob(jobId, { progress_percent: Math.min(95, Math.max(5, info.percent)) });
+                  }
+                });
+              } catch {}
+
+              try {
+                mobileStorage.updateJob(jobId, { progress_percent: 15 });
+                const audioRes = await UniversalNativeEngine.processAudioNative({
+                  inputPath: tempInputPath,
+                  operation: op,
+                  parameters: payload.parameters,
+                  files: createdTempPaths,
+                });
+                if (!audioRes.outputPath) throw new Error('Audio operation produced no output path');
+                mobileStorage.updateJob(jobId, { progress_percent: 92 });
+
+                const outFilename = audioRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.mp3`;
+                const ext = outFilename.split('.').pop()?.toLowerCase() || 'mp3';
+                let mime = 'audio/mpeg';
+                if (ext === 'wav') mime = 'audio/wav';
+                else if (ext === 'm4a' || ext === 'aac') mime = 'audio/mp4';
+                else if (ext === 'flac') mime = 'audio/flac';
+                else if (ext === 'ogg') mime = 'audio/ogg';
+                else if (ext === 'opus') mime = 'audio/opus';
+                else if (ext === 'zip') mime = 'application/zip';
+
+                const outBlob = await readNativeFileAsBlob(audioRes.outputPath, mime);
+                result = {
+                  outputBlob: outBlob,
+                  outputFilename: outFilename,
+                  outputMime: mime,
+                  logs: [`[Native FFmpegKit GPL] Audio ${op} finished successfully.`],
+                };
+              } finally {
+                if (progressSub && typeof progressSub.remove === 'function') {
+                  progressSub.remove();
+                }
+              }
             } else if (op === 'extract_frame' || op === 'video_thumbnail') {
               mobileStorage.updateJob(jobId, { progress_percent: 25 });
               const timeParam = payload.parameters?.time || payload.parameters?.timestamp || '00:00:01';

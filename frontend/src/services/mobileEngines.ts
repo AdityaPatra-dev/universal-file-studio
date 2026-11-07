@@ -1006,7 +1006,7 @@ export const mobileEngines = {
       };
     }
 
-    if (operation === 'extract_audio' || operation === 'convert_audio_wav') {
+    if (operation.startsWith('audio_') || operation === 'extract_audio' || operation === 'convert_audio_wav') {
       logs.push(`Decoding audio buffer from ${filename}...`);
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass();
@@ -1015,16 +1015,68 @@ export const mobileEngines = {
         const arrayBuf = await blob.arrayBuffer();
         onProgress?.(30);
 
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+        let audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
         logs.push(`Decoded audio: ${audioBuffer.numberOfChannels} ch, ${audioBuffer.sampleRate} Hz, ${audioBuffer.duration.toFixed(2)}s`);
-        onProgress?.(60);
+        onProgress?.(50);
 
+        if (operation === 'audio_trim') {
+          const parseTime = (t: any) => {
+            if (!t) return 0;
+            if (typeof t === 'number') return t;
+            if (typeof t === 'string' && t.includes(':')) {
+              const parts = t.split(':').map(Number);
+              let s = 0;
+              for (const p of parts) s = s * 60 + p;
+              return s;
+            }
+            return parseFloat(t) || 0;
+          };
+          const startSec = Math.max(0, parseTime(params.start));
+          const endSec = Math.min(audioBuffer.duration, parseTime(params.end) || audioBuffer.duration);
+          const startSample = Math.floor(startSec * audioBuffer.sampleRate);
+          const endSample = Math.floor(endSec * audioBuffer.sampleRate);
+          const frameCount = Math.max(1, endSample - startSample);
+
+          const trimmedBuf = audioCtx.createBuffer(audioBuffer.numberOfChannels, frameCount, audioBuffer.sampleRate);
+          for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+            const src = audioBuffer.getChannelData(ch);
+            const dst = trimmedBuf.getChannelData(ch);
+            for (let i = 0; i < frameCount; i++) {
+              dst[i] = src[startSample + i] || 0;
+            }
+          }
+          audioBuffer = trimmedBuf;
+          logs.push(`Trimmed audio from ${startSec}s to ${endSec}s (${(frameCount / audioBuffer.sampleRate).toFixed(2)}s)`);
+        } else if (operation === 'audio_boost_volume') {
+          let factor = 1.5;
+          const volStr = String(params.volume || '150%');
+          if (volStr.includes('%')) {
+            factor = parseFloat(volStr.replace('%', '')) / 100.0;
+          } else if (!isNaN(Number(volStr))) {
+            factor = Number(volStr);
+          }
+          for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+            const data = audioBuffer.getChannelData(ch);
+            for (let i = 0; i < data.length; i++) {
+              data[i] = Math.max(-1.0, Math.min(1.0, data[i] * factor));
+            }
+          }
+          logs.push(`Boosted volume by ${(factor * 100).toFixed(0)}%`);
+        } else if (operation === 'audio_reverse') {
+          for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+            const data = audioBuffer.getChannelData(ch);
+            data.reverse();
+          }
+          logs.push('Reversed audio track');
+        }
+
+        onProgress?.(80);
         // Encode to 16-bit PCM WAV
         const wavBytes = encodeWAV(audioBuffer);
         const outBlob = new Blob([wavBytes as any], { type: 'audio/wav' });
 
         onProgress?.(100);
-        const outName = `${filename.replace(/\.[^/.]+$/, '')}.wav`;
+        const outName = `${filename.replace(/\.[^/.]+$/, '')}_${operation}.wav`;
         logs.push(`Exported lossless WAV: ${outName} (${outBlob.size} bytes)`);
 
         return {

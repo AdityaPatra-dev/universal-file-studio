@@ -852,6 +852,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 String inputPath = call.getString("inputPath");
                 String operation = call.getString("operation", "audio_convert");
                 JSObject params = call.getObject("parameters", new JSObject());
+                JSArray filesArray = call.getArray("files");
 
                 if (inputPath == null || !new File(inputPath).exists()) {
                     call.reject("Input audio not found: " + inputPath);
@@ -864,31 +865,198 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if (!outputDir.exists()) outputDir.mkdirs();
 
                 String outExt = params.optString("format", "mp3").toLowerCase();
+                if (outExt.startsWith(".")) outExt = outExt.substring(1);
+
                 String cleanBase = in.getName().replaceFirst("[.][^.]+$", "").replaceAll("[^a-zA-Z0-9._-]", "_");
                 String outName = cleanBase + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
                 File out = new File(outputDir, outName);
                 if (out.exists()) out.delete();
 
-                StringBuilder cmd = new StringBuilder();
-                cmd.append("-y -nostdin ");
-                if ("audio_normalize".equals(operation)) {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -af loudnorm \"").append(out.getAbsolutePath()).append("\"");
-                } else {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" \"").append(out.getAbsolutePath()).append("\"");
+                // Retrieve audio duration using MediaMetadataRetriever for progress tracking
+                long durationMs = 0;
+                MediaMetadataRetriever mmr = new MediaMetadataRetriever();
+                try {
+                    mmr.setDataSource(in.getAbsolutePath());
+                    String durStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                    if (durStr != null) durationMs = Long.parseLong(durStr);
+                } catch (Exception ignored) {
+                } finally {
+                    try { mmr.release(); } catch (Exception ignored) {}
                 }
 
+                StringBuilder cmd = new StringBuilder();
+                cmd.append("-y -nostdin ");
+
+                int bitrate = params.optInt("bitrate", 192);
+                final boolean isSplit = "audio_split_equal".equals(operation) || "split_equal".equals(operation);
+                final File splitDir = isSplit ? new File(outputDir, cleanBase + "_parts_" + (System.currentTimeMillis() % 100000)) : null;
+
+                if ("audio_trim".equals(operation) || "trim".equals(operation)) {
+                    String start = params.has("start") ? params.optString("start", "00:00:00") : params.optString("start_time", "00:00:00");
+                    String end = params.has("end") ? params.optString("end", "00:00:30") : params.optString("end_time", "00:00:30");
+                    cmd.append("-ss \"").append(start).append("\" -to \"").append(end).append("\" ")
+                       .append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_compress".equals(operation) || "compress".equals(operation)) {
+                    String compBitrate = params.optString("bitrate", "96");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-c:a libmp3lame -b:a ").append(compBitrate).append("k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_normalize".equals(operation) || "normalize".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af loudnorm=I=-16:TP=-1.5:LRA=11 -c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_boost_volume".equals(operation) || "audio_adjust_volume".equals(operation) || "boost_volume".equals(operation)) {
+                    String volume = params.optString("volume", "150%");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af \"volume=").append(volume).append("\" -c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_change_speed".equals(operation) || "audio_speed".equals(operation) || "speed".equals(operation)) {
+                    double speed = params.optDouble("speed", 1.5);
+                    if (speed <= 0) speed = 1.0;
+                    double clampedSpeed = Math.max(0.5, Math.min(2.0, speed));
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af \"atempo=").append(String.format(Locale.US, "%.3f", clampedSpeed)).append("\" ")
+                       .append("-c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_merge".equals(operation) || "merge".equals(operation) || "concat".equals(operation)) {
+                    if (filesArray != null && filesArray.length() > 1) {
+                        File listFile = new File(getContext().getCacheDir(), "audio_concat_" + System.currentTimeMillis() + ".txt");
+                        try (FileOutputStream fos = new FileOutputStream(listFile)) {
+                            for (int i = 0; i < filesArray.length(); i++) {
+                                String fPath = filesArray.getString(i);
+                                String line = "file '" + fPath.replace("'", "'\\''") + "'\n";
+                                fos.write(line.getBytes(StandardCharsets.UTF_8));
+                            }
+                        }
+                        cmd.append("-f concat -safe 0 -i \"").append(listFile.getAbsolutePath()).append("\" ")
+                           .append("-c:a libmp3lame -b:a 192k \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:a libmp3lame -b:a 192k \"").append(out.getAbsolutePath()).append("\"");
+                    }
+                } else if ("audio_fade".equals(operation) || "fade".equals(operation)) {
+                    int fadeIn = params.optInt("fade_in", 3);
+                    int fadeOut = params.optInt("fade_out", 3);
+                    double durSec = durationMs > 0 ? (durationMs / 1000.0) : 30.0;
+                    double startFadeOut = Math.max(0.0, durSec - fadeOut);
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af \"afade=t=in:ss=0:d=").append(fadeIn)
+                       .append(",afade=t=out:st=").append(String.format(Locale.US, "%.2f", startFadeOut)).append(":d=").append(fadeOut).append("\" ")
+                       .append("-c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_reverse".equals(operation) || "reverse".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af \"areverse\" -c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_channel_convert".equals(operation) || "channel_convert".equals(operation)) {
+                    int channels = params.optInt("channels", 1);
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-ac ").append(channels).append(" -c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_resample".equals(operation) || "resample".equals(operation)) {
+                    int sampleRate = params.optInt("sample_rate", 44100);
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-ar ").append(sampleRate).append(" \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_remove_silence".equals(operation) || "remove_silence".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af \"silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-40dB\" ")
+                       .append("-c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("audio_invert".equals(operation) || "invert".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-af \"aeval=-val(0)|-val(1):c=same\" -c:a libmp3lame -b:a 192k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if (isSplit) {
+                    int segmentTime = params.optInt("segment_time", 300);
+                    if (splitDir != null) splitDir.mkdirs();
+                    String segmentPattern = new File(splitDir, cleanBase + "_part_%03d." + outExt).getAbsolutePath();
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-f segment -segment_time ").append(segmentTime).append(" -c copy \"")
+                       .append(segmentPattern).append("\"");
+                } else {
+                    // Universal Audio Convert (transcode)
+                    String codec = "-c:a libmp3lame -b:a " + bitrate + "k";
+                    if ("wav".equals(outExt)) {
+                        codec = "-c:a pcm_s16le";
+                    } else if ("flac".equals(outExt)) {
+                        codec = "-c:a flac";
+                    } else if ("m4a".equals(outExt) || "aac".equals(outExt)) {
+                        codec = "-c:a aac -b:a " + bitrate + "k";
+                    } else if ("ogg".equals(outExt)) {
+                        codec = "-c:a libvorbis -b:a " + bitrate + "k";
+                    } else if ("opus".equals(outExt)) {
+                        codec = "-c:a libopus -b:a " + bitrate + "k";
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append(codec).append(" \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                }
+
+                final long finalDur = durationMs;
+                final File finalOutputDir = outputDir;
+                final String finalOutExt = outExt;
+                final String finalCleanBase = cleanBase;
                 FFmpegKit.executeAsync(
                     cmd.toString(),
                     session -> {
                         if (ReturnCode.isSuccess(session.getReturnCode())) {
                             JSObject res = new JSObject();
                             res.put("success", true);
-                            res.put("outputPath", out.getAbsolutePath());
-                            res.put("outputFilename", out.getName());
-                            res.put("sizeBytes", out.length());
+
+                            if (isSplit && splitDir != null && splitDir.exists()) {
+                                File[] parts = splitDir.listFiles((dir, name) -> name.endsWith("." + finalOutExt));
+                                if (parts != null && parts.length > 0) {
+                                    File zipOut = new File(finalOutputDir, finalCleanBase + "_split_parts.zip");
+                                    try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(zipOut)))) {
+                                        byte[] buf = new byte[8192];
+                                        for (File p : parts) {
+                                            ZipEntry entry = new ZipEntry(p.getName());
+                                            zos.putNextEntry(entry);
+                                            try (FileInputStream fis = new FileInputStream(p)) {
+                                                int len;
+                                                while ((len = fis.read(buf)) > 0) {
+                                                    zos.write(buf, 0, len);
+                                                }
+                                            }
+                                            zos.closeEntry();
+                                            p.delete();
+                                        }
+                                    } catch (Exception ignored) {}
+                                    splitDir.delete();
+                                    res.put("outputPath", zipOut.getAbsolutePath());
+                                    res.put("outputFilename", zipOut.getName());
+                                    res.put("sizeBytes", zipOut.length());
+                                } else {
+                                    res.put("outputPath", out.getAbsolutePath());
+                                    res.put("outputFilename", out.getName());
+                                    res.put("sizeBytes", out.length());
+                                }
+                            } else {
+                                res.put("outputPath", out.getAbsolutePath());
+                                res.put("outputFilename", out.getName());
+                                res.put("sizeBytes", out.length());
+                            }
                             call.resolve(res);
                         } else {
                             call.reject("Audio operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
+                        }
+                    },
+                    log -> {},
+                    statistics -> {
+                        if (statistics != null) {
+                            double timeMs = statistics.getTime();
+                            int pct;
+                            if (finalDur > 0) {
+                                pct = (int) Math.min(95, Math.max(5, (timeMs / finalDur) * 100));
+                            } else {
+                                pct = (int) Math.min(95, 10 + (timeMs / 1000) * 5);
+                            }
+                            JSObject prog = new JSObject();
+                            prog.put("percent", pct);
+                            notifyListeners("audioProgress", prog);
                         }
                     }
                 );
