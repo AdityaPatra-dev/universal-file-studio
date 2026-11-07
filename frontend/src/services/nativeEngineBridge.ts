@@ -37,6 +37,7 @@ export interface UniversalNativeEnginePlugin {
   }): Promise<NativeProcessResult>;
   extractVideoFrameNative(options: {
     inputPath: string;
+    time?: string;
     timeSeconds?: number;
   }): Promise<NativeProcessResult>;
   processDocumentNative(options: {
@@ -56,6 +57,7 @@ export interface UniversalNativeEnginePlugin {
     inputPath: string;
     operation: string;
     parameters?: Record<string, any>;
+    files?: string[];
   }): Promise<NativeProcessResult>;
   processAudioNative(options: {
     inputPath: string;

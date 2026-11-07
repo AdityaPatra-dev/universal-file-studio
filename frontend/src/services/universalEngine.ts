@@ -275,9 +275,14 @@ class UniversalEngineService {
             op.startsWith('audio_') ||
             op.includes('compress_video') ||
             op.includes('extract_audio') ||
+            op === 'extract_frame' ||
+            op === 'video_thumbnail' ||
+            op === 'remove_audio' ||
+            op === 'gif_to_video' ||
             op.startsWith('ocr'))
         ) {
           const tempInputPath = await writeBlobToNativeTempFile(fileBlob, fileRecord.filename);
+          const createdTempPaths: string[] = [tempInputPath];
           try {
             if (op.startsWith('ocr') || op === 'ocr_image' || op === 'ocr_pdf') {
               const ocrRes = await UniversalNativeEngine.processOcrNative({ inputPath: tempInputPath });
@@ -304,7 +309,44 @@ class UniversalEngineService {
                 outputMime: mime,
                 logs: [`[Native FFmpegKit GPL] Audio ${op} finished successfully.`],
               };
+            } else if (op === 'extract_frame' || op === 'video_thumbnail') {
+              mobileStorage.updateJob(jobId, { progress_percent: 25 });
+              const timeParam = payload.parameters?.time || payload.parameters?.timestamp || '00:00:01';
+              const frameRes = await UniversalNativeEngine.extractVideoFrameNative({
+                inputPath: tempInputPath,
+                time: timeParam,
+              });
+              if (!frameRes.outputPath) throw new Error('Video frame extraction produced no output path');
+              mobileStorage.updateJob(jobId, { progress_percent: 95 });
+              const mime = 'image/jpeg';
+              const outBlob = await readNativeFileAsBlob(frameRes.outputPath, mime);
+              result = {
+                outputBlob: outBlob,
+                outputFilename: frameRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_thumb.jpg`,
+                outputMime: mime,
+                logs: [`[Native Frame Extractor] Captured frame at ${timeParam}`],
+              };
             } else {
+              // Multi-file support for video_concat
+              if (op === 'video_concat') {
+                const additionalIds: any[] = payload.parameters?.additional_file_ids || 
+                  (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
+                if (Array.isArray(additionalIds) && additionalIds.length > 0) {
+                  for (const addId of additionalIds) {
+                    try {
+                      const addRec = await mobileStorage.getFileRecord(Number(addId));
+                      const addBlob = await mobileStorage.getFileBlob(Number(addId));
+                      if (addRec && addBlob) {
+                        const addPath = await writeBlobToNativeTempFile(addBlob, addRec.filename);
+                        createdTempPaths.push(addPath);
+                      }
+                    } catch (err) {
+                      console.warn('Failed to load additional file for video_concat:', addId, err);
+                    }
+                  }
+                }
+              }
+
               // Video operation
               let progressSub: any = null;
               try {
@@ -321,15 +363,28 @@ class UniversalEngineService {
                   inputPath: tempInputPath,
                   operation: op,
                   parameters: payload.parameters,
+                  files: createdTempPaths,
                 });
                 if (!videoRes.outputPath) throw new Error('Video operation produced no output path');
                 mobileStorage.updateJob(jobId, { progress_percent: 92 });
-                const isAudioExtract = op === 'extract_audio';
-                const mime = isAudioExtract ? 'audio/mpeg' : 'video/mp4';
+
+                const outFilename = videoRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.mp4`;
+                const ext = outFilename.split('.').pop()?.toLowerCase() || 'mp4';
+                let mime = 'video/mp4';
+                if (ext === 'mp3') mime = 'audio/mpeg';
+                else if (ext === 'wav') mime = 'audio/wav';
+                else if (ext === 'm4a' || ext === 'aac') mime = 'audio/mp4';
+                else if (ext === 'flac') mime = 'audio/flac';
+                else if (ext === 'gif') mime = 'image/gif';
+                else if (ext === 'webm') mime = 'video/webm';
+                else if (ext === 'mkv') mime = 'video/x-matroska';
+                else if (ext === 'mov') mime = 'video/quicktime';
+                else if (ext === 'avi') mime = 'video/x-msvideo';
+
                 const outBlob = await readNativeFileAsBlob(videoRes.outputPath, mime);
                 result = {
                   outputBlob: outBlob,
-                  outputFilename: videoRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.${isAudioExtract ? 'mp3' : 'mp4'}`,
+                  outputFilename: outFilename,
                   outputMime: mime,
                   logs: [`[Native FFmpegKit GPL] Video ${op} finished successfully.`],
                 };
@@ -340,7 +395,9 @@ class UniversalEngineService {
               }
             }
           } finally {
-            UniversalNativeEngine.deleteTempFile({ filePath: tempInputPath }).catch(() => {});
+            for (const p of createdTempPaths) {
+              UniversalNativeEngine.deleteTempFile({ filePath: p }).catch(() => {});
+            }
           }
         } else if (category === 'image' && (op.startsWith('ocr') || op === 'ocr_image')) {
           if (isNative) {
@@ -410,7 +467,18 @@ class UniversalEngineService {
               mobileStorage.updateJob(jobId, { progress_percent: pct });
             }
           );
-        } else if (category === 'video' || category === 'audio') {
+        } else if (
+          category === 'video' ||
+          category === 'audio' ||
+          op.startsWith('video_') ||
+          op.startsWith('audio_') ||
+          op === 'extract_frame' ||
+          op === 'video_thumbnail' ||
+          op === 'extract_audio' ||
+          op === 'compress_video' ||
+          op === 'remove_audio' ||
+          op === 'gif_to_video'
+        ) {
           result = await mobileEngines.processAudioVideo(
             fileBlob,
             fileRecord.filename,

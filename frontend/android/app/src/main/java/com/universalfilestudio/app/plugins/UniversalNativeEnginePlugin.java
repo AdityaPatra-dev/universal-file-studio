@@ -310,35 +310,51 @@ public class UniversalNativeEnginePlugin extends Plugin {
     @PluginMethod
     public void extractVideoFrameNative(PluginCall call) {
         executor.execute(() -> {
+            MediaMetadataRetriever retriever = null;
             try {
                 String inputPath = call.getString("inputPath");
-                long timeSec = call.getInt("timeSeconds", 1);
-
                 if (inputPath == null || !new File(inputPath).exists()) {
                     call.reject("Video file does not exist: " + inputPath);
                     return;
                 }
 
-                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-                retriever.setDataSource(inputPath);
+                String timeStr = call.getString("time", call.getString("timeSeconds", "1"));
+                long timeMicros = 1000000L;
+                try {
+                    if (timeStr.contains(":")) {
+                        String[] parts = timeStr.split(":");
+                        long s = 0;
+                        for (String p : parts) {
+                            s = s * 60 + Long.parseLong(p.trim());
+                        }
+                        timeMicros = s * 1000000L;
+                    } else {
+                        timeMicros = (long) (Double.parseDouble(timeStr) * 1000000L);
+                    }
+                } catch (Exception ignored) {}
 
-                long timeMicros = timeSec * 1000000L;
+                retriever = new MediaMetadataRetriever();
+                retriever.setDataSource(inputPath);
                 Bitmap frame = retriever.getFrameAtTime(timeMicros, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
-                retriever.release();
+                if (frame == null) {
+                    frame = retriever.getFrameAtTime(timeMicros);
+                }
 
                 if (frame == null) {
-                    call.reject("Failed to retrieve video frame at " + timeSec + "s");
+                    call.reject("Failed to retrieve video frame at timestamp " + timeStr);
                     return;
                 }
 
                 File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_PICTURES);
                 if (outputDir == null) outputDir = getContext().getCacheDir();
+                if (!outputDir.exists()) outputDir.mkdirs();
 
-                String outName = new File(inputPath).getName().replaceFirst("[.][^.]+$", "") + "_frame_" + timeSec + "s.jpg";
+                String cleanBase = new File(inputPath).getName().replaceFirst("[.][^.]+$", "").replaceAll("[^a-zA-Z0-9._-]", "_");
+                String outName = cleanBase + "_frame_" + System.currentTimeMillis() % 10000 + ".jpg";
                 File outFile = new File(outputDir, outName);
 
                 try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                    frame.compress(Bitmap.CompressFormat.JPEG, 90, fos);
+                    frame.compress(Bitmap.CompressFormat.JPEG, 92, fos);
                     fos.flush();
                 }
 
@@ -354,6 +370,10 @@ public class UniversalNativeEnginePlugin extends Plugin {
             } catch (Exception e) {
                 Log.e(TAG, "extractVideoFrameNative error: " + e.getMessage(), e);
                 call.reject("Video frame extraction failed: " + e.getMessage());
+            } finally {
+                if (retriever != null) {
+                    try { retriever.release(); } catch (Exception ignored) {}
+                }
             }
         });
     }
@@ -565,6 +585,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 String inputPath = call.getString("inputPath");
                 String operation = call.getString("operation", "compress_video");
                 JSObject params = call.getObject("parameters", new JSObject());
+                JSArray filesArray = call.getArray("files");
 
                 if (inputPath == null || !new File(inputPath).exists()) {
                     call.reject("Input video not found: " + inputPath);
@@ -576,12 +597,18 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if (outputDir == null) outputDir = getContext().getCacheDir();
                 if (!outputDir.exists()) outputDir.mkdirs();
 
-                String outExt = params.optString("format", "mp4").toLowerCase();
+                String outExt = "mp4";
                 if ("extract_audio".equals(operation)) {
                     outExt = params.optString("format", "mp3").toLowerCase();
                 } else if ("video_to_gif".equals(operation) || "gif".equals(operation)) {
                     outExt = "gif";
+                } else if ("gif_to_video".equals(operation)) {
+                    outExt = "mp4";
+                } else if (params.has("format")) {
+                    outExt = params.optString("format", "mp4").toLowerCase();
                 }
+
+                if (outExt.startsWith(".")) outExt = outExt.substring(1);
 
                 String cleanBase = in.getName().replaceFirst("[.][^.]+$", "").replaceAll("[^a-zA-Z0-9._-]", "_");
                 String outName = cleanBase + "_" + operation + "_" + UUID.randomUUID().toString().substring(0, 6) + "." + outExt;
@@ -604,60 +631,176 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 cmd.append("-y -nostdin ");
 
                 if ("video_trim".equals(operation) || "trim".equals(operation)) {
-                    double start = params.optDouble("start_time", params.optDouble("start", 0.0));
-                    double end = params.optDouble("end_time", params.optDouble("end", 10.0));
-                    cmd.append("-ss ").append(start).append(" -to ").append(end).append(" -i \"").append(in.getAbsolutePath()).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                    String start = params.has("start") ? params.optString("start", "00:00:00") : params.optString("start_time", "00:00:00");
+                    String end = params.has("end") ? params.optString("end", "00:00:30") : params.optString("end_time", "00:00:30");
+                    cmd.append("-ss \"").append(start).append("\" -to \"").append(end).append("\" ")
+                       .append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"")
+                       .append(out.getAbsolutePath()).append("\"");
                 } else if ("extract_audio".equals(operation)) {
+                    int bitrate = params.optInt("bitrate", 192);
                     if ("wav".equals(outExt)) {
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -acodec pcm_s16le \"").append(out.getAbsolutePath()).append("\"");
+                    } else if ("flac".equals(outExt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a flac \"").append(out.getAbsolutePath()).append("\"");
                     } else if ("aac".equals(outExt) || "m4a".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a aac -b:a 192k \"").append(out.getAbsolutePath()).append("\"");
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a aac -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a libmp3lame -q:a 2 \"").append(out.getAbsolutePath()).append("\"");
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a libmp3lame -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
                     }
-                } else if ("remove_audio".equals(operation) || "mute".equals(operation)) {
+                } else if ("remove_audio".equals(operation) || "mute".equals(operation) || "video_remove_audio".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
                 } else if ("video_rotate".equals(operation) || "rotate".equals(operation)) {
-                    int deg = params.optInt("degrees", params.optInt("rotation", 90));
+                    int deg = params.optInt("degrees", params.optInt("rotation", params.optInt("angle", 90)));
                     String vf = "transpose=1";
-                    if (deg == 180) vf = "transpose=2,transpose=2";
-                    else if (deg == 270) vf = "transpose=2";
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                    if (deg == 180) {
+                        vf = "transpose=2,transpose=2";
+                    } else if (deg == 270) {
+                        vf = "transpose=2";
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_resize".equals(operation) || "scale".equals(operation)) {
-                    String res = params.optString("resolution", "720p").toLowerCase();
+                    String res = params.optString("preset", params.optString("resolution", "720p")).toLowerCase();
                     String vf = "scale=-2:720";
-                    if (res.contains("1080")) vf = "scale=-2:1080";
-                    else if (res.contains("480")) vf = "scale=-2:480";
-                    else if (params.has("width") && params.has("height")) {
+                    if (res.contains("1080")) {
+                        vf = "scale=-2:1080";
+                    } else if (res.contains("480")) {
+                        vf = "scale=-2:480";
+                    } else if (params.has("width") && params.has("height")) {
                         int w = params.optInt("width", 1280);
                         int h = params.optInt("height", 720);
                         vf = "scale=" + w + ":" + h + ":force_original_aspect_ratio=decrease,pad=" + w + ":" + h + ":(ow-iw)/2:(oh-ih)/2";
                     }
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_crop".equals(operation) || "crop".equals(operation)) {
-                    String aspect = params.optString("ratio", params.optString("aspect", "9:16"));
-                    String vf = "crop=ih*(9/16):ih";
-                    if ("1:1".equals(aspect)) vf = "crop=min(iw\\,ih):min(iw\\,ih)";
-                    else if ("16:9".equals(aspect)) vf = "crop=iw:iw*(9/16)";
-                    else if ("4:3".equals(aspect)) vf = "crop=ih*(4/3):ih";
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                    String aspect = params.optString("aspect_ratio", params.optString("ratio", params.optString("aspect", "9:16")));
+                    String vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)";
+                    if ("1:1".equals(aspect)) {
+                        vf = "crop=min(iw\\,ih):min(iw\\,ih)";
+                    } else if ("16:9".equals(aspect)) {
+                        vf = "crop=min(iw\\,ih*16/9):min(ih\\,iw*9/16)";
+                    } else if ("4:5".equals(aspect)) {
+                        vf = "crop=min(iw\\,ih*4/5):min(ih\\,iw*5/4)";
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_change_speed".equals(operation) || "video_speed".equals(operation)) {
                     double speed = params.optDouble("speed", 1.5);
+                    if (speed <= 0) speed = 1.0;
                     double setpts = 1.0 / Math.max(0.25, Math.min(4.0, speed));
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -filter_complex \"[0:v]setpts=").append(String.format(Locale.US, "%.3f", setpts)).append("*PTS[v];[0:a]atempo=").append(String.format(Locale.US, "%.3f", speed)).append("[a]\" -map \"[v]\" -map \"[a]\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac \"").append(out.getAbsolutePath()).append("\"");
-                } else if ("video_change_fps".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-filter_complex \"[0:v]setpts=").append(String.format(Locale.US, "%.3f", setpts)).append("*PTS[v];[0:a]atempo=").append(String.format(Locale.US, "%.3f", Math.max(0.5, Math.min(2.0, speed)))).append("[a]\" ")
+                       .append("-map \"[v]\" -map \"[a]?\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_change_fps".equals(operation) || "change_fps".equals(operation)) {
                     int fps = params.optInt("fps", 30);
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -r ").append(fps).append(" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"").append(out.getAbsolutePath()).append("\"");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -r ").append(fps).append(" ")
+                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(out.getAbsolutePath()).append("\"");
                 } else if ("compress_video".equals(operation) || "video_compress".equals(operation)) {
+                    String preset = params.optString("target_preset", "balanced").toLowerCase();
                     int crf = params.optInt("crf", 28);
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -crf ").append(crf).append(" -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
-                } else if ("gif".equals(outExt)) {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"fps=12,scale=480:-2:flags=lanczos\" \"").append(out.getAbsolutePath()).append("\"");
-                } else {
-                    if ("webm".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libvpx -b:v 1M -crf 30 -map 0:v:0 -map 0:a? -c:a libvorbis \"").append(out.getAbsolutePath()).append("\"");
+                    String scale = "";
+                    int audioBitrate = 128;
+                    if ("discord".equals(preset)) {
+                        crf = 28;
+                        scale = "scale='min(1280,iw)':-2,";
+                        audioBitrate = 96;
+                    } else if ("whatsapp".equals(preset)) {
+                        crf = 30;
+                        scale = "scale='min(854,iw)':-2,";
+                        audioBitrate = 96;
+                    } else if ("email".equals(preset)) {
+                        crf = 32;
+                        scale = "scale='min(640,iw)':-2,";
+                        audioBitrate = 64;
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
+                    if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
+                    cmd.append("-c:v libx264 -crf ").append(crf)
+                       .append(" -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_reverse".equals(operation) || "reverse".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-vf \"reverse\" -af \"areverse\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_loop".equals(operation) || "loop".equals(operation)) {
+                    int count = params.optInt("count", 3);
+                    int streamLoop = Math.max(1, count - 1);
+                    cmd.append("-stream_loop ").append(streamLoop).append(" -i \"").append(in.getAbsolutePath())
+                       .append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                } else if ("video_adjust_volume".equals(operation) || "adjust_volume".equals(operation)) {
+                    String vol = params.optString("volume", "150%");
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-c:v copy -af \"volume=").append(vol).append("\" \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_to_gif".equals(operation) || "gif".equals(operation) || "gif".equals(outExt)) {
+                    int fps = params.optInt("fps", 15);
+                    int width = params.optInt("width", 480);
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-vf \"fps=").append(fps).append(",scale=").append(width).append(":-2:flags=lanczos\" \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("gif_to_video".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_watermark".equals(operation) || "watermark".equals(operation)) {
+                    String text = params.optString("text", "CONFIDENTIAL").replace("'", "").replace(":", "");
+                    File font = new File("/system/fonts/Roboto-Regular.ttf");
+                    String fontArg = font.exists() ? ":fontfile=/system/fonts/Roboto-Regular.ttf" : "";
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-vf \"drawtext=text='").append(text).append("'").append(fontArg)
+                       .append(":fontsize=36:fontcolor=white@0.85:x=w-tw-30:y=h-th-30:box=1:boxcolor=black@0.5:boxborderw=8\" ")
+                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_stabilize".equals(operation) || "stabilize".equals(operation)) {
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                       .append("-vf \"deshake\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_concat".equals(operation) || "concat".equals(operation)) {
+                    if (filesArray != null && filesArray.length() > 1) {
+                        File listFile = new File(getContext().getCacheDir(), "concat_" + System.currentTimeMillis() + ".txt");
+                        try (FileOutputStream fos = new FileOutputStream(listFile)) {
+                            for (int i = 0; i < filesArray.length(); i++) {
+                                String fPath = filesArray.getString(i);
+                                String line = "file '" + fPath.replace("'", "'\\''") + "'\n";
+                                fos.write(line.getBytes(StandardCharsets.UTF_8));
+                            }
+                        }
+                        cmd.append("-f concat -safe 0 -i \"").append(listFile.getAbsolutePath()).append("\" ")
+                           .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
+                           .append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                    }
+                } else {
+                    String res = params.optString("resolution", "original").toLowerCase();
+                    String scale = "";
+                    if (res.contains("1080")) scale = "scale=-2:1080,";
+                    else if (res.contains("720")) scale = "scale=-2:720,";
+                    else if (res.contains("480")) scale = "scale=-2:480,";
+
+                    if ("webm".equals(outExt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
+                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
+                        cmd.append("-c:v libvpx -b:v 1.5M -crf 30 -map 0:v:0 -map 0:a? -c:a libvorbis \"").append(out.getAbsolutePath()).append("\"");
+                    } else if ("avi".equals(outExt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
+                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
+                        cmd.append("-c:v mpeg4 -vtag xvid -qscale:v 3 -map 0:v:0 -map 0:a? -c:a libmp3lame \"").append(out.getAbsolutePath()).append("\"");
+                    } else if ("mkv".equals(outExt)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
+                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
+                        cmd.append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
+                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
+                        cmd.append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
                     }
                 }
 
