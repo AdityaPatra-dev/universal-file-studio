@@ -100,9 +100,11 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const secondaryFileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const prevOpenRef = useRef(false);
   const prevToolIdRef = useRef<string | null>(null);
+  const [activeSlotTarget, setActiveSlotTarget] = useState<'primary' | 'secondary' | null>(null);
 
   // Audio Recording State for Microphone Tool
   const [isRecording, setIsRecording] = useState(false);
@@ -323,6 +325,38 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
 
   const matchingLibraryFiles = libraryFiles.filter(isFormatMatching);
 
+  const isDualInput = ['video_burn_subtitles', 'video_add_audio', 'pdf_compare'].includes(tool?.id || '');
+
+  let primaryLabel = 'Primary File';
+  let primaryDesc = 'Main input file';
+  let primaryAccept = getAcceptFilter(tool.inputFormats);
+  let secondaryLabel = 'Secondary File';
+  let secondaryDesc = 'Secondary track or comparison file';
+  let secondaryAccept = '*/*';
+
+  if (tool.id === 'video_burn_subtitles') {
+    primaryLabel = 'Video File';
+    primaryDesc = 'Select MP4, MKV, MOV, or WebM video';
+    primaryAccept = 'video/*,.mp4,.mkv,.mov,.webm';
+    secondaryLabel = 'Subtitle Track';
+    secondaryDesc = 'Select SRT, VTT, or ASS captions file';
+    secondaryAccept = '.srt,.vtt,.ass,text/*';
+  } else if (tool.id === 'video_add_audio') {
+    primaryLabel = 'Video File';
+    primaryDesc = 'Select MP4, MKV, MOV, or WebM video';
+    primaryAccept = 'video/*,.mp4,.mov,.mkv,.webm';
+    secondaryLabel = 'Audio Soundtrack';
+    secondaryDesc = 'Select MP3, WAV, AAC, M4A, or FLAC track';
+    secondaryAccept = 'audio/*,.mp3,.wav,.aac,.m4a,.flac,.ogg';
+  } else if (tool.id === 'pdf_compare') {
+    primaryLabel = 'Baseline Document (PDF A)';
+    primaryDesc = 'Original baseline PDF document';
+    primaryAccept = 'application/pdf,.pdf';
+    secondaryLabel = 'Comparison Document (PDF B)';
+    secondaryDesc = 'New / modified comparison PDF document';
+    secondaryAccept = 'application/pdf,.pdf';
+  }
+
   // Handle local device file picker
   const handleDeviceFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -335,7 +369,10 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
       const uploaded = await universalEngine.uploadFiles(filesArray);
       onFilesUploaded?.(uploaded);
 
-      if (tool.acceptsMultipleFiles) {
+      if (activeSlotTarget === 'primary') {
+        setSelectedFiles((prev) => [uploaded[0], ...prev.slice(1)]);
+        setActiveSlotTarget(null);
+      } else if (tool.acceptsMultipleFiles) {
         setSelectedFiles((prev) => [...prev, ...uploaded]);
       } else {
         setSelectedFiles([uploaded[0]]);
@@ -350,7 +387,44 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
     }
   };
 
+  const handleSecondaryDeviceFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    setIsUploading(true);
+    setExecutionStage('Importing secondary track / document...');
+    try {
+      const filesArray = Array.from(fileList);
+      const uploaded = await universalEngine.uploadFiles(filesArray);
+      onFilesUploaded?.(uploaded);
+
+      setSelectedFiles((prev) => {
+        if (prev.length === 0) return [uploaded[0]];
+        return [prev[0], uploaded[0], ...prev.slice(2)];
+      });
+      setActiveSlotTarget(null);
+    } catch (err: any) {
+      setErrorMessage(`Upload failed: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+      setExecutionStage('');
+      if (secondaryFileInputRef.current) secondaryFileInputRef.current.value = '';
+    }
+  };
+
   const handleSelectFromLibrary = (file: FileRecord) => {
+    if (activeSlotTarget === 'secondary') {
+      setSelectedFiles((prev) => (prev.length === 0 ? [file] : [prev[0], file, ...prev.slice(2)]));
+      setShowLibraryPicker(false);
+      setActiveSlotTarget(null);
+      return;
+    }
+    if (activeSlotTarget === 'primary') {
+      setSelectedFiles((prev) => [file, ...prev.slice(1)]);
+      setShowLibraryPicker(false);
+      setActiveSlotTarget(null);
+      return;
+    }
     if (tool.acceptsMultipleFiles) {
       if (!selectedFiles.some((f) => f.id === file.id)) {
         setSelectedFiles((prev) => [...prev, file]);
@@ -962,8 +1036,160 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
               </div>
             )}
 
-            {/* Selected File(s) List */}
-            {selectedFiles.length > 0 ? (
+            {/* Dual Input Interface for Muxing, Subtitles & PDF Comparison */}
+            {isDualInput ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Slot 1: Primary File */}
+                  <div className={`p-4 rounded-2xl border transition-all ${selectedFiles[0] ? 'bg-surface-900 border-surface-700/80' : 'bg-surface-900/40 border-dashed border-surface-700/80 hover:border-brand-500/60'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-brand-400 bg-brand-500/10 px-2.5 py-0.5 rounded-lg border border-brand-500/20">
+                        {primaryLabel}
+                      </span>
+                      {selectedFiles[0] && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(selectedFiles[0].id)}
+                          className="text-slate-400 hover:text-rose-400 p-1"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {selectedFiles[0] ? (
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-white truncate" title={selectedFiles[0].filename}>
+                          {selectedFiles[0].filename}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          {formatBytes(selectedFiles[0].size_bytes)}
+                        </div>
+                        <div className="pt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSlotTarget('primary');
+                              fileInputRef.current?.click();
+                            }}
+                            className="text-[11px] font-semibold text-slate-300 hover:text-white bg-surface-800 hover:bg-surface-750 px-2.5 py-1 rounded-lg border border-surface-700 btn-press"
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 py-1 text-center">
+                        <p className="text-xs text-slate-400">{primaryDesc}</p>
+                        <div className="flex items-center justify-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSlotTarget('primary');
+                              fileInputRef.current?.click();
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow btn-press"
+                          >
+                            Browse Device
+                          </button>
+                          {matchingLibraryFiles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveSlotTarget('primary');
+                                setShowLibraryPicker(true);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 font-semibold text-xs border border-surface-700 btn-press"
+                            >
+                              Library
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Slot 2: Secondary File */}
+                  <div className={`p-4 rounded-2xl border transition-all ${selectedFiles[1] ? 'bg-surface-900 border-surface-700/80' : 'bg-surface-900/40 border-dashed border-surface-700/80 hover:border-purple-500/60'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-lg border border-purple-500/20">
+                        {secondaryLabel}
+                      </span>
+                      {selectedFiles[1] && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFile(selectedFiles[1].id)}
+                          className="text-slate-400 hover:text-rose-400 p-1"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {selectedFiles[1] ? (
+                      <div className="space-y-1">
+                        <div className="text-xs font-bold text-white truncate" title={selectedFiles[1].filename}>
+                          {selectedFiles[1].filename}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          {formatBytes(selectedFiles[1].size_bytes)}
+                        </div>
+                        <div className="pt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSlotTarget('secondary');
+                              secondaryFileInputRef.current?.click();
+                            }}
+                            className="text-[11px] font-semibold text-slate-300 hover:text-white bg-surface-800 hover:bg-surface-750 px-2.5 py-1 rounded-lg border border-surface-700 btn-press"
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 py-1 text-center">
+                        <p className="text-xs text-slate-400">{secondaryDesc}</p>
+                        <div className="flex items-center justify-center gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveSlotTarget('secondary');
+                              secondaryFileInputRef.current?.click();
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs shadow btn-press"
+                          >
+                            Browse Device
+                          </button>
+                          {libraryFiles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveSlotTarget('secondary');
+                                setShowLibraryPicker(true);
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-slate-300 font-semibold text-xs border border-surface-700 btn-press"
+                            >
+                              Library
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedFiles[0] && selectedFiles[1] ? (
+                  <div className="px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>Both dual-input tracks loaded: Ready to execute!</span>
+                  </div>
+                ) : (
+                  <div className="px-3 py-2 rounded-xl bg-surface-900/60 border border-surface-700/50 text-slate-400 text-xs flex items-center gap-2">
+                    <Sliders className="h-3.5 w-3.5 text-brand-400 shrink-0" />
+                    <span>Please select both files above to proceed with dual-track processing.</span>
+                  </div>
+                )}
+              </div>
+            ) : selectedFiles.length > 0 ? (
               <div className="space-y-2">
                 {/* Folder Identification Banner if files belong to a folder */}
                 {detectedFolderName && (
@@ -1120,8 +1346,15 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
               type="file"
               ref={fileInputRef}
               onChange={handleDeviceFilesSelected}
-              multiple={tool.acceptsMultipleFiles}
-              accept={getAcceptFilter(tool.inputFormats)}
+              multiple={tool.acceptsMultipleFiles && !isDualInput}
+              accept={activeSlotTarget === 'primary' ? primaryAccept : getAcceptFilter(tool.inputFormats)}
+              className="hidden"
+            />
+            <input
+              type="file"
+              ref={secondaryFileInputRef}
+              onChange={handleSecondaryDeviceFilesSelected}
+              accept={secondaryAccept}
               className="hidden"
             />
             <input

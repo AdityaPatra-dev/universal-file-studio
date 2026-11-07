@@ -204,7 +204,7 @@ export const ARCHIVE_TOOLS: StudioTool[] = [
     backendEngine: '7z',
     mobileEngine: 'jszip',
     inputFormats: ['*'],
-    outputFormats: ['.7z'],
+    outputFormats: ['.part001.zip', '.zip', '.7z'],
     acceptsMultipleFiles: true,
     defaultParameters: { split_size: '100m' },
     parameters: [

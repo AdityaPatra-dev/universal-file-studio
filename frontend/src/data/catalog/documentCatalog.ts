@@ -891,6 +891,7 @@ export const DOCUMENT_TOOLS: StudioTool[] = [
     operation: 'pdf_compare',
     backendEngine: 'imagemagick',
     mobileEngine: 'pdf-lib',
+    acceptsMultipleFiles: true,
     inputFormats: ['.pdf'],
     outputFormats: ['.pdf', '.png'],
     defaultParameters: {},
