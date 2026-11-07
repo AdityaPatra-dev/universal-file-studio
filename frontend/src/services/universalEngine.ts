@@ -421,8 +421,8 @@ class UniversalEngineService {
                 logs: [`[Native Frame Extractor] Captured frame at ${timeParam}`],
               };
             } else {
-              // Multi-file support for video_concat
-              if (op === 'video_concat') {
+              // Multi-file support for video_concat, video_add_audio, video_burn_subtitles
+              if (op === 'video_concat' || op === 'video_add_audio' || op === 'video_burn_subtitles') {
                 const additionalIds: any[] = payload.parameters?.additional_file_ids || 
                   (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
                 if (Array.isArray(additionalIds) && additionalIds.length > 0) {
@@ -435,7 +435,7 @@ class UniversalEngineService {
                         createdTempPaths.push(addPath);
                       }
                     } catch (err) {
-                      console.warn('Failed to load additional file for video_concat:', addId, err);
+                      console.warn(`Failed to load additional file for ${op}:`, addId, err);
                     }
                   }
                 }

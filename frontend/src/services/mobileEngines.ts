@@ -166,6 +166,9 @@ export const mobileEngines = {
     if (params.quality) {
       quality = Math.max(0.1, Math.min(1.0, parseInt(params.quality, 10) / 100));
       logs.push(`Compression quality: ${Math.round(quality * 100)}%`);
+    } else if (operation === 'image_compress' || operation === 'compress_image') {
+      quality = 0.7;
+      logs.push(`Compression quality: 70% (default)`);
     }
 
     onProgress?.(50);

@@ -852,6 +852,39 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
                        .append("-vf \"deshake\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_burn_subtitles".equals(operation) || "burn_subtitles".equals(operation)) {
+                    String subPath = null;
+                    if (filesArray != null && filesArray.length() > 1) {
+                        subPath = filesArray.getString(1);
+                    } else if (params.has("subtitle_path")) {
+                        subPath = params.optString("subtitle_path", "");
+                    }
+                    if (subPath != null && !subPath.isEmpty() && new File(subPath).exists()) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-vf \"subtitles='").append(subPath.replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
+                           .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-vf \"subtitles='").append(in.getAbsolutePath().replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
+                           .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    }
+                } else if ("video_add_audio".equals(operation) || "add_audio".equals(operation)) {
+                    String audioPath = null;
+                    if (filesArray != null && filesArray.length() > 1) {
+                        audioPath = filesArray.getString(1);
+                    } else if (params.has("audio_path")) {
+                        audioPath = params.optString("audio_path", "");
+                    }
+                    if (audioPath != null && !audioPath.isEmpty() && new File(audioPath).exists()) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-i \"").append(audioPath).append("\" ")
+                           .append("-c:v copy -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_concat".equals(operation) || "concat".equals(operation)) {
                     if (filesArray != null && filesArray.length() > 1) {
                         File listFile = new File(getContext().getCacheDir(), "concat_" + System.currentTimeMillis() + ".txt");
