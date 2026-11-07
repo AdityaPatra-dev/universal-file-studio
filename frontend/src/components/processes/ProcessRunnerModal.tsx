@@ -3,7 +3,7 @@ import {
   X, Play, Sliders, CheckCircle2, AlertCircle, FileText,
   UploadCloud, ArrowRight, Download, RefreshCw, Eye, EyeOff,
   FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive, Folder, FolderUp, FolderArchive,
-  Share2, ExternalLink, FileCheck, Mic, Square
+  Share2, ExternalLink, FileCheck, Mic, Square, PenTool
 } from 'lucide-react';
 import { StudioTool, ToolParameter } from '../../data/catalog/types';
 import { FileRecord, Job } from '../../types/api';
@@ -158,6 +158,96 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
       }
     };
   }, []);
+
+  // Signature Drawing Pad for PDF Sign
+  const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawingRef = useRef<boolean>(false);
+
+  const handleStartDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    isDrawingRef.current = true;
+    ctx.strokeStyle = '#2563eb';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const handleDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawingRef.current) return;
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const handleStopDrawing = () => {
+    isDrawingRef.current = false;
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !e.touches[0]) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+    isDrawingRef.current = true;
+    ctx.strokeStyle = '#2563eb';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    if (!isDrawingRef.current) return;
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !e.touches[0]) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.touches[0].clientX - rect.left;
+    const y = e.touches[0].clientY - rect.top;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const handleClearSignature = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handleApplySignature = async () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const sigFile = new File([blob], `drawn_signature_${Date.now()}.png`, { type: 'image/png' });
+      const uploaded = await universalEngine.uploadFiles([sigFile]);
+      onFilesUploaded?.(uploaded);
+      setSelectedFiles((prev) => [...prev.filter((f) => !f.filename.startsWith('drawn_signature_')), ...uploaded]);
+    }, 'image/png');
+  };
 
   // Initialize modal state on tool or file change (guarded against reference instability)
   useEffect(() => {
@@ -821,6 +911,53 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                       <span>Start Recording</span>
                     </button>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Live Signature Drawing Pad for PDF Sign */}
+            {tool.id === 'pdf_sign' && (
+              <div className="p-4 rounded-2xl bg-surface-900 border border-purple-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <PenTool className="h-4 w-4 text-purple-400" />
+                    <span className="text-xs font-bold text-white">Handwritten Signature Pad</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleClearSignature}
+                      className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-slate-300 text-[11px] font-semibold"
+                    >
+                      Clear Pad
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplySignature}
+                      className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold shadow-md shadow-purple-600/30 flex items-center gap-1.5"
+                    >
+                      <Check className="h-3 w-3" />
+                      <span>Attach Signature</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="relative rounded-xl overflow-hidden bg-slate-950/80 border border-surface-700/60 touch-none">
+                  <canvas
+                    ref={sigCanvasRef}
+                    width={400}
+                    height={110}
+                    onMouseDown={handleStartDrawing}
+                    onMouseMove={handleDraw}
+                    onMouseUp={handleStopDrawing}
+                    onMouseLeave={handleStopDrawing}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleStopDrawing}
+                    className="w-full h-[110px] cursor-crosshair"
+                  />
+                  <div className="absolute bottom-2 left-3 text-[10px] text-slate-500 pointer-events-none select-none">
+                    Draw your signature above with your finger or mouse
+                  </div>
                 </div>
               </div>
             )}

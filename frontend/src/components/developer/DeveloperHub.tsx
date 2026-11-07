@@ -50,7 +50,7 @@ export const DeveloperHub: React.FC = () => {
       setInfo({
         status: 'standalone_mode',
         mode: 'Client Standalone / Offline',
-        version: '1.0.13',
+        version: '1.0.14',
         engines_installed: ['Mobile Canvas (Skia)', 'PDF-Lib (Wasm)', 'JSZip (Deflate)', 'Web Audio API', 'WebCrypto API'],
         api_base: '/api/v1',
         websocket_url: 'ws://localhost:8000/ws',

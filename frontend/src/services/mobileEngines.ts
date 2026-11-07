@@ -1774,14 +1774,15 @@ export const mobileEngines = {
       );
 
       const base = params.archive_name || files[0].filename.replace(/\.[^/.]+$/, '');
-      const outName = `${base}.7z`;
+      const ext = (params.format || 'zip').toLowerCase().includes('7z') ? '7z' : 'zip';
+      const outName = `${base}_ultra.${ext}`;
       logs.push(`Ultra compressed archive generated: ${outName} (${outBlob.size} bytes).`);
       onProgress?.(100);
 
       return {
         outputBlob: outBlob,
         outputFilename: outName,
-        outputMime: 'application/x-7z-compressed',
+        outputMime: ext === '7z' ? 'application/x-7z-compressed' : 'application/zip',
         logs,
       };
     }
@@ -1808,6 +1809,24 @@ export const mobileEngines = {
         logs.push(`Unpacked ${tarEntries.length} file(s) from uncompressed tarball.`);
         for (const entry of tarEntries) {
           newZip.file(entry.name, entry.data);
+        }
+      } else if (lowerName.endsWith('.rar')) {
+        try {
+          logs.push('Executing WASM unrar decompression on RAR archive...');
+          const { createExtractorFromData } = await import('node-unrar-js');
+          const ab = await files[0].blob.arrayBuffer();
+          const extractor = await createExtractorFromData({ data: ab });
+          const extracted = extractor.extract();
+          const filesIter = [...extracted.files];
+          logs.push(`Successfully unpacked ${filesIter.length} file(s) from RAR.`);
+          for (const item of filesIter) {
+            if (item.fileHeader && !item.fileHeader.flags.directory && item.extraction) {
+              newZip.file(item.fileHeader.name, item.extraction);
+            }
+          }
+        } catch (rarErr: any) {
+          logs.push(`Notice: RAR decompression notice (${rarErr.message}), falling back to direct repackage.`);
+          newZip.file(files[0].filename, await files[0].blob.arrayBuffer());
         }
       } else {
         try {
