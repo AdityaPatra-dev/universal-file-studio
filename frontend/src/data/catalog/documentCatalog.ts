@@ -360,10 +360,18 @@ export const DOCUMENT_TOOLS: StudioTool[] = [
     operation: 'pdf_sign',
     backendEngine: 'qpdf',
     mobileEngine: 'pdf-lib',
-    inputFormats: ['.pdf'],
+    acceptsMultipleFiles: true,
+    inputFormats: ['.pdf', '.png', '.jpg', '.jpeg'],
     outputFormats: ['.pdf'],
-    defaultParameters: { page: 'last', position: 'bottom-right' },
+    defaultParameters: { page: 'last', position: 'bottom-right', signature_name: 'Digitally Signed' },
     parameters: [
+      {
+        name: 'signature_name',
+        label: 'Signer Name / Title',
+        type: 'text',
+        default: 'Digitally Signed',
+        placeholder: 'e.g. John Doe / Approved',
+      },
       {
         name: 'position',
         label: 'Signature Placement',

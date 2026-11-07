@@ -2,7 +2,9 @@ import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting, NetworkInfo
 import { api, setApiBase } from './api';
 import { socketService } from './socket';
 import { mobileStorage } from './mobileStorage';
-import { mobileEngines, createDocxFromText } from './mobileEngines';
+import { mobileEngines, createDocxFromText, createPptxFromSlides, createXlsxFromRows, createEpubFromText } from './mobileEngines';
+import { PDFDocument } from 'pdf-lib';
+import JSZip from 'jszip';
 import { UniversalNativeEngine, writeBlobToNativeTempFile, readNativeFileAsBlob, blobToBase64 } from './nativeEngineBridge';
 import { Capacitor } from '@capacitor/core';
 
@@ -284,6 +286,10 @@ class UniversalEngineService {
             op === 'pdf_ocr_to_word' ||
             op === 'pdf_to_word' ||
             op === 'pdf_to_text' ||
+            op === 'pdf_to_powerpoint' ||
+            op === 'pdf_to_excel' ||
+            op === 'pdf_to_epub' ||
+            op === 'pdf_compress' ||
             op === 'pdf_to_images' ||
             op === 'pdf_extract_images')
         ) {
@@ -297,30 +303,120 @@ class UniversalEngineService {
               op === 'pdf_ocr' ||
               op === 'pdf_ocr_to_word' ||
               op === 'pdf_to_word' ||
-              op === 'pdf_to_text'
+              op === 'pdf_to_text' ||
+              op === 'pdf_to_powerpoint' ||
+              op === 'pdf_to_excel' ||
+              op === 'pdf_to_epub'
             ) {
               const ocrRes = await UniversalNativeEngine.processOcrNative({ inputPath: tempInputPath });
+              const baseName = fileRecord.filename.replace(/\.[^/.]+$/, '');
               if (op === 'pdf_ocr_to_word' || op === 'pdf_to_word') {
                 const docxBlob = await createDocxFromText(
                   ocrRes.text || '',
-                  fileRecord.filename.replace(/\.[^/.]+$/, '')
+                  baseName
                 );
-                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.docx`;
+                const outName = `${baseName}.docx`;
                 result = {
                   outputBlob: docxBlob,
                   outputFilename: outName,
                   outputMime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                   logs: [`[Native Tesseract 5] OCR extracted full PDF content and created Microsoft Word (.DOCX).`],
                 };
+              } else if (op === 'pdf_to_powerpoint') {
+                const lines = (ocrRes.text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+                const slides: { title: string; bullets: string[] }[] = [];
+                for (let i = 0; i < Math.max(1, lines.length); i += 4) {
+                  const chunk = lines.slice(i, i + 4);
+                  slides.push({
+                    title: chunk[0] || `Slide ${Math.floor(i / 4) + 1}`,
+                    bullets: chunk.slice(1).length > 0 ? chunk.slice(1) : ['[Content extracted from PDF]'],
+                  });
+                }
+                const pptxBlob = await createPptxFromSlides(
+                  slides.length > 0 ? slides : [{ title: baseName, bullets: [lines.join(' ')] }]
+                );
+                result = {
+                  outputBlob: pptxBlob,
+                  outputFilename: `${baseName}.pptx`,
+                  outputMime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  logs: [`[Native Tesseract 5] OCR converted PDF pages into ${slides.length} PowerPoint presentation slides (.PPTX).`],
+                };
+              } else if (op === 'pdf_to_excel') {
+                const lines = (ocrRes.text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+                const rows: string[][] = [
+                  ['Line #', 'Extracted PDF Data', 'Length'],
+                  ...lines.map((l, idx) => [String(idx + 1), l, String(l.length)]),
+                ];
+                const xlsxBlob = await createXlsxFromRows(rows, 'Extracted Data');
+                result = {
+                  outputBlob: xlsxBlob,
+                  outputFilename: `${baseName}.xlsx`,
+                  outputMime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  logs: [`[Native Tesseract 5] OCR converted PDF text into ${rows.length - 1} structured spreadsheet rows (.XLSX).`],
+                };
+              } else if (op === 'pdf_to_epub') {
+                const epubBlob = await createEpubFromText(ocrRes.text || 'No text extracted', baseName);
+                result = {
+                  outputBlob: epubBlob,
+                  outputFilename: `${baseName}.epub`,
+                  outputMime: 'application/epub+zip',
+                  logs: [`[Native Tesseract 5] OCR extracted PDF content into reflowable eBook (.EPUB).`],
+                };
               } else {
                 const textBlob = new Blob([ocrRes.text || ''], { type: 'text/plain' });
-                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}.txt`;
+                const outName = `${baseName}.txt`;
                 result = {
                   outputBlob: textBlob,
                   outputFilename: outName,
                   outputMime: 'text/plain',
                   logs: [`[Native Tesseract 5] Extracted ${ocrRes.characterCount} characters of full text from PDF.`],
                 };
+              }
+            } else if (op === 'pdf_compress') {
+              const renderRes = await UniversalNativeEngine.renderPdfPagesNative({
+                inputPath: tempInputPath,
+                format: 'jpg',
+              });
+              if (renderRes.outputPath) {
+                const isZip = renderRes.outputFilename?.endsWith('.zip');
+                const outDoc = await PDFDocument.create();
+                if (isZip) {
+                  const zipBlob = await readNativeFileAsBlob(renderRes.outputPath, 'application/zip');
+                  const zip = await JSZip.loadAsync(await zipBlob.arrayBuffer());
+                  const pageNames = Object.keys(zip.files)
+                    .filter((k) => k.endsWith('.jpg') || k.endsWith('.jpeg'))
+                    .sort();
+                  for (const pName of pageNames) {
+                    const imgBytes = await zip.files[pName].async('uint8array');
+                    const embedded = await outDoc.embedJpg(imgBytes);
+                    const page = outDoc.addPage([embedded.width, embedded.height]);
+                    page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+                  }
+                } else {
+                  const imgBlob = await readNativeFileAsBlob(renderRes.outputPath, 'image/jpeg');
+                  const imgBytes = new Uint8Array(await imgBlob.arrayBuffer());
+                  const embedded = await outDoc.embedJpg(imgBytes);
+                  const page = outDoc.addPage([embedded.width, embedded.height]);
+                  page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+                }
+                const pdfBytes = await outDoc.save({ useObjectStreams: true });
+                const compBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+                const baseName = fileRecord.filename.replace(/\.pdf$/i, '');
+                const outName = `${baseName}_compressed.pdf`;
+                const savedBytes = fileBlob.size - compBlob.size;
+                const ratioPct = Math.round((savedBytes / fileBlob.size) * 100);
+                result = {
+                  outputBlob: compBlob,
+                  outputFilename: outName,
+                  outputMime: 'application/pdf',
+                  logs: [
+                    `[Native Hardware Compressor] Recompressed ${outDoc.getPageCount()} pages via hardware JPEG rendering (${
+                      ratioPct > 0 ? ratioPct + '% reduction' : 'optimized streams'
+                    }).`,
+                  ],
+                };
+              } else {
+                throw new Error('Native PDF page rendering failed.');
               }
             } else if (op === 'pdf_to_images' || op === 'pdf_extract_images') {
               const renderRes = await UniversalNativeEngine.renderPdfPagesNative({

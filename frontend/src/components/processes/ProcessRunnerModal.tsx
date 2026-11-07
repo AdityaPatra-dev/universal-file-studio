@@ -3,7 +3,7 @@ import {
   X, Play, Sliders, CheckCircle2, AlertCircle, FileText,
   UploadCloud, ArrowRight, Download, RefreshCw, Eye, EyeOff,
   FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive, Folder, FolderUp, FolderArchive,
-  Share2, ExternalLink, FileCheck
+  Share2, ExternalLink, FileCheck, Mic, Square
 } from 'lucide-react';
 import { StudioTool, ToolParameter } from '../../data/catalog/types';
 import { FileRecord, Job } from '../../types/api';
@@ -103,6 +103,61 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const folderInputRef = useRef<HTMLInputElement>(null);
   const prevOpenRef = useRef(false);
   const prevToolIdRef = useRef<string | null>(null);
+
+  // Audio Recording State for Microphone Tool
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<any>(null);
+
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const recFile = new File([audioBlob], `voice_recording_${Date.now()}.wav`, { type: 'audio/wav' });
+        const uploaded = await universalEngine.uploadFiles([recFile]);
+        onFilesUploaded?.(uploaded);
+        setSelectedFiles(uploaded);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordTimerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch (err: any) {
+      setErrorMessage(`Microphone access error: ${err.message}. Please allow microphone permissions.`);
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   // Initialize modal state on tool or file change (guarded against reference instability)
   useEffect(() => {
@@ -725,6 +780,50 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* Live Microphone Recording Studio */}
+            {tool.id === 'audio_record' && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-red-950/40 via-surface-900 to-surface-900 border border-red-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-2 rounded-xl ${isRecording ? 'bg-red-500/20 text-red-400 animate-pulse' : 'bg-surface-800 text-slate-400'}`}>
+                      <Mic className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-2">
+                        <span>Built-in Voice Recorder</span>
+                        {isRecording && (
+                          <span className="flex items-center gap-1 text-[10px] text-red-400 font-mono font-semibold">
+                            <span className="h-2 w-2 rounded-full bg-red-500 animate-ping inline-block" />
+                            REC {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:{(recordingTime % 60).toString().padStart(2, '0')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400">Capture voice notes or live audio with your device microphone</div>
+                    </div>
+                  </div>
+                  {isRecording ? (
+                    <button
+                      type="button"
+                      onClick={handleStopRecording}
+                      className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 btn-press animate-pulse"
+                    >
+                      <Square className="h-3.5 w-3.5 fill-current" />
+                      <span>Stop & Save</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleStartRecording}
+                      className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 btn-press"
+                    >
+                      <Mic className="h-3.5 w-3.5" />
+                      <span>Start Recording</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Selected File(s) List */}
             {selectedFiles.length > 0 ? (
