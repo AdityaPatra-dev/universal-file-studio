@@ -512,9 +512,39 @@ class UniversalEngineService {
           } else {
             throw new Error('Offline OCR is supported on native Android with Tesseract or via desktop backend.');
           }
-        } else if (category === 'archive' || op === 'zip' || op === 'create_zip' || op === 'archive' || op === 'compress' || op === 'extract_zip') {
+        } else if (
+          category === 'archive' ||
+          op.startsWith('archive_') ||
+          op === 'zip' ||
+          op === 'create_zip' ||
+          op === 'archive' ||
+          op === 'compress' ||
+          op === 'extract_zip' ||
+          op === 'file_hash'
+        ) {
+          const allBlobs: { blob: Blob; filename: string }[] = [
+            { blob: fileBlob, filename: fileRecord.filename },
+          ];
+
+          const additionalIds: any[] = payload.parameters?.additional_file_ids || 
+            (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
+
+          if (Array.isArray(additionalIds) && additionalIds.length > 0) {
+            for (const addId of additionalIds) {
+              try {
+                const addRec = await mobileStorage.getFileRecord(Number(addId));
+                const addBlob = await mobileStorage.getFileBlob(Number(addId));
+                if (addRec && addBlob) {
+                  allBlobs.push({ blob: addBlob, filename: addRec.filename });
+                }
+              } catch (err) {
+                console.warn('Failed to load additional file for archive job:', addId, err);
+              }
+            }
+          }
+
           result = await mobileEngines.processArchive(
-            [{ blob: fileBlob, filename: fileRecord.filename }],
+            allBlobs,
             op,
             payload.parameters,
             (pct) => {

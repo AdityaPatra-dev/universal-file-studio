@@ -306,7 +306,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
                 if (outputDir == null) outputDir = getContext().getCacheDir();
 
-                if ("create_zip".equals(operation) || "archive".equals(operation)) {
+                if ("create_zip".equals(operation) || "archive".equals(operation) || "archive_create".equals(operation) || "archive_create_zip".equals(operation) || "archive_protect".equals(operation) || "archive_create_7z".equals(operation)) {
                     if (filesArray == null || filesArray.length() == 0) {
                         call.reject("No files specified for archive creation");
                         return;
@@ -341,7 +341,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     res.put("sizeBytes", zipFile.length());
                     call.resolve(res);
 
-                } else if ("extract_zip".equals(operation) || "extract".equals(operation)) {
+                } else if ("extract_zip".equals(operation) || "extract".equals(operation) || "archive_extract".equals(operation) || "archive_convert".equals(operation)) {
                     if (inputArchive == null || !new File(inputArchive).exists()) {
                         call.reject("Archive file does not exist: " + inputArchive);
                         return;
