@@ -14,10 +14,13 @@ import java.util.List;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.pdf.PdfRenderer;
+import android.os.ParcelFileDescriptor;
 import android.media.MediaMetadataRetriever;
 import android.os.Build;
 import android.os.Environment;
@@ -1193,14 +1196,54 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     return;
                 }
 
-                Bitmap bitmap = BitmapFactory.decodeFile(inputPath);
-                if (bitmap == null) {
-                    call.reject("Failed to decode image for OCR");
-                    return;
-                }
+                String recognizedText;
+                if (inputPath.toLowerCase().endsWith(".pdf")) {
+                    ParcelFileDescriptor pfd = null;
+                    PdfRenderer renderer = null;
+                    try {
+                        pfd = ParcelFileDescriptor.open(new File(inputPath), ParcelFileDescriptor.MODE_READ_ONLY);
+                        renderer = new PdfRenderer(pfd);
+                        int pageCount = renderer.getPageCount();
+                        StringBuilder allText = new StringBuilder();
+                        for (int i = 0; i < pageCount; i++) {
+                            PdfRenderer.Page page = renderer.openPage(i);
+                            int w = page.getWidth() * 2;
+                            int h = page.getHeight() * 2;
+                            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                            Canvas canvas = new Canvas(bmp);
+                            canvas.drawColor(Color.WHITE);
+                            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                            page.close();
 
-                tess.setImage(bitmap);
-                String recognizedText = tess.getUTF8Text();
+                            tess.setImage(bmp);
+                            String pageText = tess.getUTF8Text();
+                            if (pageText != null && !pageText.trim().isEmpty()) {
+                                if (pageCount > 1) {
+                                    allText.append("--- Page ").append(i + 1).append(" ---\n");
+                                }
+                                allText.append(pageText).append("\n\n");
+                            }
+                            bmp.recycle();
+                        }
+                        recognizedText = allText.toString();
+                    } finally {
+                        if (renderer != null) {
+                            try { renderer.close(); } catch (Exception ignored) {}
+                        }
+                        if (pfd != null) {
+                            try { pfd.close(); } catch (Exception ignored) {}
+                        }
+                    }
+                } else {
+                    Bitmap bitmap = BitmapFactory.decodeFile(inputPath);
+                    if (bitmap == null) {
+                        call.reject("Failed to decode image for OCR");
+                        return;
+                    }
+                    tess.setImage(bitmap);
+                    recognizedText = tess.getUTF8Text();
+                    bitmap.recycle();
+                }
 
                 // Also save recognized text to a file for seamless workflow chaining
                 File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
@@ -1227,6 +1270,120 @@ public class UniversalNativeEnginePlugin extends Plugin {
             } finally {
                 if (tess != null) {
                     try { tess.recycle(); } catch (Exception ignored) {}
+                }
+            }
+        });
+    }
+
+    /**
+     * Native Hardware-Accelerated PDF Page Rendering using android.graphics.pdf.PdfRenderer
+     */
+    @PluginMethod
+    public void renderPdfPagesNative(PluginCall call) {
+        executor.execute(() -> {
+            ParcelFileDescriptor pfd = null;
+            PdfRenderer renderer = null;
+            try {
+                String inputPath = call.getString("inputPath");
+                if (inputPath == null || !new File(inputPath).exists()) {
+                    call.reject("PDF input file not found: " + inputPath);
+                    return;
+                }
+
+                int scale = call.getInt("scale", 2); // 2x default for crisp 144-150 DPI render
+                if (scale < 1) scale = 1;
+                if (scale > 4) scale = 4;
+
+                String format = call.getString("format", "png").toLowerCase();
+                Bitmap.CompressFormat compressFormat = format.contains("jp") ? Bitmap.CompressFormat.JPEG : Bitmap.CompressFormat.PNG;
+                String ext = format.contains("jp") ? ".jpg" : ".png";
+
+                File inputFile = new File(inputPath);
+                pfd = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY);
+                renderer = new PdfRenderer(pfd);
+                int pageCount = renderer.getPageCount();
+
+                if (pageCount == 0) {
+                    call.reject("PDF document has 0 pages");
+                    return;
+                }
+
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+
+                String baseName = inputFile.getName().replaceFirst("[.][^.]+$", "");
+
+                // If only 1 page, output single image directly
+                if (pageCount == 1) {
+                    PdfRenderer.Page page = renderer.openPage(0);
+                    int w = page.getWidth() * scale;
+                    int h = page.getHeight() * scale;
+                    Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(bmp);
+                    canvas.drawColor(Color.WHITE);
+                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    page.close();
+
+                    File outFile = new File(outputDir, baseName + "_page_1" + ext);
+                    try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                        bmp.compress(compressFormat, 90, fos);
+                        fos.flush();
+                    }
+                    bmp.recycle();
+
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("outputPath", outFile.getAbsolutePath());
+                    res.put("outputFilename", outFile.getName());
+                    res.put("pageCount", 1);
+                    res.put("sizeBytes", outFile.length());
+                    res.put("mimeType", format.contains("jp") ? "image/jpeg" : "image/png");
+                    call.resolve(res);
+                } else {
+                    // Multi-page PDF: render each page and bundle into a ZIP archive
+                    File zipFile = new File(outputDir, baseName + "_pages.zip");
+                    try (FileOutputStream fos = new FileOutputStream(zipFile);
+                         ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(fos))) {
+
+                        for (int i = 0; i < pageCount; i++) {
+                            PdfRenderer.Page page = renderer.openPage(i);
+                            int w = page.getWidth() * scale;
+                            int h = page.getHeight() * scale;
+                            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                            Canvas canvas = new Canvas(bmp);
+                            canvas.drawColor(Color.WHITE);
+                            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                            page.close();
+
+                            String entryName = String.format(Locale.US, "%s_page_%03d%s", baseName, i + 1, ext);
+                            ZipEntry entry = new ZipEntry(entryName);
+                            zos.putNextEntry(entry);
+                            bmp.compress(compressFormat, 90, zos);
+                            zos.closeEntry();
+                            bmp.recycle();
+                        }
+                        zos.flush();
+                    }
+
+                    JSObject res = new JSObject();
+                    res.put("success", true);
+                    res.put("outputPath", zipFile.getAbsolutePath());
+                    res.put("outputFilename", zipFile.getName());
+                    res.put("pageCount", pageCount);
+                    res.put("sizeBytes", zipFile.length());
+                    res.put("mimeType", "application/zip");
+                    call.resolve(res);
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "renderPdfPagesNative error: " + e.getMessage(), e);
+                call.reject("Failed to render PDF pages: " + e.getMessage());
+            } finally {
+                if (renderer != null) {
+                    try { renderer.close(); } catch (Exception ignored) {}
+                }
+                if (pfd != null) {
+                    try { pfd.close(); } catch (Exception ignored) {}
                 }
             }
         });

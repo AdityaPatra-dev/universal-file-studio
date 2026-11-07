@@ -68,6 +68,11 @@ export interface UniversalNativeEnginePlugin {
   processOcrNative(options: {
     inputPath: string;
   }): Promise<{ success: boolean; text: string; characterCount: number; outputPath?: string; outputFilename?: string; sizeBytes?: number }>;
+  renderPdfPagesNative(options: {
+    inputPath: string;
+    scale?: number;
+    format?: 'png' | 'jpg' | 'jpeg';
+  }): Promise<NativeProcessResult & { pageCount?: number }>;
   writeTempFile(options: {
     fileName: string;
     base64Data: string;

@@ -2,7 +2,7 @@ import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting, NetworkInfo
 import { api, setApiBase } from './api';
 import { socketService } from './socket';
 import { mobileStorage } from './mobileStorage';
-import { mobileEngines } from './mobileEngines';
+import { mobileEngines, createDocxFromText } from './mobileEngines';
 import { UniversalNativeEngine, writeBlobToNativeTempFile, readNativeFileAsBlob, blobToBase64 } from './nativeEngineBridge';
 import { Capacitor } from '@capacitor/core';
 
@@ -279,21 +279,67 @@ class UniversalEngineService {
             op === 'video_thumbnail' ||
             op === 'remove_audio' ||
             op === 'gif_to_video' ||
-            op.startsWith('ocr'))
+            op.startsWith('ocr') ||
+            op === 'pdf_ocr' ||
+            op === 'pdf_ocr_to_word' ||
+            op === 'pdf_to_images' ||
+            op === 'pdf_extract_images')
         ) {
           const tempInputPath = await writeBlobToNativeTempFile(fileBlob, fileRecord.filename);
           const createdTempPaths: string[] = [tempInputPath];
           try {
-            if (op.startsWith('ocr') || op === 'ocr_image' || op === 'ocr_pdf') {
+            if (
+              op.startsWith('ocr') ||
+              op === 'ocr_image' ||
+              op === 'ocr_pdf' ||
+              op === 'pdf_ocr' ||
+              op === 'pdf_ocr_to_word'
+            ) {
               const ocrRes = await UniversalNativeEngine.processOcrNative({ inputPath: tempInputPath });
-              const textBlob = new Blob([ocrRes.text || ''], { type: 'text/plain' });
-              const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.txt`;
-              result = {
-                outputBlob: textBlob,
-                outputFilename: outName,
-                outputMime: 'text/plain',
-                logs: [`[Native Tesseract 5] OCR extracted ${ocrRes.characterCount} characters.`],
-              };
+              if (op === 'pdf_ocr_to_word') {
+                const docxBlob = await createDocxFromText(
+                  ocrRes.text || '',
+                  fileRecord.filename.replace(/\.[^/.]+$/, '')
+                );
+                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.docx`;
+                result = {
+                  outputBlob: docxBlob,
+                  outputFilename: outName,
+                  outputMime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                  logs: [`[Native Tesseract 5] OCR extracted and converted text to Microsoft Word (.DOCX).`],
+                };
+              } else {
+                const textBlob = new Blob([ocrRes.text || ''], { type: 'text/plain' });
+                const outName = `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_ocr.txt`;
+                result = {
+                  outputBlob: textBlob,
+                  outputFilename: outName,
+                  outputMime: 'text/plain',
+                  logs: [`[Native Tesseract 5] OCR extracted ${ocrRes.characterCount} characters.`],
+                };
+              }
+            } else if (op === 'pdf_to_images' || op === 'pdf_extract_images') {
+              const renderRes = await UniversalNativeEngine.renderPdfPagesNative({
+                inputPath: tempInputPath,
+                format: (payload.parameters?.format as any) || 'png',
+              });
+              if (renderRes.outputPath) {
+                const isZip = renderRes.outputFilename?.endsWith('.zip');
+                const outBlob = await readNativeFileAsBlob(
+                  renderRes.outputPath,
+                  isZip ? 'application/zip' : (renderRes as any).mimeType || 'image/png'
+                );
+                result = {
+                  outputBlob: outBlob,
+                  outputFilename: renderRes.outputFilename || `${fileRecord.filename.replace(/\.[^/.]+$/, '')}_pages.zip`,
+                  outputMime: isZip ? 'application/zip' : (renderRes as any).mimeType || 'image/png',
+                  logs: [
+                    `[Native PdfRenderer] Successfully rendered ${renderRes.pageCount || 1} pages with hardware acceleration.`,
+                  ],
+                };
+              } else {
+                throw new Error('Native PDF rendering produced no output file.');
+              }
             } else if (category === 'audio' || op.startsWith('audio_')) {
               // Multi-file support for audio_merge
               if (op === 'audio_merge') {
