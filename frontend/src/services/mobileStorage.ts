@@ -248,6 +248,23 @@ export const mobileStorage = {
     });
   },
 
+  async reconcileInterruptedJobs(): Promise<void> {
+    try {
+      const all = await this.getJobs();
+      for (const j of all) {
+        if (['running', 'queued', 'pending'].includes(j.status)) {
+          await this.updateJob(j.id, {
+            status: 'failed',
+            error_message: 'Process was interrupted by system memory management or unexpected app closure. Tap Retry to run again.',
+            completed_at: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('reconcileInterruptedJobs warning:', e);
+    }
+  },
+
   async deleteJobsBulk(status?: string): Promise<{ success: boolean; deleted_count: number }> {
     const all = await this.getJobs();
     const toDelete = status ? all.filter(j => j.status === status) : all;

@@ -59,7 +59,9 @@ import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 import com.arthenica.ffmpegkit.FFmpegKit;
+import com.arthenica.ffmpegkit.FFmpegKitConfig;
 import com.arthenica.ffmpegkit.FFmpegSession;
+import com.arthenica.ffmpegkit.Level;
 import com.arthenica.ffmpegkit.ReturnCode;
 import com.arthenica.ffmpegkit.Statistics;
 import com.arthenica.ffmpegkit.StatisticsCallback;
@@ -69,6 +71,16 @@ import com.googlecode.tesseract.android.TessBaseAPI;
 public class UniversalNativeEnginePlugin extends Plugin {
     private static final String TAG = "UniversalNativeEngine";
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
+
+    @Override
+    public void load() {
+        super.load();
+        try {
+            FFmpegKitConfig.setLogLevel(Level.AV_LOG_WARNING);
+            FFmpegKitConfig.enableLogCallback(null);
+        } catch (Throwable ignored) {
+        }
+    }
 
     @PluginMethod
     public void getEngineStatus(PluginCall call) {
@@ -946,23 +958,10 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 }
 
                 final long finalDur = durationMs;
-                FFmpegKit.executeAsync(
-                    cmd.toString(),
-                    session -> {
-                        if (ReturnCode.isSuccess(session.getReturnCode())) {
-                            JSObject res = new JSObject();
-                            res.put("success", true);
-                            res.put("outputPath", out.getAbsolutePath());
-                            res.put("outputFilename", out.getName());
-                            res.put("sizeBytes", out.length());
-                            call.resolve(res);
-                        } else {
-                            call.reject("Video operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
-                        }
-                    },
-                    log -> {},
-                    statistics -> {
-                        if (statistics != null) {
+                final int[] lastProgress = new int[] { -1 };
+                FFmpegKitConfig.enableStatisticsCallback(statistics -> {
+                    if (statistics != null) {
+                        try {
                             double timeMs = statistics.getTime();
                             int pct;
                             if (finalDur > 0) {
@@ -970,13 +969,42 @@ public class UniversalNativeEnginePlugin extends Plugin {
                             } else {
                                 pct = (int) Math.min(95, 10 + (timeMs / 1000) * 5);
                             }
-                            JSObject prog = new JSObject();
-                            prog.put("percent", pct);
-                            notifyListeners("videoProgress", prog);
-                        }
+                            if (pct >= lastProgress[0] + 2) {
+                                lastProgress[0] = pct;
+                                if (getActivity() != null) {
+                                    getActivity().runOnUiThread(() -> {
+                                        try {
+                                            JSObject prog = new JSObject();
+                                            prog.put("percent", pct);
+                                            notifyListeners("videoProgress", prog);
+                                        } catch (Throwable ignored) {}
+                                    });
+                                }
+                            }
+                        } catch (Throwable ignored) {}
                     }
-                );
-            } catch (Exception e) {
+                });
+
+                try {
+                    FFmpegSession session = FFmpegKit.execute(cmd.toString());
+                    if (ReturnCode.isSuccess(session.getReturnCode())) {
+                        JSObject res = new JSObject();
+                        res.put("success", true);
+                        res.put("outputPath", out.getAbsolutePath());
+                        res.put("outputFilename", out.getName());
+                        res.put("sizeBytes", out.length());
+                        call.resolve(res);
+                    } else {
+                        String err = session.getFailStackTrace();
+                        if (err == null || err.isEmpty()) err = "FFmpeg returned code " + session.getReturnCode();
+                        call.reject("Video operation failed: " + err);
+                    }
+                } finally {
+                    try {
+                        FFmpegKitConfig.enableStatisticsCallback(null);
+                    } catch (Throwable ignored) {}
+                }
+            } catch (Throwable e) {
                 Log.e(TAG, "processVideoNative error: " + e.getMessage(), e);
                 call.reject("Video operation failed: " + e.getMessage());
             }
@@ -1140,54 +1168,11 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 final File finalOutputDir = outputDir;
                 final String finalOutExt = outExt;
                 final String finalCleanBase = cleanBase;
-                FFmpegKit.executeAsync(
-                    cmd.toString(),
-                    session -> {
-                        if (ReturnCode.isSuccess(session.getReturnCode())) {
-                            JSObject res = new JSObject();
-                            res.put("success", true);
+                final int[] lastProgress = new int[] { -1 };
 
-                            if (isSplit && splitDir != null && splitDir.exists()) {
-                                File[] parts = splitDir.listFiles((dir, name) -> name.endsWith("." + finalOutExt));
-                                if (parts != null && parts.length > 0) {
-                                    File zipOut = new File(finalOutputDir, finalCleanBase + "_split_parts.zip");
-                                    try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(zipOut)))) {
-                                        byte[] buf = new byte[8192];
-                                        for (File p : parts) {
-                                            ZipEntry entry = new ZipEntry(p.getName());
-                                            zos.putNextEntry(entry);
-                                            try (FileInputStream fis = new FileInputStream(p)) {
-                                                int len;
-                                                while ((len = fis.read(buf)) > 0) {
-                                                    zos.write(buf, 0, len);
-                                                }
-                                            }
-                                            zos.closeEntry();
-                                            p.delete();
-                                        }
-                                    } catch (Exception ignored) {}
-                                    splitDir.delete();
-                                    res.put("outputPath", zipOut.getAbsolutePath());
-                                    res.put("outputFilename", zipOut.getName());
-                                    res.put("sizeBytes", zipOut.length());
-                                } else {
-                                    res.put("outputPath", out.getAbsolutePath());
-                                    res.put("outputFilename", out.getName());
-                                    res.put("sizeBytes", out.length());
-                                }
-                            } else {
-                                res.put("outputPath", out.getAbsolutePath());
-                                res.put("outputFilename", out.getName());
-                                res.put("sizeBytes", out.length());
-                            }
-                            call.resolve(res);
-                        } else {
-                            call.reject("Audio operation failed (" + session.getReturnCode() + "): " + session.getFailStackTrace());
-                        }
-                    },
-                    log -> {},
-                    statistics -> {
-                        if (statistics != null) {
+                FFmpegKitConfig.enableStatisticsCallback(statistics -> {
+                    if (statistics != null) {
+                        try {
                             double timeMs = statistics.getTime();
                             int pct;
                             if (finalDur > 0) {
@@ -1195,13 +1180,73 @@ public class UniversalNativeEnginePlugin extends Plugin {
                             } else {
                                 pct = (int) Math.min(95, 10 + (timeMs / 1000) * 5);
                             }
-                            JSObject prog = new JSObject();
-                            prog.put("percent", pct);
-                            notifyListeners("audioProgress", prog);
-                        }
+                            if (pct >= lastProgress[0] + 2) {
+                                lastProgress[0] = pct;
+                                if (getActivity() != null) {
+                                    getActivity().runOnUiThread(() -> {
+                                        try {
+                                            JSObject prog = new JSObject();
+                                            prog.put("percent", pct);
+                                            notifyListeners("audioProgress", prog);
+                                        } catch (Throwable ignored) {}
+                                    });
+                                }
+                            }
+                        } catch (Throwable ignored) {}
                     }
-                );
-            } catch (Exception e) {
+                });
+
+                try {
+                    FFmpegSession session = FFmpegKit.execute(cmd.toString());
+                    if (ReturnCode.isSuccess(session.getReturnCode())) {
+                        JSObject res = new JSObject();
+                        res.put("success", true);
+
+                        if (isSplit && splitDir != null && splitDir.exists()) {
+                            File[] parts = splitDir.listFiles((dir, name) -> name.endsWith("." + finalOutExt));
+                            if (parts != null && parts.length > 0) {
+                                File zipOut = new File(finalOutputDir, finalCleanBase + "_split_parts.zip");
+                                try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(zipOut)))) {
+                                    byte[] buf = new byte[8192];
+                                    for (File p : parts) {
+                                        ZipEntry entry = new ZipEntry(p.getName());
+                                        zos.putNextEntry(entry);
+                                        try (FileInputStream fis = new FileInputStream(p)) {
+                                            int len;
+                                            while ((len = fis.read(buf)) > 0) {
+                                                zos.write(buf, 0, len);
+                                            }
+                                        }
+                                        zos.closeEntry();
+                                        p.delete();
+                                    }
+                                } catch (Exception ignored) {}
+                                splitDir.delete();
+                                res.put("outputPath", zipOut.getAbsolutePath());
+                                res.put("outputFilename", zipOut.getName());
+                                res.put("sizeBytes", zipOut.length());
+                            } else {
+                                res.put("outputPath", out.getAbsolutePath());
+                                res.put("outputFilename", out.getName());
+                                res.put("sizeBytes", out.length());
+                            }
+                        } else {
+                            res.put("outputPath", out.getAbsolutePath());
+                            res.put("outputFilename", out.getName());
+                            res.put("sizeBytes", out.length());
+                        }
+                        call.resolve(res);
+                    } else {
+                        String err = session.getFailStackTrace();
+                        if (err == null || err.isEmpty()) err = "FFmpeg returned code " + session.getReturnCode();
+                        call.reject("Audio operation failed: " + err);
+                    }
+                } finally {
+                    try {
+                        FFmpegKitConfig.enableStatisticsCallback(null);
+                    } catch (Throwable ignored) {}
+                }
+            } catch (Throwable e) {
                 Log.e(TAG, "processAudioNative error: " + e.getMessage(), e);
                 call.reject("Audio operation failed: " + e.getMessage());
             }
@@ -1315,7 +1360,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 res.put("sizeBytes", outFile.length());
                 call.resolve(res);
 
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 Log.e(TAG, "processOcrNative error: " + e.getMessage(), e);
                 call.reject("OCR recognition failed: " + e.getMessage());
             } finally {
@@ -1426,7 +1471,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     call.resolve(res);
                 }
 
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 Log.e(TAG, "renderPdfPagesNative error: " + e.getMessage(), e);
                 call.reject("Failed to render PDF pages: " + e.getMessage());
             } finally {

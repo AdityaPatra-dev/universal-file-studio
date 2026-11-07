@@ -99,6 +99,7 @@ class UniversalEngineService {
     }
 
     this.setMode('mobile_standalone');
+    mobileStorage.reconcileInterruptedJobs().catch(() => {});
     return 'mobile_standalone';
   }
 
