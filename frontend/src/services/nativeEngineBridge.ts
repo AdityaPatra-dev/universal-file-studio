@@ -73,6 +73,23 @@ export interface UniversalNativeEnginePlugin {
     scale?: number;
     format?: 'png' | 'jpg' | 'jpeg';
   }): Promise<NativeProcessResult & { pageCount?: number }>;
+  protectPdfNative(options: {
+    inputPath: string;
+    userPassword: string;
+    ownerPassword?: string;
+    keyLength?: number;
+  }): Promise<NativeProcessResult>;
+  unlockPdfNative(options: {
+    inputPath: string;
+    password?: string;
+  }): Promise<NativeProcessResult>;
+  create7zNative(options: {
+    files: string[];
+    archiveName?: string;
+  }): Promise<NativeProcessResult>;
+  extract7zNative(options: {
+    inputPath: string;
+  }): Promise<NativeProcessResult>;
   writeTempFile(options: {
     fileName: string;
     base64Data: string;
@@ -103,6 +120,7 @@ export interface UniversalNativeEnginePlugin {
     filePath: string;
     title?: string | null;
   }): Promise<{ success: boolean }>;
+  cancelNativeJob(): Promise<{ success: boolean; message?: string }>;
   addListener(
     eventName: 'videoProgress' | 'audioProgress',
     listenerFunc: (info: { percent: number }) => void
@@ -199,11 +217,11 @@ function base64ToBlob(base64: string, mimeType: string): Blob {
 
   for (let offset = 0; offset < byteChars.length; offset += sliceSize) {
     const slice = byteChars.slice(offset, offset + sliceSize);
-    const byteNumbers = new Array(slice.length);
+    const byteArray = new Uint8Array(slice.length);
     for (let i = 0; i < slice.length; i++) {
-      byteNumbers[i] = slice.charCodeAt(i);
+      byteArray[i] = slice.charCodeAt(i);
     }
-    byteArrays.push(new Uint8Array(byteNumbers));
+    byteArrays.push(byteArray);
   }
 
   return new Blob(byteArrays as any, { type: mimeType });

@@ -11,3 +11,12 @@
     @com.getcapacitor.PluginMethod public *;
 }
 
+-keep class com.tom_roush.pdfbox.** { *; }
+-dontwarn com.tom_roush.pdfbox.**
+
+-keep class org.apache.commons.compress.** { *; }
+-dontwarn org.apache.commons.compress.**
+
+-keep class org.tukaani.xz.** { *; }
+-dontwarn org.tukaani.xz.**
+

@@ -644,14 +644,71 @@ class UniversalEngineService {
             }
           }
 
-          result = await mobileEngines.processArchive(
-            allBlobs,
-            op,
-            payload.parameters,
-            (pct) => {
-              mobileStorage.updateJob(jobId, { progress_percent: pct });
+          if (
+            isNative &&
+            (op === 'archive_create_7z' ||
+              (op === 'archive_convert' && fileRecord.filename.toLowerCase().endsWith('.7z')))
+          ) {
+            const tempPaths: string[] = [];
+            try {
+              for (const b of allBlobs) {
+                const p = await writeBlobToNativeTempFile(b.blob, b.filename);
+                tempPaths.push(p);
+              }
+              if (op === 'archive_create_7z') {
+                const baseName = fileRecord.filename.replace(/\.[^/.]+$/, '');
+                const archiveName = `${baseName}.7z`;
+                const sevenZRes = await UniversalNativeEngine.create7zNative({
+                  files: tempPaths,
+                  archiveName,
+                });
+                if (!sevenZRes.outputPath) throw new Error('Native 7-Zip archive creation failed');
+                const outBlob = await readNativeFileAsBlob(sevenZRes.outputPath, 'application/x-7z-compressed');
+                result = {
+                  outputBlob: outBlob,
+                  outputFilename: archiveName,
+                  outputMime: 'application/x-7z-compressed',
+                  logs: [`[Native Commons LZMA2] Created genuine 7-Zip archive (.7z) with ${tempPaths.length} items.`],
+                };
+              } else {
+                const extractRes = await UniversalNativeEngine.extract7zNative({
+                  inputPath: tempPaths[0],
+                });
+                if (extractRes.files && extractRes.files.length > 0) {
+                  const zip = new JSZip();
+                  for (const fPath of extractRes.files) {
+                    const fBlob = await readNativeFileAsBlob(fPath, 'application/octet-stream');
+                    const fname = fPath.split('/').pop() || 'file';
+                    zip.file(fname, await fBlob.arrayBuffer());
+                  }
+                  const zipBytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+                  const outZipBlob = new Blob([zipBytes as any], { type: 'application/zip' });
+                  const baseName = fileRecord.filename.replace(/\.7z$/i, '');
+                  result = {
+                    outputBlob: outZipBlob,
+                    outputFilename: `${baseName}.zip`,
+                    outputMime: 'application/zip',
+                    logs: [`[Native LZMA2 Engine] Extracted ${extractRes.files.length} items from .7z and converted to standard .zip.`],
+                  };
+                } else {
+                  throw new Error('No files extracted from 7z archive.');
+                }
+              }
+            } finally {
+              for (const p of tempPaths) {
+                UniversalNativeEngine.deleteTempFile({ filePath: p }).catch(() => {});
+              }
             }
-          );
+          } else {
+            result = await mobileEngines.processArchive(
+              allBlobs,
+              op,
+              payload.parameters,
+              (pct) => {
+                mobileStorage.updateJob(jobId, { progress_percent: pct });
+              }
+            );
+          }
         } else if (category === 'pdf' || op.includes('pdf') || op === 'watermark' || op === 'split' || op === 'merge' || op === 'images_to_pdf' || op === 'text_to_pdf' || op === 'pdf_repair') {
           const allBlobs: { blob: Blob; filename: string }[] = [
             { blob: fileBlob, filename: fileRecord.filename },
@@ -674,14 +731,163 @@ class UniversalEngineService {
             }
           }
 
-          result = await mobileEngines.processPdf(
-            allBlobs,
-            op,
-            payload.parameters,
-            (pct) => {
-              mobileStorage.updateJob(jobId, { progress_percent: pct });
+          if (isNative && (op === 'pdf_protect' || op === 'protect_pdf' || op === 'pdf_encrypt')) {
+            const tempPath = await writeBlobToNativeTempFile(fileBlob, fileRecord.filename);
+            try {
+              const userPassword = (payload.parameters?.password as string) || (payload.parameters?.user_password as string) || '1234';
+              const ownerPassword = (payload.parameters?.owner_password as string) || userPassword;
+              const keyLength = Number(payload.parameters?.key_length) === 256 ? 256 : 128;
+              const protectRes = await UniversalNativeEngine.protectPdfNative({
+                inputPath: tempPath,
+                userPassword,
+                ownerPassword,
+                keyLength,
+              });
+              if (!protectRes.outputPath) throw new Error('Native PDF encryption failed');
+              const encBlob = await readNativeFileAsBlob(protectRes.outputPath, 'application/pdf');
+              const baseName = fileRecord.filename.replace(/\.pdf$/i, '');
+              result = {
+                outputBlob: encBlob,
+                outputFilename: `${baseName}_protected.pdf`,
+                outputMime: 'application/pdf',
+                logs: [`[Native Apache PDFBox] Successfully encrypted PDF with standard AES-${keyLength} password protection.`],
+              };
+            } finally {
+              UniversalNativeEngine.deleteTempFile({ filePath: tempPath }).catch(() => {});
             }
-          );
+          } else if (isNative && (op === 'pdf_unlock' || op === 'unlock_pdf' || op === 'pdf_decrypt')) {
+            const tempPath = await writeBlobToNativeTempFile(fileBlob, fileRecord.filename);
+            try {
+              const password = (payload.parameters?.password as string) || '';
+              const unlockRes = await UniversalNativeEngine.unlockPdfNative({
+                inputPath: tempPath,
+                password,
+              });
+              if (!unlockRes.outputPath) throw new Error('Native PDF decryption failed');
+              const decBlob = await readNativeFileAsBlob(unlockRes.outputPath, 'application/pdf');
+              const baseName = fileRecord.filename.replace(/\.pdf$/i, '');
+              result = {
+                outputBlob: decBlob,
+                outputFilename: `${baseName}_unlocked.pdf`,
+                outputMime: 'application/pdf',
+                logs: [`[Native Apache PDFBox] Successfully unlocked PDF and removed all security restrictions.`],
+              };
+            } finally {
+              UniversalNativeEngine.deleteTempFile({ filePath: tempPath }).catch(() => {});
+            }
+          } else {
+            // Check if pdf_compare on native can generate visual pixel diff
+            if (isNative && (op === 'pdf_compare' || op === 'compare_pdf') && allBlobs.length > 1) {
+              try {
+                const getPageOneDataUrl = async (blob: Blob, fname: string): Promise<string> => {
+                  const p = await writeBlobToNativeTempFile(blob, fname);
+                  try {
+                    const r = await UniversalNativeEngine.renderPdfPagesNative({ inputPath: p, format: 'png', scale: 1 });
+                    if (!r.outputPath) return '';
+                    if (r.outputFilename?.endsWith('.zip')) {
+                      const zBlob = await readNativeFileAsBlob(r.outputPath, 'application/zip');
+                      UniversalNativeEngine.deleteTempFile({ filePath: r.outputPath }).catch(() => {});
+                      const zip = await JSZip.loadAsync(await zBlob.arrayBuffer());
+                      const firstName = Object.keys(zip.files).sort()[0];
+                      if (!firstName) return '';
+                      const b64 = await zip.files[firstName].async('base64');
+                      return `data:image/png;base64,${b64}`;
+                    } else {
+                      const imgBlob = await readNativeFileAsBlob(r.outputPath, 'image/png');
+                      UniversalNativeEngine.deleteTempFile({ filePath: r.outputPath }).catch(() => {});
+                      const b64 = await blobToBase64(imgBlob);
+                      return `data:image/png;base64,${b64}`;
+                    }
+                  } finally {
+                    UniversalNativeEngine.deleteTempFile({ filePath: p }).catch(() => {});
+                  }
+                };
+
+                const [urlA, urlB] = await Promise.all([
+                  getPageOneDataUrl(allBlobs[0].blob, allBlobs[0].filename),
+                  getPageOneDataUrl(allBlobs[1].blob, allBlobs[1].filename),
+                ]);
+
+                if (urlA && urlB) {
+                  const [imgA, imgB] = await Promise.all([
+                    new Promise<HTMLImageElement>((resolve, reject) => {
+                      const img = new Image();
+                      img.onload = () => resolve(img);
+                      img.onerror = reject;
+                      img.src = urlA;
+                    }),
+                    new Promise<HTMLImageElement>((resolve, reject) => {
+                      const img = new Image();
+                      img.onload = () => resolve(img);
+                      img.onerror = reject;
+                      img.src = urlB;
+                    }),
+                  ]);
+
+                  const w = Math.min(imgA.width, imgB.width);
+                  const h = Math.min(imgA.height, imgB.height);
+                  if (w > 0 && h > 0) {
+                    const cA = document.createElement('canvas');
+                    cA.width = w;
+                    cA.height = h;
+                    const ctxA = cA.getContext('2d')!;
+                    ctxA.drawImage(imgA, 0, 0, w, h);
+
+                    const cB = document.createElement('canvas');
+                    cB.width = w;
+                    cB.height = h;
+                    const ctxB = cB.getContext('2d')!;
+                    ctxB.drawImage(imgB, 0, 0, w, h);
+
+                    const dA = ctxA.getImageData(0, 0, w, h);
+                    const dB = ctxB.getImageData(0, 0, w, h);
+
+                    const cDiff = document.createElement('canvas');
+                    cDiff.width = w;
+                    cDiff.height = h;
+                    const ctxDiff = cDiff.getContext('2d')!;
+                    const outDiff = ctxDiff.createImageData(w, h);
+
+                    let diffCount = 0;
+                    const len = dA.data.length;
+                    for (let i = 0; i < len; i += 4) {
+                      const dr = Math.abs(dA.data[i] - dB.data[i]);
+                      const dg = Math.abs(dA.data[i + 1] - dB.data[i + 1]);
+                      const db = Math.abs(dA.data[i + 2] - dB.data[i + 2]);
+                      if (dr + dg + db > 40) {
+                        diffCount++;
+                        outDiff.data[i] = 239;     // Red
+                        outDiff.data[i + 1] = 68;
+                        outDiff.data[i + 2] = 68;
+                        outDiff.data[i + 3] = 255;
+                      } else {
+                        const gray = Math.round((dA.data[i] + dA.data[i + 1] + dA.data[i + 2]) / 3);
+                        outDiff.data[i] = gray;
+                        outDiff.data[i + 1] = gray;
+                        outDiff.data[i + 2] = gray;
+                        outDiff.data[i + 3] = 70;
+                      }
+                    }
+                    ctxDiff.putImageData(outDiff, 0, 0);
+                    if (!payload.parameters) payload.parameters = {};
+                    payload.parameters.diffDataUrl = cDiff.toDataURL('image/png');
+                    payload.parameters.divergencePercent = ((diffCount / (w * h)) * 100).toFixed(2);
+                  }
+                }
+              } catch (diffErr) {
+                console.warn('Native visual pixel diff computation failed, falling back:', diffErr);
+              }
+            }
+
+            result = await mobileEngines.processPdf(
+              allBlobs,
+              op,
+              payload.parameters,
+              (pct) => {
+                mobileStorage.updateJob(jobId, { progress_percent: pct });
+              }
+            );
+          }
         } else if (
           category === 'image' ||
           op.startsWith('image_') ||
@@ -756,7 +962,7 @@ class UniversalEngineService {
         }
 
         // Save output file back to mobile store
-        const savedOutput = await mobileStorage.saveFile(result.outputBlob, result.outputFilename);
+        await mobileStorage.saveFile(result.outputBlob, result.outputFilename);
 
         await mobileStorage.updateJob(
           jobId,
@@ -809,6 +1015,32 @@ class UniversalEngineService {
     const job = await mobileStorage.getJob(id);
     if (!job) throw new Error(`Job ${id} not found`);
     return job;
+  }
+
+  async getFileBlob(fileId: number): Promise<Blob | null> {
+    if (this.isDesktop()) {
+      try {
+        const res = await fetch(`/api/files/${fileId}/download`);
+        if (!res.ok) return null;
+        return await res.blob();
+      } catch {
+        return null;
+      }
+    }
+    return await mobileStorage.getFileBlob(fileId);
+  }
+
+  async getJobOutputBlob(jobId: string): Promise<Blob | null> {
+    if (this.isDesktop()) {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/download`);
+        if (!res.ok) return null;
+        return await res.blob();
+      } catch {
+        return null;
+      }
+    }
+    return await mobileStorage.getJobOutputBlob(jobId);
   }
 
   async getJobDownloadUrl(id: string): Promise<string> {
@@ -972,6 +1204,13 @@ class UniversalEngineService {
         return;
       } catch (err) {
         console.warn('Desktop cancelJob failed, falling back:', err);
+      }
+    }
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await UniversalNativeEngine.cancelNativeJob();
+      } catch (err) {
+        console.warn('Failed to cancel native job:', err);
       }
     }
     await mobileStorage.cancelJob(id);

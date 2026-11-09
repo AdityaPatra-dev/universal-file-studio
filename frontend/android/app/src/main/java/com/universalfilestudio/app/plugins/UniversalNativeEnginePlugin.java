@@ -67,6 +67,16 @@ import com.arthenica.ffmpegkit.Statistics;
 import com.arthenica.ffmpegkit.StatisticsCallback;
 import com.googlecode.tesseract.android.TessBaseAPI;
 
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.pdmodel.encryption.AccessPermission;
+import com.tom_roush.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
+import org.apache.commons.compress.archivers.sevenz.SevenZFile;
+import org.apache.commons.compress.archivers.sevenz.SevenZMethod;
+import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile;
+import com.universalfilestudio.app.services.UniversalProcessingService;
+
 @CapacitorPlugin(name = "UniversalNativeEngine")
 public class UniversalNativeEnginePlugin extends Plugin {
     private static final String TAG = "UniversalNativeEngine";
@@ -78,6 +88,10 @@ public class UniversalNativeEnginePlugin extends Plugin {
         try {
             FFmpegKitConfig.setLogLevel(Level.AV_LOG_WARNING);
             FFmpegKitConfig.enableLogCallback(null);
+        } catch (Throwable ignored) {
+        }
+        try {
+            PDFBoxResourceLoader.init(getContext());
         } catch (Throwable ignored) {
         }
     }
@@ -683,9 +697,10 @@ public class UniversalNativeEnginePlugin extends Plugin {
     @PluginMethod
     public void processVideoNative(PluginCall call) {
         executor.execute(() -> {
+            String operation = call.getString("operation", "compress_video");
+            UniversalProcessingService.start(getContext(), "Processing Video (" + operation + ")...");
             try {
                 String inputPath = call.getString("inputPath");
-                String operation = call.getString("operation", "compress_video");
                 JSObject params = call.getObject("parameters", new JSObject());
                 JSArray filesArray = call.getArray("files");
 
@@ -926,10 +941,11 @@ public class UniversalNativeEnginePlugin extends Plugin {
                             }
                         }
                         cmd.append("-f concat -safe 0 -i \"").append(listFile.getAbsolutePath()).append("\" ")
+                           .append("-vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" ")
                            .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
                            .append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac \"").append(out.getAbsolutePath()).append("\"");
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac \"").append(out.getAbsolutePath()).append("\"");
                     }
                 } else {
                     String res = params.optString("resolution", "original").toLowerCase();
@@ -971,6 +987,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                             }
                             if (pct >= lastProgress[0] + 2) {
                                 lastProgress[0] = pct;
+                                UniversalProcessingService.updateProgress(getContext(), "Processing Video (" + operation + ")...", pct);
                                 if (getActivity() != null) {
                                     getActivity().runOnUiThread(() -> {
                                         try {
@@ -1007,6 +1024,8 @@ public class UniversalNativeEnginePlugin extends Plugin {
             } catch (Throwable e) {
                 Log.e(TAG, "processVideoNative error: " + e.getMessage(), e);
                 call.reject("Video operation failed: " + e.getMessage());
+            } finally {
+                UniversalProcessingService.stop(getContext());
             }
         });
     }
@@ -1017,9 +1036,10 @@ public class UniversalNativeEnginePlugin extends Plugin {
     @PluginMethod
     public void processAudioNative(PluginCall call) {
         executor.execute(() -> {
+            String operation = call.getString("operation", "audio_convert");
+            UniversalProcessingService.start(getContext(), "Processing Audio (" + operation + ")...");
             try {
                 String inputPath = call.getString("inputPath");
-                String operation = call.getString("operation", "audio_convert");
                 JSObject params = call.getObject("parameters", new JSObject());
                 JSArray filesArray = call.getArray("files");
 
@@ -1182,6 +1202,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                             }
                             if (pct >= lastProgress[0] + 2) {
                                 lastProgress[0] = pct;
+                                UniversalProcessingService.updateProgress(getContext(), "Processing Audio (" + operation + ")...", pct);
                                 if (getActivity() != null) {
                                     getActivity().runOnUiThread(() -> {
                                         try {
@@ -1249,6 +1270,8 @@ public class UniversalNativeEnginePlugin extends Plugin {
             } catch (Throwable e) {
                 Log.e(TAG, "processAudioNative error: " + e.getMessage(), e);
                 call.reject("Audio operation failed: " + e.getMessage());
+            } finally {
+                UniversalProcessingService.stop(getContext());
             }
         });
     }
@@ -1259,6 +1282,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
     @PluginMethod
     public void processOcrNative(PluginCall call) {
         executor.execute(() -> {
+            UniversalProcessingService.start(getContext(), "Running Neural OCR...");
             TessBaseAPI tess = null;
             try {
                 String inputPath = call.getString("inputPath");
@@ -1367,6 +1391,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if (tess != null) {
                     try { tess.recycle(); } catch (Exception ignored) {}
                 }
+                UniversalProcessingService.stop(getContext());
             }
         });
     }
@@ -1377,6 +1402,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
     @PluginMethod
     public void renderPdfPagesNative(PluginCall call) {
         executor.execute(() -> {
+            UniversalProcessingService.start(getContext(), "Rendering PDF Pages...");
             ParcelFileDescriptor pfd = null;
             PdfRenderer renderer = null;
             try {
@@ -1481,8 +1507,272 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if (pfd != null) {
                     try { pfd.close(); } catch (Exception ignored) {}
                 }
+                UniversalProcessingService.stop(getContext());
             }
         });
+    }
+
+    /**
+     * Native PDF Encryption using Apache PDFBox Standard AES-128 / AES-256
+     */
+    @PluginMethod
+    public void protectPdfNative(PluginCall call) {
+        executor.execute(() -> {
+            UniversalProcessingService.start(getContext(), "Encrypting PDF Document...");
+            try {
+                String inputPath = call.getString("inputPath");
+                String userPassword = call.getString("userPassword", "");
+                String ownerPassword = call.getString("ownerPassword", userPassword);
+                int keyLength = call.getInt("keyLength", 128);
+
+                if (inputPath == null || !new File(inputPath).exists()) {
+                    call.reject("PDF input file not found: " + inputPath);
+                    return;
+                }
+                if (userPassword == null || userPassword.isEmpty()) {
+                    call.reject("Password cannot be empty for PDF encryption");
+                    return;
+                }
+                if (ownerPassword == null || ownerPassword.isEmpty()) {
+                    ownerPassword = userPassword;
+                }
+
+                PDFBoxResourceLoader.init(getContext());
+                File inFile = new File(inputPath);
+                PDDocument doc = PDDocument.load(inFile);
+
+                AccessPermission ap = new AccessPermission();
+                ap.setCanPrint(true);
+                ap.setCanExtractContent(false);
+                ap.setCanModify(false);
+
+                StandardProtectionPolicy spp = new StandardProtectionPolicy(ownerPassword, userPassword, ap);
+                if (keyLength == 256) {
+                    spp.setEncryptionKeyLength(256);
+                } else {
+                    spp.setEncryptionKeyLength(128);
+                }
+                spp.setPermissions(ap);
+                doc.protect(spp);
+
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+                String outName = "protected_" + inFile.getName();
+                File outFile = new File(outputDir, outName);
+
+                doc.save(outFile);
+                doc.close();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("outputPath", outFile.getAbsolutePath());
+                res.put("outputFilename", outFile.getName());
+                res.put("sizeBytes", outFile.length());
+                call.resolve(res);
+            } catch (Throwable e) {
+                Log.e(TAG, "protectPdfNative error: " + e.getMessage(), e);
+                call.reject("PDF encryption failed: " + e.getMessage());
+            } finally {
+                UniversalProcessingService.stop(getContext());
+            }
+        });
+    }
+
+    /**
+     * Native PDF Decryption / Password Removal using Apache PDFBox
+     */
+    @PluginMethod
+    public void unlockPdfNative(PluginCall call) {
+        executor.execute(() -> {
+            UniversalProcessingService.start(getContext(), "Decrypting PDF Document...");
+            try {
+                String inputPath = call.getString("inputPath");
+                String password = call.getString("password", "");
+
+                if (inputPath == null || !new File(inputPath).exists()) {
+                    call.reject("PDF input file not found: " + inputPath);
+                    return;
+                }
+
+                PDFBoxResourceLoader.init(getContext());
+                File inFile = new File(inputPath);
+                PDDocument doc;
+
+                try {
+                    if (password != null && !password.isEmpty()) {
+                        doc = PDDocument.load(inFile, password);
+                    } else {
+                        doc = PDDocument.load(inFile);
+                    }
+                } catch (Exception ex) {
+                    if (password == null || password.isEmpty()) {
+                        doc = PDDocument.load(inFile, "");
+                    } else {
+                        throw ex;
+                    }
+                }
+
+                if (doc.isEncrypted()) {
+                    doc.setAllSecurityToBeRemoved(true);
+                }
+
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+                String outName = "unlocked_" + inFile.getName();
+                File outFile = new File(outputDir, outName);
+
+                doc.save(outFile);
+                doc.close();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("outputPath", outFile.getAbsolutePath());
+                res.put("outputFilename", outFile.getName());
+                res.put("sizeBytes", outFile.length());
+                call.resolve(res);
+            } catch (Throwable e) {
+                Log.e(TAG, "unlockPdfNative error: " + e.getMessage(), e);
+                String msg = e.getMessage() != null ? e.getMessage() : "Invalid password or corrupted document";
+                call.reject("PDF decryption failed: " + msg);
+            } finally {
+                UniversalProcessingService.stop(getContext());
+            }
+        });
+    }
+
+    /**
+     * Native 7-Zip Archive Creation with true LZMA2 compression via Apache Commons Compress
+     */
+    @PluginMethod
+    public void create7zNative(PluginCall call) {
+        executor.execute(() -> {
+            UniversalProcessingService.start(getContext(), "Creating 7-Zip Archive...");
+            try {
+                JSArray filesArray = call.getArray("files");
+                String archiveName = call.getString("archiveName", "archive_" + System.currentTimeMillis() + ".7z");
+                if (!archiveName.toLowerCase().endsWith(".7z")) archiveName += ".7z";
+
+                if (filesArray == null || filesArray.length() == 0) {
+                    call.reject("No files specified for 7z archive creation");
+                    return;
+                }
+
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+                File sevenZFile = new File(outputDir, archiveName);
+
+                SevenZOutputFile sevenZOutput = new SevenZOutputFile(sevenZFile);
+                sevenZOutput.setContentCompression(SevenZMethod.LZMA2);
+
+                byte[] buffer = new byte[16384];
+                for (int i = 0; i < filesArray.length(); i++) {
+                    String fPath = filesArray.getString(i);
+                    File src = new File(fPath);
+                    if (src.exists() && src.isFile()) {
+                        SevenZArchiveEntry entry = sevenZOutput.createArchiveEntry(src, src.getName());
+                        sevenZOutput.putArchiveEntry(entry);
+                        try (FileInputStream fis = new FileInputStream(src)) {
+                            int count;
+                            while ((count = fis.read(buffer)) > 0) {
+                                sevenZOutput.write(buffer, 0, count);
+                            }
+                        }
+                        sevenZOutput.closeArchiveEntry();
+                    }
+                }
+                sevenZOutput.close();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("outputPath", sevenZFile.getAbsolutePath());
+                res.put("outputFilename", sevenZFile.getName());
+                res.put("sizeBytes", sevenZFile.length());
+                call.resolve(res);
+            } catch (Throwable e) {
+                Log.e(TAG, "create7zNative error: " + e.getMessage(), e);
+                call.reject("7z creation failed: " + e.getMessage());
+            } finally {
+                UniversalProcessingService.stop(getContext());
+            }
+        });
+    }
+
+    /**
+     * Native 7-Zip Extraction via Apache Commons Compress
+     */
+    @PluginMethod
+    public void extract7zNative(PluginCall call) {
+        executor.execute(() -> {
+            UniversalProcessingService.start(getContext(), "Extracting 7-Zip Archive...");
+            try {
+                String inputArchive = call.getString("inputPath");
+                if (inputArchive == null || !new File(inputArchive).exists()) {
+                    call.reject("7z archive file does not exist: " + inputArchive);
+                    return;
+                }
+
+                File outputDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                if (outputDir == null) outputDir = getContext().getCacheDir();
+                File extractDir = new File(outputDir, new File(inputArchive).getName().replaceFirst("[.][^.]+$", "") + "_extracted");
+                extractDir.mkdirs();
+
+                JSArray extractedFiles = new JSArray();
+                byte[] buffer = new byte[16384];
+
+                File src7z = new File(inputArchive);
+                SevenZFile sevenZFile = new SevenZFile(src7z);
+                SevenZArchiveEntry entry;
+                while ((entry = sevenZFile.getNextEntry()) != null) {
+                    File targetFile = new File(extractDir, entry.getName());
+                    if (!targetFile.getCanonicalPath().startsWith(extractDir.getCanonicalPath())) {
+                        throw new SecurityException("ZipSlip path traversal attempt detected: " + entry.getName());
+                    }
+
+                    if (entry.isDirectory()) {
+                        targetFile.mkdirs();
+                    } else {
+                        targetFile.getParentFile().mkdirs();
+                        try (FileOutputStream fos = new FileOutputStream(targetFile)) {
+                            int count;
+                            while ((count = sevenZFile.read(buffer, 0, buffer.length)) > 0) {
+                                fos.write(buffer, 0, count);
+                            }
+                        }
+                        extractedFiles.put(targetFile.getAbsolutePath());
+                    }
+                }
+                sevenZFile.close();
+
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("outputDirectory", extractDir.getAbsolutePath());
+                res.put("extractedCount", extractedFiles.length());
+                res.put("files", extractedFiles);
+                call.resolve(res);
+            } catch (Throwable e) {
+                Log.e(TAG, "extract7zNative error: " + e.getMessage(), e);
+                call.reject("7z extraction failed: " + e.getMessage());
+            } finally {
+                UniversalProcessingService.stop(getContext());
+            }
+        });
+    }
+
+    /**
+     * Cancel currently running native operations (FFmpeg jobs, background services)
+     */
+    @PluginMethod
+    public void cancelNativeJob(PluginCall call) {
+        try {
+            FFmpegKit.cancel();
+            UniversalProcessingService.stop(getContext());
+            JSObject res = new JSObject();
+            res.put("cancelled", true);
+            call.resolve(res);
+        } catch (Throwable e) {
+            Log.e(TAG, "cancelNativeJob error: " + e.getMessage(), e);
+            call.reject("Failed to cancel job: " + e.getMessage());
+        }
     }
 
     /**

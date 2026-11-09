@@ -1216,7 +1216,6 @@ export const mobileEngines = {
         sizeB = blobs[1].blob.size;
       }
 
-      const diffPages = pagesA === pagesB ? 'Identical' : `${pagesA} vs ${pagesB} pages`;
       const diffSize = `${blobs[0].blob.size.toLocaleString()} bytes vs ${sizeB.toLocaleString()} bytes`;
 
       const comparisonHtml = `
@@ -1270,12 +1269,28 @@ export const mobileEngines = {
                 <tr>
                   <td style="padding: 10px; font-weight: 600; color: #475569;">Visual Pixel Diff Status</td>
                   <td style="padding: 10px; color: #059669; font-weight: 700;">
-                    ${blobs.length > 1 ? 'Analyzed • Rendered 2-Up Visual Diff Breakdown' : 'Baseline Verified'}
+                    ${blobs.length > 1 ? (params?.diffDataUrl ? `Analyzed • ${params.divergencePercent || 0}% Visual Divergence` : 'Analyzed • Rendered 2-Up Visual Diff Breakdown') : 'Baseline Verified'}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          ${
+            params?.diffDataUrl
+              ? `
+          <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <h3 style="font-size: 15px; font-weight: 700; color: #0f172a; margin: 0 0 6px 0;">Visual Pixel Difference Heatmap</h3>
+            <p style="font-size: 12px; color: #64748b; margin: 0 0 14px 0;">
+              Red highlights indicate altered or misaligned visual elements (<strong>${params.divergencePercent || 0}% divergence</strong> between documents).
+            </p>
+            <div style="text-align: center;">
+              <img src="${params.diffDataUrl}" style="max-width: 100%; max-height: 480px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);" />
+            </div>
+          </div>
+          `
+              : ''
+          }
 
           <div style="background: #f1f5f9; border-radius: 10px; padding: 16px; font-size: 12px; color: #64748b; line-height: 1.6;">
             <strong>Inspection Verification:</strong> Stream cross-reference tables verified, embedded fonts reconciled, DeviceRGB and separation color spaces validated.
@@ -1787,15 +1802,14 @@ export const mobileEngines = {
       );
 
       const base = params.archive_name || files[0].filename.replace(/\.[^/.]+$/, '');
-      const ext = (params.format || 'zip').toLowerCase().includes('7z') ? '7z' : 'zip';
-      const outName = `${base}_ultra.${ext}`;
-      logs.push(`Ultra compressed archive generated: ${outName} (${outBlob.size} bytes).`);
+      const outName = `${base}_ultra.zip`;
+      logs.push(`Ultra compressed archive generated: ${outName} (${outBlob.size} bytes, DEFLATE Level 9).`);
       onProgress?.(100);
 
       return {
         outputBlob: outBlob,
         outputFilename: outName,
-        outputMime: ext === '7z' ? 'application/x-7z-compressed' : 'application/zip',
+        outputMime: 'application/zip',
         logs,
       };
     }
@@ -1932,17 +1946,35 @@ export const mobileEngines = {
         onProgress?.(20 + Math.round(((p + 1) / numParts) * 60));
       }
 
-      const primaryPart = partBlobs[0];
-      logs.push(`Generated ${numParts} volume part(s): ${partBlobs.map((b) => b.name).join(', ')}.`);
-      logs.push(`Created direct standalone volume without outer archive wrapper.`);
-      onProgress?.(100);
+      if (numParts > 1) {
+        const zip = new JSZip();
+        for (const pb of partBlobs) {
+          zip.file(pb.name, await pb.blob.arrayBuffer());
+        }
+        const bundleBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+        const outName = `${base}_split_volumes.zip`;
+        logs.push(`Generated ${numParts} volume part(s): ${partBlobs.map((b) => b.name).join(', ')}.`);
+        logs.push(`Packaged all ${numParts} standalone volume parts into ${outName}.`);
+        onProgress?.(100);
 
-      return {
-        outputBlob: primaryPart.blob,
-        outputFilename: primaryPart.name,
-        outputMime: 'application/zip',
-        logs,
-      };
+        return {
+          outputBlob: bundleBlob,
+          outputFilename: outName,
+          outputMime: 'application/zip',
+          logs,
+        };
+      } else {
+        const primaryPart = partBlobs[0];
+        logs.push(`Archive fits in single volume: ${primaryPart.name}.`);
+        onProgress?.(100);
+
+        return {
+          outputBlob: primaryPart.blob,
+          outputFilename: primaryPart.name,
+          outputMime: 'application/zip',
+          logs,
+        };
+      }
     }
 
     // 9. TEST ARCHIVE INTEGRITY
