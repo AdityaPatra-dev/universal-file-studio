@@ -3,12 +3,14 @@ import {
   X, Play, Sliders, CheckCircle2, AlertCircle, FileText,
   UploadCloud, ArrowRight, Download, RefreshCw, Eye, EyeOff,
   FolderOpen, ChevronUp, ChevronDown, Check, Sparkles, FileArchive, Folder, FolderUp, FolderArchive,
-  Share2, ExternalLink, FileCheck, Mic, Square, PenTool
+  Share2, ExternalLink, FileCheck, Mic, Square, PenTool, XCircle
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { StudioTool, ToolParameter } from '../../data/catalog/types';
 import { FileRecord, Job } from '../../types/api';
 import { api } from '../../services/api';
 import { universalEngine } from '../../services/universalEngine';
+import { UniversalNativeEngine } from '../../services/nativeEngineBridge';
 import { formatBytes } from '../../utils/format';
 import { CatalogIcon } from './CatalogIcon';
 
@@ -98,6 +100,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const [savedFilePath, setSavedFilePath] = useState<string | null>(null);
   const [showLocationDetails, setShowLocationDetails] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const secondaryFileInputRef = useRef<HTMLInputElement>(null);
@@ -268,7 +271,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
 
     if (isOpening) {
       // Initialize default parameters
-      const initial: Record<string, any> = { ...(tool.defaultParameters || {}), ...(initialParameters || {}) };
+      const initial: Record<string, any> = { ...tool.defaultParameters, ...initialParameters };
       tool.parameters.forEach((param) => {
         if (initial[param.name] === undefined) {
           if (param.default !== undefined) {
@@ -482,6 +485,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
         engine_used: tool.backendEngine,
         parameters: runParams,
       });
+      setActiveJobId(job.id);
 
       onJobStarted?.(job);
 
@@ -508,6 +512,9 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
         setProgressPercent(100);
         setExecutionStage('Finished successfully!');
         setCompletedJob(finishedJob);
+      } else if (finishedJob.status === 'cancelled') {
+        setExecutionStage('Cancelled by user');
+        setErrorMessage('Operation was cancelled.');
       } else if (finishedJob.status === 'failed') {
         throw new Error(finishedJob.error_message || 'Processing failed.');
       } else {
@@ -519,6 +526,22 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
       setErrorMessage(err.message || 'Operation failed.');
     } finally {
       setIsExecuting(false);
+    }
+  };
+
+  const handleCancelRunning = async () => {
+    try {
+      if (activeJobId) {
+        await universalEngine.cancelJob(activeJobId);
+      }
+      if (Capacitor.isNativePlatform()) {
+        await UniversalNativeEngine.cancelNativeJob();
+      }
+      setIsExecuting(false);
+      setExecutionStage('Cancelled by user');
+      setErrorMessage('Operation was cancelled.');
+    } catch (err: any) {
+      console.warn('Failed to cancel active job:', err);
     }
   };
 
@@ -1430,7 +1453,18 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                   <span>{executionStage || 'Processing...'}</span>
                 </span>
-                <span className="font-mono font-bold text-white">{progressPercent}%</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-mono font-bold text-white">{progressPercent}%</span>
+                  <button
+                    type="button"
+                    onClick={handleCancelRunning}
+                    className="px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-[11px] font-semibold border border-rose-500/30 flex items-center gap-1 transition-colors"
+                    title="Cancel active job"
+                  >
+                    <XCircle className="h-3 w-3 text-rose-400" />
+                    <span>Cancel</span>
+                  </button>
+                </div>
               </div>
               <div className="w-full bg-surface-800 rounded-full h-2 overflow-hidden">
                 <div
@@ -1583,29 +1617,43 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
             Close
           </button>
 
-          <button
-            type="button"
-            onClick={handleExecute}
-            disabled={isExecuting || isUploading || selectedFiles.length === 0}
-            className={`px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all btn-press flex items-center gap-2 ${
-              isExecuting || isUploading || selectedFiles.length === 0
-                ? 'bg-surface-800 text-slate-500 cursor-not-allowed border border-surface-700'
-                : `bg-gradient-to-r ${tool.color} text-white shadow-brand-500/20 hover:brightness-110 active:scale-95`
-            }`}
-          >
-            {isExecuting ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                <span>Running...</span>
-              </>
-            ) : (
-              <>
-                <Play className="h-3.5 w-3.5 fill-current" />
-                <span>Run {tool.name}</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </>
+          <div className="flex items-center gap-2">
+            {isExecuting && (
+              <button
+                type="button"
+                onClick={handleCancelRunning}
+                className="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-xs font-semibold border border-rose-500/40 transition-colors btn-press flex items-center gap-1.5"
+                title="Cancel job execution"
+              >
+                <XCircle className="h-3.5 w-3.5 text-rose-400" />
+                <span>Cancel Job</span>
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              onClick={handleExecute}
+              disabled={isExecuting || isUploading || selectedFiles.length === 0}
+              className={`px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all btn-press flex items-center gap-2 ${
+                isExecuting || isUploading || selectedFiles.length === 0
+                  ? 'bg-surface-800 text-slate-500 cursor-not-allowed border border-surface-700'
+                  : `bg-gradient-to-r ${tool.color} text-white shadow-brand-500/20 hover:brightness-110 active:scale-95`
+              }`}
+            >
+              {isExecuting ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>Running...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                  <span>Run {tool.name}</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

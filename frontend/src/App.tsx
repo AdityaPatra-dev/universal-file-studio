@@ -1,30 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, TabType } from './components/layout/Sidebar';
 import { FileDropZone } from './components/files/FileDropZone';
 import { FileList } from './components/files/FileList';
-import { FileProcessModal } from './components/files/FileProcessModal';
-import { BatchProcessModal } from './components/files/BatchProcessModal';
-import { FileInspectorModal } from './components/files/FileInspectorModal';
 import { JobList } from './components/jobs/JobList';
-import { PipelineEditor } from './components/pipeline/PipelineEditor';
-import { EngineManager } from './components/system/EngineManager';
-import { Diagnostics } from './components/system/Diagnostics';
-import { SettingsView } from './components/system/SettingsView';
-import { DeveloperHub } from './components/developer/DeveloperHub';
-import { HelpGuideModal } from './components/common/HelpGuideModal';
-import { MobileConnectModal } from './components/common/MobileConnectModal';
 import { BottomNav } from './components/layout/BottomNav';
+import { ProcessDirectory } from './components/processes/ProcessDirectory';
+import { MediaViewerModal, MediaViewerTarget } from './components/common/MediaViewerModal';
 import { api } from './services/api';
 import { socketService } from './services/socket';
 import { universalEngine, EngineMode } from './services/universalEngine';
 import { FileRecord, Job, EngineInfo, SystemDiagnostics, AppSetting } from './types/api';
 import { Sparkles, X, GitMerge, Layers, Flame, ArrowRight, Wand2 } from 'lucide-react';
-import { ProcessDirectory } from './components/processes/ProcessDirectory';
-import { ProcessRunnerModal } from './components/processes/ProcessRunnerModal';
-import { UpdateModal } from './components/updates/UpdateModal';
 import { updaterService, UpdateInfo } from './services/updater';
 import { findToolById, StudioTool } from './data/catalog';
+
+// Lazy loaded secondary views and modals to optimize bundle size and startup speed
+const PipelineEditor = lazy(() => import('./components/pipeline/PipelineEditor').then(m => ({ default: m.PipelineEditor })));
+const EngineManager = lazy(() => import('./components/system/EngineManager').then(m => ({ default: m.EngineManager })));
+const Diagnostics = lazy(() => import('./components/system/Diagnostics').then(m => ({ default: m.Diagnostics })));
+const SettingsView = lazy(() => import('./components/system/SettingsView').then(m => ({ default: m.SettingsView })));
+const DeveloperHub = lazy(() => import('./components/developer/DeveloperHub').then(m => ({ default: m.DeveloperHub })));
+const FileProcessModal = lazy(() => import('./components/files/FileProcessModal').then(m => ({ default: m.FileProcessModal })));
+const BatchProcessModal = lazy(() => import('./components/files/BatchProcessModal').then(m => ({ default: m.BatchProcessModal })));
+const FileInspectorModal = lazy(() => import('./components/files/FileInspectorModal').then(m => ({ default: m.FileInspectorModal })));
+const ProcessRunnerModal = lazy(() => import('./components/processes/ProcessRunnerModal').then(m => ({ default: m.ProcessRunnerModal })));
+const HelpGuideModal = lazy(() => import('./components/common/HelpGuideModal').then(m => ({ default: m.HelpGuideModal })));
+const MobileConnectModal = lazy(() => import('./components/common/MobileConnectModal').then(m => ({ default: m.MobileConnectModal })));
+const UpdateModal = lazy(() => import('./components/updates/UpdateModal').then(m => ({ default: m.UpdateModal })));
+
+const LazyFallback = () => (
+  <div className="flex flex-col items-center justify-center p-12 space-y-3">
+    <div className="h-8 w-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+    <span className="text-xs text-slate-400 font-medium">Loading module...</span>
+  </div>
+);
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('pipelines');
@@ -59,6 +69,7 @@ export function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedFileForProcess, setSelectedFileForProcess] = useState<FileRecord | null>(null);
   const [inspectingFile, setInspectingFile] = useState<FileRecord | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<MediaViewerTarget | null>(null);
   const [batchModal, setBatchModal] = useState<{
     isOpen: boolean;
     files: FileRecord[];
@@ -108,7 +119,6 @@ export function App() {
     setIsRefreshing(true);
     try {
       await universalEngine.detectMode().catch(() => {});
-      const isDesk = universalEngine.isDesktop();
       const filesData = await universalEngine.listFiles().catch(() => []);
       setFiles(filesData);
 
@@ -474,6 +484,13 @@ export function App() {
                   onDeleteFile={handleDeleteFile}
                   onDownloadFile={handleDownloadFile}
                   onInspectFile={handleInspectFile}
+                  onPreviewFile={(file) => setPreviewTarget({
+                    id: file.id,
+                    filename: file.filename,
+                    mimeType: file.mime_type,
+                    sizeBytes: file.size_bytes,
+                    isJobOutput: false,
+                  })}
                   onBatchAction={handleBatchAction}
                   onBatchDelete={handleBatchDelete}
                   onBatchPipeline={handleBatchPipeline}
@@ -524,15 +541,17 @@ export function App() {
                     onOpenPipelineEditor={() => setPipelineViewMode('builder')}
                   />
                 ) : (
-                  <PipelineEditor
-                    files={files}
-                    preSelectedFileIds={pipelinePreSelectedFileIds}
-                    onJobStarted={async () => {
-                      const updatedJobs = await universalEngine.listJobs();
-                      setJobs(updatedJobs);
-                      setCurrentTab('jobs');
-                    }}
-                  />
+                  <Suspense fallback={<LazyFallback />}>
+                    <PipelineEditor
+                      files={files}
+                      preSelectedFileIds={pipelinePreSelectedFileIds}
+                      onJobStarted={async () => {
+                        const updatedJobs = await universalEngine.listJobs();
+                        setJobs(updatedJobs);
+                        setCurrentTab('jobs');
+                      }}
+                    />
+                  </Suspense>
                 )}
               </div>
             )}
@@ -550,6 +569,12 @@ export function App() {
                   onRetryJob={handleRetryJob}
                   onDeleteJob={handleDeleteJob}
                   onDownloadOutput={handleDownloadOutput}
+                  onPreviewOutput={(job) => setPreviewTarget({
+                    id: job.id,
+                    filename: job.output_filename || 'output',
+                    sizeBytes: job.output_size_bytes || undefined,
+                    isJobOutput: true,
+                  })}
                   onClearCompleted={handleClearCompletedJobs}
                   onRetryAllFailed={handleRetryAllFailedJobs}
                   onCancelAllActive={handleCancelAllActiveJobs}
@@ -560,100 +585,142 @@ export function App() {
 
             {/* Tab 5: Engines & Tools */}
             {currentTab === 'engines' && (
-              <EngineManager
-                engines={engines}
-                onRescan={handleRescanEngines}
-                isRescanning={isRefreshing}
-              />
+              <Suspense fallback={<LazyFallback />}>
+                <EngineManager
+                  engines={engines}
+                  onRescan={handleRescanEngines}
+                  isRescanning={isRefreshing}
+                />
+              </Suspense>
             )}
 
             {/* Tab 6: System Diagnostics */}
             {currentTab === 'diagnostics' && (
-              <Diagnostics 
-                diagnostics={diagnostics} 
-                onRefresh={loadData}
-                isRefreshing={isRefreshing}
-              />
+              <Suspense fallback={<LazyFallback />}>
+                <Diagnostics 
+                  diagnostics={diagnostics} 
+                  onRefresh={loadData}
+                  isRefreshing={isRefreshing}
+                />
+              </Suspense>
             )}
 
             {/* Tab 7: Developer Hub */}
             {currentTab === 'developer' && (
-              <DeveloperHub />
+              <Suspense fallback={<LazyFallback />}>
+                <DeveloperHub />
+              </Suspense>
             )}
 
             {/* Tab 8: Settings */}
             {currentTab === 'settings' && (
-              <SettingsView
-                settings={settings}
-                onRefresh={loadData}
-              />
+              <Suspense fallback={<LazyFallback />}>
+                <SettingsView
+                  settings={settings}
+                  onRefresh={loadData}
+                />
+              </Suspense>
             )}
           </div>
         </main>
       </div>
 
-      {/* Process File Modal */}
-      <FileProcessModal
-        file={selectedFileForProcess}
-        onClose={() => setSelectedFileForProcess(null)}
-        onJobStarted={async () => {
-          const updatedJobs = await universalEngine.listJobs();
-          setJobs(updatedJobs);
-          setCurrentTab('jobs');
-        }}
-      />
+      <Suspense fallback={null}>
+        {/* Process File Modal */}
+        {selectedFileForProcess && (
+          <FileProcessModal
+            file={selectedFileForProcess}
+            onClose={() => setSelectedFileForProcess(null)}
+            onJobStarted={async () => {
+              const updatedJobs = await universalEngine.listJobs();
+              setJobs(updatedJobs);
+              setCurrentTab('jobs');
+            }}
+          />
+        )}
 
-      {/* Batch Process Modal */}
-      {batchModal.isOpen && (
-        <BatchProcessModal
-          files={batchModal.files}
-          initialMode={batchModal.mode}
-          onClose={() => setBatchModal({ isOpen: false, files: [], mode: 'convert' })}
-          onBatchStarted={async () => {
-            const updatedJobs = await universalEngine.listJobs();
-            setJobs(updatedJobs);
-            setCurrentTab('jobs');
-          }}
-        />
-      )}
+        {/* Batch Process Modal */}
+        {batchModal.isOpen && (
+          <BatchProcessModal
+            files={batchModal.files}
+            initialMode={batchModal.mode}
+            onClose={() => setBatchModal({ isOpen: false, files: [], mode: 'convert' })}
+            onBatchStarted={async () => {
+              const updatedJobs = await universalEngine.listJobs();
+              setJobs(updatedJobs);
+              setCurrentTab('jobs');
+            }}
+          />
+        )}
 
-      {/* Advanced File Inspector Modal */}
-      {inspectingFile && (
-        <FileInspectorModal
-          file={inspectingFile}
-          onClose={() => setInspectingFile(null)}
-          onTriggerStripMetadata={handleTriggerStripMetadata}
-        />
-      )}
+        {/* Advanced File Inspector Modal */}
+        {inspectingFile && (
+          <FileInspectorModal
+            file={inspectingFile}
+            onClose={() => setInspectingFile(null)}
+            onTriggerStripMetadata={handleTriggerStripMetadata}
+          />
+        )}
 
-      {/* Help & Features Guide Modal */}
-      <HelpGuideModal
-        isOpen={isHelpGuideOpen}
-        onClose={() => setIsHelpGuideOpen(false)}
-        onNavigateTab={(tab) => setCurrentTab(tab as TabType)}
-      />
+        {/* Help & Features Guide Modal */}
+        {isHelpGuideOpen && (
+          <HelpGuideModal
+            isOpen={isHelpGuideOpen}
+            onClose={() => setIsHelpGuideOpen(false)}
+            onNavigateTab={(tab) => setCurrentTab(tab as TabType)}
+          />
+        )}
 
-      {/* Mobile Connect QR Code Modal */}
-      <MobileConnectModal
-        isOpen={isMobileConnectOpen}
-        onClose={() => setIsMobileConnectOpen(false)}
-      />
+        {/* Mobile Connect QR Code Modal */}
+        {isMobileConnectOpen && (
+          <MobileConnectModal
+            isOpen={isMobileConnectOpen}
+            onClose={() => setIsMobileConnectOpen(false)}
+          />
+        )}
 
-      {/* Dashboard Quick Tool Runner Modal */}
-      {dashboardTool && (
-        <ProcessRunnerModal
-          tool={dashboardTool}
-          isOpen={Boolean(dashboardTool)}
-          onClose={() => setDashboardTool(null)}
-          libraryFiles={files}
-          onJobStarted={async () => {
-            const updatedJobs = await universalEngine.listJobs();
-            setJobs(updatedJobs);
-            setCurrentTab('jobs');
-          }}
-          onFilesUploaded={(newFiles) => setFiles((prev) => [...newFiles, ...prev])}
-        />
-      )}
+        {/* Dashboard Quick Tool Runner Modal */}
+        {dashboardTool && (
+          <ProcessRunnerModal
+            tool={dashboardTool}
+            isOpen={Boolean(dashboardTool)}
+            onClose={() => setDashboardTool(null)}
+            libraryFiles={files}
+            onJobStarted={async () => {
+              const updatedJobs = await universalEngine.listJobs();
+              setJobs(updatedJobs);
+              setCurrentTab('jobs');
+            }}
+            onFilesUploaded={(newFiles) => setFiles((prev) => [...newFiles, ...prev])}
+          />
+        )}
+
+        {/* Software Updates Modal */}
+        {isUpdateModalOpen && (
+          <UpdateModal
+            isOpen={isUpdateModalOpen}
+            onClose={() => setIsUpdateModalOpen(false)}
+            updateInfo={updateInfo}
+            onRefresh={() => checkUpdates(true)}
+            isChecking={isCheckingUpdate}
+          />
+        )}
+
+        {/* In-App Embedded Media Viewer Modal */}
+        {previewTarget && (
+          <MediaViewerModal
+            target={previewTarget}
+            onClose={() => setPreviewTarget(null)}
+            onSave={(target) => {
+              if (target.isJobOutput && target.id) {
+                handleDownloadOutput(String(target.id));
+              } else if (target.id) {
+                handleDownloadFile(Number(target.id));
+              }
+            }}
+          />
+        )}
+      </Suspense>
 
       {/* Mobile Adaptive Bottom Navigation Bar */}
       <BottomNav
@@ -667,15 +734,6 @@ export function App() {
         onOpenHelpGuide={() => setIsHelpGuideOpen(true)}
         onRefresh={loadData}
         isRefreshing={isRefreshing}
-      />
-
-      {/* Software Updates Modal */}
-      <UpdateModal
-        isOpen={isUpdateModalOpen}
-        onClose={() => setIsUpdateModalOpen(false)}
-        updateInfo={updateInfo}
-        onRefresh={() => checkUpdates(true)}
-        isChecking={isCheckingUpdate}
       />
     </div>
   );

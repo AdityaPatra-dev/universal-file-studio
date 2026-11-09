@@ -9,11 +9,95 @@ import {
 } from 'lucide-react';
 import { Pipeline, FileRecord, Operation, OperationSpec, PipelineValidationIssue } from '../../types/api';
 import { universalEngine } from '../../services/universalEngine';
+import { findToolById, ALL_STUDIO_TOOLS } from '../../data/catalog';
 
 interface PipelineEditorProps {
   files: FileRecord[];
   onJobStarted: () => void;
   preSelectedFileIds?: number[];
+}
+
+export interface StepCompatibilityIssue {
+  stepIndex?: number;
+  severity: 'error' | 'warning';
+  title: string;
+  description: string;
+  suggestion?: string;
+}
+
+export interface StepCompatibilityReport {
+  isValid: boolean;
+  hasWarnings: boolean;
+  issues: StepCompatibilityIssue[];
+}
+
+export function validatePipelineCompatibility(
+  steps: Array<{ name: string; operation: string; parameters?: Record<string, any> }>,
+  selectedFiles: FileRecord[]
+): StepCompatibilityReport {
+  const issues: StepCompatibilityIssue[] = [];
+
+  if (steps.length === 0) {
+    return {
+      isValid: false,
+      hasWarnings: false,
+      issues: [{ severity: 'error', title: 'Empty Pipeline', description: 'Add at least one action step to run this workflow.' }]
+    };
+  }
+
+  // 1. Validate Input Files with Step 1
+  const step1 = steps[0];
+  const tool1 = findToolById(step1.operation);
+  if (tool1 && selectedFiles.length > 0) {
+    const supportedExts = new Set(tool1.inputFormats.map(f => f.toLowerCase().replace(/^\./, '')));
+    for (const f of selectedFiles) {
+      const ext = (f.filename.split('.').pop() || '').toLowerCase();
+      if (!supportedExts.has(ext) && !supportedExts.has('*') && !supportedExts.has('all')) {
+        issues.push({
+          stepIndex: 0,
+          severity: 'warning',
+          title: `Incompatible Input File: ${f.filename}`,
+          description: `Step 1 ("${step1.name}") expects [${tool1.inputFormats.join(', ')}] formats, but "${f.filename}" is .${ext}.`,
+          suggestion: `Select compatible ${tool1.category} files or add a conversion step first.`
+        });
+      }
+    }
+  }
+
+  // 2. Validate Step-to-Step Sequential Compatibility
+  for (let i = 0; i < steps.length - 1; i++) {
+    const curStep = steps[i];
+    const nextStep = steps[i + 1];
+    const curTool = findToolById(curStep.operation);
+    const nextTool = findToolById(nextStep.operation);
+
+    if (curTool && nextTool) {
+      const curOutputs = new Set(curTool.outputFormats.map(f => f.toLowerCase().replace(/^\./, '')));
+      const nextInputs = new Set(nextTool.inputFormats.map(f => f.toLowerCase().replace(/^\./, '')));
+
+      const hasCommon = Array.from(curOutputs).some(o => nextInputs.has(o) || nextInputs.has('*') || nextInputs.has('all'));
+      const isBothGeneralArchive = curTool.category === 'archive' || nextTool.category === 'archive';
+
+      if (!hasCommon && !isBothGeneralArchive) {
+        issues.push({
+          stepIndex: i + 1,
+          severity: 'error',
+          title: `Incompatible Step Sequence (${i + 1} ➔ ${i + 2})`,
+          description: `Step ${i + 1} ("${curStep.name}") outputs [${curTool.outputFormats.join(', ')}], which cannot be consumed by Step ${i + 2} ("${nextStep.name}") expecting [${nextTool.inputFormats.join(', ')}].`,
+          suggestion: `Add an intermediate converter step between Step ${i + 1} and Step ${i + 2}.`
+        });
+      }
+    }
+  }
+
+  const hasErrors = issues.some(i => i.severity === 'error');
+  const hasWarnings = issues.some(i => i.severity === 'warning');
+
+  return {
+    isValid: !hasErrors,
+    hasWarnings,
+    issues
+  };
 }
 
 export type CategoryFilter = 'all' | 'photo' | 'video' | 'doc' | 'archive';
@@ -185,6 +269,10 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
       setError('Please select at least one file below to run this workflow.');
       return;
     }
+    if (!validationReport.isValid) {
+      setError('Please resolve pipeline compatibility errors before running this workflow.');
+      return;
+    }
 
     setIsExecuting(true);
     setError(null);
@@ -238,6 +326,16 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
   const filteredRecipes = activeCategory === 'all'
     ? FRIENDLY_RECIPES
     : FRIENDLY_RECIPES.filter((r) => r.category === activeCategory);
+
+  const selectedFilesList = files.filter((f) => selectedFileIds.includes(f.id));
+  const validationReport = selectedRecipe
+    ? validatePipelineCompatibility(selectedRecipe.steps, selectedFilesList)
+    : { isValid: true, hasWarnings: false, issues: [] };
+
+  const customValidationReport = validatePipelineCompatibility(
+    customSteps,
+    selectedFilesList
+  );
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -388,18 +486,60 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
 
             <button
               onClick={handleRunWorkflow}
-              disabled={isExecuting || selectedFileIds.length === 0}
+              disabled={isExecuting || selectedFileIds.length === 0 || !validationReport.isValid}
               className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-xs shadow-xl shadow-brand-500/25 transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center space-x-2 active:scale-95 shrink-0"
             >
               <Play className="h-4 w-4 fill-current" />
               <span>
                 {isExecuting
                   ? 'Running Workflow...'
+                  : !validationReport.isValid
+                  ? 'Resolve Compatibility Issues Below'
                   : selectedFileIds.length > 0
                   ? `Run on ${selectedFileIds.length} Selected File(s)`
                   : 'Select Files Below to Run'}
               </span>
             </button>
+          </div>
+
+          {/* Pipeline Step Compatibility Validator Ledger */}
+          <div className="space-y-2">
+            {validationReport.isValid && !validationReport.hasWarnings ? (
+              <div className="flex items-center gap-2 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span className="font-medium">Compatibility Verified: Input files and step stream transitions are 100% compatible.</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {validationReport.issues.map((iss, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-start gap-2.5 p-3 rounded-2xl border text-xs ${
+                      iss.severity === 'error'
+                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                    }`}
+                  >
+                    <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${iss.severity === 'error' ? 'text-rose-400' : 'text-amber-400'}`} />
+                    <div className="space-y-0.5">
+                      <div className="font-bold flex items-center gap-2">
+                        <span>{iss.title}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono uppercase ${iss.severity === 'error' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                          {iss.severity}
+                        </span>
+                      </div>
+                      <div className="opacity-90">{iss.description}</div>
+                      {iss.suggestion && (
+                        <div className="text-[11px] opacity-80 pt-0.5 font-medium flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 shrink-0 text-brand-400" />
+                          <span>{iss.suggestion}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Workflow Steps Sequence Visualizer */}
@@ -639,6 +779,37 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
                       </select>
                     </div>
                   ))}
+                  {/* Live Custom Workflow Step Compatibility Report */}
+                  <div className="pt-2">
+                    {customValidationReport.isValid && !customValidationReport.hasWarnings ? (
+                      <div className="flex items-center gap-2 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs">
+                        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-400" />
+                        <span>All custom steps have compatible input/output stream chains.</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {customValidationReport.issues.map((iss, i) => (
+                          <div
+                            key={i}
+                            className={`flex items-start gap-2 p-3 rounded-2xl border text-xs ${
+                              iss.severity === 'error'
+                                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                                : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                            }`}
+                          >
+                            <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${iss.severity === 'error' ? 'text-rose-400' : 'text-amber-400'}`} />
+                            <div className="space-y-0.5">
+                              <div className="font-bold">{iss.title}</div>
+                              <div className="opacity-90">{iss.description}</div>
+                              {iss.suggestion && (
+                                <div className="text-[11px] opacity-75 font-medium">{iss.suggestion}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -654,7 +825,8 @@ export const PipelineEditor: React.FC<PipelineEditorProps> = ({
               <button
                 type="button"
                 onClick={handleSaveCustomWorkflow}
-                className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-500/25 cursor-pointer"
+                disabled={!customValidationReport.isValid}
+                className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-500/25 cursor-pointer disabled:opacity-50"
               >
                 Save & Use Workflow
               </button>

@@ -6,7 +6,8 @@ import {
   Film, Music, Image as ImageIcon, FileText, Archive, FileQuestion, 
   Sparkles, Download, Trash2, ArrowUpDown, ChevronUp, ChevronDown, 
   Search, CheckSquare, Square, MinusSquare, ShieldCheck, 
-  Check, X, FolderArchive, Layers, GitMerge, FileSpreadsheet, Presentation
+  Check, X, FolderArchive, Layers, GitMerge, FileSpreadsheet, Presentation,
+  Eye
 } from 'lucide-react';
 import { formatBytes, formatDate } from '../../utils/format';
 
@@ -16,6 +17,7 @@ interface FileListProps {
   onDeleteFile: (fileId: number) => void;
   onDownloadFile: (fileId: number) => void;
   onInspectFile?: (file: FileRecord) => void;
+  onPreviewFile?: (file: FileRecord) => void;
   onBatchAction?: (selectedFiles: FileRecord[], mode: 'convert' | 'compress' | 'archive') => void;
   onBatchDelete?: (fileIds: number[]) => void;
   onBatchPipeline?: (selectedFiles: FileRecord[]) => void;
@@ -30,6 +32,7 @@ export const FileList: React.FC<FileListProps> = ({
   onDeleteFile,
   onDownloadFile,
   onInspectFile,
+  onPreviewFile,
   onBatchAction,
   onBatchDelete,
   onBatchPipeline
@@ -280,6 +283,17 @@ export const FileList: React.FC<FileListProps> = ({
                       <span>Process</span>
                     </button>
 
+                    {onPreviewFile && (
+                      <button
+                        type="button"
+                        onClick={() => onPreviewFile(file)}
+                        className="flex items-center justify-center p-2.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-cyan-400 hover:text-cyan-300 border border-surface-700/60 btn-press min-h-[42px] min-w-[42px]"
+                        title="Preview media"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    )}
+
                     {onInspectFile && (
                       <button
                         onClick={() => onInspectFile(file)}
@@ -403,6 +417,16 @@ export const FileList: React.FC<FileListProps> = ({
                           >
                             Process
                           </button>
+                          {onPreviewFile && (
+                            <button
+                              type="button"
+                              onClick={() => onPreviewFile(file)}
+                              className="p-1.5 rounded-xl bg-surface-850 hover:bg-surface-800 text-cyan-400 hover:text-cyan-300 border border-surface-700/60 btn-press"
+                              title="Preview file"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           {onInspectFile && (
                             <button
                               onClick={() => onInspectFile(file)}

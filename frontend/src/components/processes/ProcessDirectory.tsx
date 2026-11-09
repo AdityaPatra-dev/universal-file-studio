@@ -14,8 +14,9 @@ import {
 } from '../../data/catalog';
 import { parseSearchQuery, SearchIntentMatch } from '../../utils/searchParser';
 import { CatalogIcon } from './CatalogIcon';
-import { ProcessRunnerModal } from './ProcessRunnerModal';
 import { FileRecord, Job } from '../../types/api';
+
+const ProcessRunnerModal = React.lazy(() => import('./ProcessRunnerModal').then(m => ({ default: m.ProcessRunnerModal })));
 
 interface ProcessDirectoryProps {
   libraryFiles?: FileRecord[];
@@ -436,18 +437,22 @@ export const ProcessDirectory: React.FC<ProcessDirectoryProps> = ({
       </div>
 
       {/* Process Runner Modal */}
-      <ProcessRunnerModal
-        tool={activeModalTool}
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setActiveModalTool(null);
-        }}
-        initialParameters={modalInitialParams}
-        libraryFiles={libraryFiles}
-        onJobStarted={onJobStarted}
-        onFilesUploaded={onFilesUploaded}
-      />
+      {isModalOpen && activeModalTool && (
+        <React.Suspense fallback={null}>
+          <ProcessRunnerModal
+            tool={activeModalTool}
+            isOpen={isModalOpen}
+            onClose={() => {
+              setIsModalOpen(false);
+              setActiveModalTool(null);
+            }}
+            initialParameters={modalInitialParams}
+            libraryFiles={libraryFiles}
+            onJobStarted={onJobStarted}
+            onFilesUploaded={onFilesUploaded}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 };

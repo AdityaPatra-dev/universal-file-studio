@@ -55,7 +55,7 @@ export const FileProcessModal: React.FC<FileProcessModalProps> = ({
     if (matchingOp) {
       setSelectedOp(matchingOp);
     }
-    setParams(prev => ({ ...prev, ...(preset.parameters || {}) }));
+    setParams(prev => ({ ...prev, ...preset.parameters }));
   };
 
   const handleSelectOp = (op: Operation) => {

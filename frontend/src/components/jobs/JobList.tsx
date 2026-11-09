@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   Play, CheckCircle2, AlertCircle, XCircle, Clock, 
   RotateCcw, Download, Trash2, StopCircle, Terminal, FileCheck,
-  Check, Copy, Sparkles, Filter, FolderOpen, ExternalLink, Share2, X, FileText
+  Check, Copy, Sparkles, Filter, FolderOpen, ExternalLink, Share2, X, FileText,
+  Eye
 } from 'lucide-react';
 import { Job, JobStatus } from '../../types/api';
 import { formatBytes, formatDuration, formatDate } from '../../utils/format';
@@ -14,6 +15,7 @@ interface JobListProps {
   onRetryJob: (jobId: string) => void;
   onDeleteJob: (jobId: string) => void;
   onDownloadOutput: (jobId: string) => void;
+  onPreviewOutput?: (job: Job) => void;
   onClearCompleted?: () => void;
   onRetryAllFailed?: () => void;
   onCancelAllActive?: () => void;
@@ -26,6 +28,7 @@ export const JobList: React.FC<JobListProps> = ({
   onRetryJob,
   onDeleteJob,
   onDownloadOutput,
+  onPreviewOutput,
   onClearCompleted,
   onRetryAllFailed,
   onCancelAllActive,
@@ -275,8 +278,20 @@ export const JobList: React.FC<JobListProps> = ({
                     </button>
                   )}
 
-                  {job.status === 'completed' && job.output_path && (
+                  {job.status === 'completed' && (job.output_path || job.output_filename) && (
                     <div className="flex items-center gap-1.5">
+                      {onPreviewOutput && (
+                        <button
+                          type="button"
+                          onClick={() => onPreviewOutput(job)}
+                          className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-colors btn-press text-xs shadow-sm shadow-cyan-600/30"
+                          title="Preview output media inside the app"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Preview</span>
+                        </button>
+                      )}
+
                       {/* Direct Viewer Opener Button */}
                       <button
                         type="button"
