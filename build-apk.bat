@@ -47,7 +47,11 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 cd /d "%~dp0"
-copy /y "frontend\android\app\build\outputs\apk\debug\app-debug.apk" "universal-file-studio.apk"
+if exist "frontend\android\app\build\outputs\apk\debug\app-universal-debug.apk" (
+    copy /y "frontend\android\app\build\outputs\apk\debug\app-universal-debug.apk" "universal-file-studio.apk"
+) else (
+    copy /y "frontend\android\app\build\outputs\apk\debug\app-debug.apk" "universal-file-studio.apk"
+)
 
 echo ======================================================================
 echo   BUILD SUCCESSFUL!

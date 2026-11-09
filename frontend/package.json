@@ -1,13 +1,14 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.0.16",
+  "version": "1.0.17",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "cap:copy": "cap copy android",
-    "build:apk": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug && cp app/build/outputs/apk/debug/app-debug.apk ../../universal-file-studio.apk",
+    "build:apk": "npm run build && npx cap sync android && cd android && ./gradlew assembleDebug && cp app/build/outputs/apk/debug/app-universal-debug.apk ../../universal-file-studio.apk",
+    "build:aab": "npm run build && npx cap sync android && cd android && ./gradlew bundleDebug && cp app/build/outputs/bundle/debug/app-debug.aab ../../universal-file-studio.aab",
     "lint": "oxlint",
     "preview": "vite preview"
   },

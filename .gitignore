@@ -27,6 +27,7 @@ test_samples/
 
 # Android & Mobile Build Artifacts
 *.apk
+*.aab
 frontend/android/.gradle/
 frontend/android/app/build/
 frontend/android/build/

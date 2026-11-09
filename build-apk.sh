@@ -47,10 +47,15 @@ cd android
 ./gradlew assembleDebug
 
 # 6. Copy output APK to workspace root
-OUTPUT_APK="app/build/outputs/apk/debug/app-debug.apk"
+OUTPUT_APK=""
+if [ -f "app/build/outputs/apk/debug/app-universal-debug.apk" ]; then
+    OUTPUT_APK="app/build/outputs/apk/debug/app-universal-debug.apk"
+elif [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+    OUTPUT_APK="app/build/outputs/apk/debug/app-debug.apk"
+fi
 ROOT_APK="../../universal-file-studio.apk"
 
-if [ -f "$OUTPUT_APK" ]; then
+if [ -n "$OUTPUT_APK" ] && [ -f "$OUTPUT_APK" ]; then
     cp "$OUTPUT_APK" "$ROOT_APK"
     APK_SIZE=$(ls -lh "$ROOT_APK" | awk '{print $5}')
     echo "======================================================================"
