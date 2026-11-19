@@ -246,10 +246,21 @@ class VideoProcessor(BaseProcessor):
             return out_file, res
 
         # 8. Video Change Speed
-        elif operation in ["video_change_speed", "change_speed"]:
-            speed = _safe_float(parameters.get("speed", 1.5), 1.5, min_val=0.25, max_val=4.0)
+        elif operation in ["video_change_speed", "change_speed", "video_speed"]:
+            speed = _safe_float(parameters.get("speed", 1.5), 1.5, min_val=0.1, max_val=10.0)
+            preserve_pitch = bool(parameters.get("preserve_pitch", True))
+            motion_blur_smooth = bool(parameters.get("motion_blur_smooth", True))
+            mute_audio = bool(parameters.get("mute_audio", False))
             out_file = str(out_d / f"{in_p.stem}_{speed}x_{job_id[:8]}.mp4")
-            res = await ffmpeg_engine.change_speed(input_path, out_file, video_multiplier=speed, audio_multiplier=speed)
+            res = await ffmpeg_engine.change_speed(
+                input_path,
+                out_file,
+                video_multiplier=speed,
+                audio_multiplier=speed,
+                preserve_pitch=preserve_pitch,
+                motion_blur_smooth=motion_blur_smooth,
+                mute_audio=mute_audio
+            )
             return out_file, res
 
         # 9. Video Reverse
@@ -261,9 +272,74 @@ class VideoProcessor(BaseProcessor):
         # 10. Extract Audio
         elif operation in ["extract_audio", "video_extract_audio"]:
             audio_fmt = sanitize_format(parameters.get("format"), ALLOWED_AUDIO_FORMATS, "mp3")
+            bitrate = _safe_int(parameters.get("bitrate", 192), 192, min_val=64, max_val=320)
+            lossless_copy = bool(parameters.get("lossless_copy", False))
+            normalize = bool(parameters.get("normalize", False))
+            voice_enhance = bool(parameters.get("voice_enhance", False))
+            start_time = parameters.get("start_time") or parameters.get("start")
+            end_time = parameters.get("end_time") or parameters.get("end")
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.{audio_fmt}")
-            codec = "libmp3lame" if audio_fmt == "mp3" else ("aac" if audio_fmt in ["m4a", "aac"] else "copy")
-            res = await ffmpeg_engine.extract_audio(input_path, out_file, audio_codec=codec)
+            codec = "libmp3lame" if audio_fmt == "mp3" else ("aac" if audio_fmt in ["m4a", "aac"] else ("pcm_s16le" if audio_fmt == "wav" else ("flac" if audio_fmt == "flac" else "copy")))
+            res = await ffmpeg_engine.extract_audio(
+                input_path,
+                out_file,
+                audio_codec=codec,
+                bitrate=bitrate,
+                lossless_copy=lossless_copy,
+                normalize=normalize,
+                voice_enhance=voice_enhance,
+                start_time=str(start_time) if start_time else None,
+                end_time=str(end_time) if end_time else None
+            )
+            return out_file, res
+
+        # 10b. Add Music / Audio to Video
+        elif operation in ["video_add_audio", "add_audio"]:
+            out_file = str(out_d / f"{in_p.stem}_dubbed_{job_id[:8]}.mp4")
+            audio_path = parameters.get("audio_path")
+            if not audio_path or not os.path.exists(str(audio_path)):
+                sec_id = parameters.get("secondary_file_id")
+                add_ids = parameters.get("additional_file_ids") or []
+                check_ids = [sec_id] if sec_id else add_ids
+                if check_ids:
+                    try:
+                        from app.database import AsyncSessionLocal
+                        from app.models.file_record import FileRecord
+                        from sqlalchemy import select
+                        async with AsyncSessionLocal() as session:
+                            stmt = select(FileRecord).where(FileRecord.id.in_([int(i) for i in check_ids if i is not None]))
+                            r = await session.execute(stmt)
+                            recs = r.scalars().all()
+                            for rec in recs:
+                                if rec.upload_path and os.path.exists(rec.upload_path):
+                                    audio_path = rec.upload_path
+                                    break
+                    except Exception as err:
+                        logger.warning(f"Failed to lookup secondary file from db: {err}")
+
+            if not audio_path or not os.path.exists(str(audio_path)):
+                return out_file, ProcessResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="No valid audio file provided to mix with video.",
+                    success=False,
+                    command=["ffmpeg", "add_audio"]
+                )
+
+            v_vol = _safe_int(parameters.get("video_volume", 100), 100, min_val=0, max_val=200) / 100.0
+            a_vol = _safe_int(parameters.get("audio_volume", 50), 50, min_val=0, max_val=200) / 100.0
+            loop_audio = bool(parameters.get("loop_audio", True))
+            ducking = bool(parameters.get("ducking", False))
+
+            res = await ffmpeg_engine.add_audio(
+                video_path=input_path,
+                audio_path=str(audio_path),
+                output_path=out_file,
+                video_volume=v_vol,
+                audio_volume=a_vol,
+                loop_audio=loop_audio,
+                ducking=ducking
+            )
             return out_file, res
 
         # 11. Remove / Mute Audio

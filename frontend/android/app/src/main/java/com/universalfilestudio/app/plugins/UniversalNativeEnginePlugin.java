@@ -11,6 +11,7 @@ import android.provider.MediaStore;
 import android.webkit.MimeTypeMap;
 import androidx.core.content.FileProvider;
 import java.util.List;
+import java.util.ArrayList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -715,7 +716,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if (!outputDir.exists()) outputDir.mkdirs();
 
                 String outExt = "mp4";
-                if ("extract_audio".equals(operation)) {
+                if ("extract_audio".equals(operation) || "video_extract_audio".equals(operation)) {
                     outExt = params.optString("format", "mp3").toLowerCase();
                 } else if ("video_to_gif".equals(operation) || "gif".equals(operation)) {
                     outExt = "gif";
@@ -763,16 +764,47 @@ public class UniversalNativeEnginePlugin extends Plugin {
                            .append("-c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 192k \"")
                            .append(out.getAbsolutePath()).append("\"");
                     }
-                } else if ("extract_audio".equals(operation)) {
+                } else if ("extract_audio".equals(operation) || "video_extract_audio".equals(operation)) {
                     int bitrate = params.optInt("bitrate", 192);
-                    if ("wav".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -acodec pcm_s16le \"").append(out.getAbsolutePath()).append("\"");
-                    } else if ("flac".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a flac \"").append(out.getAbsolutePath()).append("\"");
-                    } else if ("aac".equals(outExt) || "m4a".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a aac -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
+                    boolean lossless = params.optBoolean("lossless_copy", false);
+                    boolean normalize = params.optBoolean("normalize", false);
+                    boolean voiceEnhance = params.optBoolean("voice_enhance", false);
+                    String startTime = params.optString("start_time", params.optString("start", ""));
+                    String endTime = params.optString("end_time", params.optString("end", ""));
+
+                    if (!startTime.isEmpty()) {
+                        cmd.append("-ss \"").append(startTime).append("\" ");
+                    }
+                    if (!endTime.isEmpty()) {
+                        cmd.append("-to \"").append(endTime).append("\" ");
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn ");
+
+                    List<String> afFilters = new ArrayList<>();
+                    if (normalize) {
+                        afFilters.add("loudnorm=I=-16:TP=-1.5:LRA=11");
+                    }
+                    if (voiceEnhance) {
+                        afFilters.add("highpass=f=120,lowpass=f=7500");
+                    }
+
+                    if (lossless && afFilters.isEmpty() && startTime.isEmpty() && endTime.isEmpty()) {
+                        cmd.append("-c:a copy \"").append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a libmp3lame -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
+                        if (!afFilters.isEmpty()) {
+                            cmd.append("-af \"").append(String.join(",", afFilters)).append("\" ");
+                        }
+                        if ("wav".equals(outExt)) {
+                            cmd.append("-c:a pcm_s16le \"").append(out.getAbsolutePath()).append("\"");
+                        } else if ("flac".equals(outExt)) {
+                            cmd.append("-c:a flac \"").append(out.getAbsolutePath()).append("\"");
+                        } else if ("aac".equals(outExt) || "m4a".equals(outExt)) {
+                            cmd.append("-c:a aac -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
+                        } else if ("ogg".equals(outExt)) {
+                            cmd.append("-c:a libvorbis -qscale:a 5 \"").append(out.getAbsolutePath()).append("\"");
+                        } else {
+                            cmd.append("-c:a libmp3lame -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
+                        }
                     }
                 } else if ("remove_audio".equals(operation) || "mute".equals(operation) || "video_remove_audio".equals(operation)) {
                     String muteMode = params.optString("mute_mode", "complete").toLowerCase();
@@ -891,27 +923,42 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 } else if ("video_change_speed".equals(operation) || "video_speed".equals(operation)) {
                     double speed = params.optDouble("speed", 1.5);
                     if (speed <= 0) speed = 1.0;
-                    double setpts = 1.0 / Math.max(0.125, Math.min(8.0, speed));
+                    double setpts = 1.0 / Math.max(0.1, Math.min(10.0, speed));
                     boolean preservePitch = params.optBoolean("preserve_pitch", true);
-                    StringBuilder atempoFilter = new StringBuilder();
-                    if (preservePitch) {
-                        double remaining = speed;
-                        while (remaining > 2.0) {
-                            atempoFilter.append("atempo=2.0,");
-                            remaining /= 2.0;
-                        }
-                        while (remaining < 0.5) {
-                            atempoFilter.append("atempo=0.5,");
-                            remaining /= 0.5;
-                        }
-                        atempoFilter.append(String.format(Locale.US, "atempo=%.3f", Math.max(0.5, Math.min(2.0, remaining))));
-                    } else {
-                        atempoFilter.append(String.format(Locale.US, "asetrate=44100*%.3f,aresample=44100", speed));
+                    boolean motionBlurSmooth = params.optBoolean("motion_blur_smooth", true);
+                    boolean muteAudio = params.optBoolean("mute_audio", false);
+
+                    String vFilter = String.format(Locale.US, "setpts=%.3f*PTS", setpts);
+                    if (motionBlurSmooth && speed < 1.0) {
+                        vFilter += ",tblend=all_mode=average";
                     }
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-filter_complex \"[0:v]setpts=").append(String.format(Locale.US, "%.3f", setpts)).append("*PTS[v];[0:a]").append(atempoFilter).append("[a]\" ")
-                       .append("-map \"[v]\" -map \"[a]?\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
-                       .append(out.getAbsolutePath()).append("\"");
+
+                    if (muteAudio) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-vf \"").append(vFilter).append("\" -an ")
+                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        StringBuilder atempoFilter = new StringBuilder();
+                        if (preservePitch) {
+                            double remaining = speed;
+                            while (remaining > 2.0) {
+                                atempoFilter.append("atempo=2.0,");
+                                remaining /= 2.0;
+                            }
+                            while (remaining < 0.5) {
+                                atempoFilter.append("atempo=0.5,");
+                                remaining /= 0.5;
+                            }
+                            atempoFilter.append(String.format(Locale.US, "atempo=%.3f", Math.max(0.5, Math.min(2.0, remaining))));
+                        } else {
+                            atempoFilter.append(String.format(Locale.US, "asetrate=44100*%.3f,aresample=44100", speed));
+                        }
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-filter_complex \"[0:v]").append(vFilter).append("[v];[0:a]").append(atempoFilter).append("[a]\" ")
+                           .append("-map \"[v]\" -map \"[a]?\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_change_fps".equals(operation) || "change_fps".equals(operation)) {
                     int fps = params.optInt("fps", 30);
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -r ").append(fps).append(" ")
@@ -1128,21 +1175,33 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     if (audioPath != null && !audioPath.isEmpty() && new File(audioPath).exists()) {
                         int videoVol = params.optInt("video_volume", 100);
                         int audioVol = params.optInt("audio_volume", 50);
+                        boolean loopAudio = params.optBoolean("loop_audio", true);
+                        boolean ducking = params.optBoolean("ducking", false);
                         double vFactor = Math.max(0.0, videoVol / 100.0);
                         double aFactor = Math.max(0.0, audioVol / 100.0);
-                        if (vFactor > 0) {
-                            cmd.append("-i \"").append(videoPath).append("\" ")
-                               .append("-i \"").append(audioPath).append("\" ")
-                               .append("-filter_complex \"[0:a]volume=").append(String.format(Locale.US, "%.2f", vFactor)).append("[a0];")
+
+                        cmd.append("-i \"").append(videoPath).append("\" ");
+                        if (loopAudio) {
+                            cmd.append("-stream_loop -1 ");
+                        }
+                        cmd.append("-i \"").append(audioPath).append("\" ");
+
+                        if (vFactor <= 0) {
+                            cmd.append("-filter_complex \"[1:a]volume=").append(String.format(Locale.US, "%.2f", aFactor)).append("[aout]\" ")
+                               .append("-map 0:v:0 -map \"[aout]\" -c:v copy -c:a aac -b:a 192k -shortest \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        } else if (ducking) {
+                            cmd.append("-filter_complex \"[0:a]volume=").append(String.format(Locale.US, "%.2f", vFactor)).append("[a0];")
                                .append("[1:a]volume=").append(String.format(Locale.US, "%.2f", aFactor)).append("[a1];")
-                               .append("[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]\" ")
+                               .append("[a1][a0]sidechaincompress=threshold=0.12:ratio=4:attack=15:release=250[ducked_a1];")
+                               .append("[a0][ducked_a1]amix=inputs=2:duration=first:dropout_transition=2[aout]\" ")
                                .append("-map 0:v:0 -map \"[aout]\" -c:v copy -c:a aac -b:a 192k -shortest \"")
                                .append(out.getAbsolutePath()).append("\"");
                         } else {
-                            cmd.append("-i \"").append(videoPath).append("\" ")
-                               .append("-i \"").append(audioPath).append("\" ")
-                               .append("-filter_complex \"[1:a]volume=").append(String.format(Locale.US, "%.2f", aFactor)).append("[a1]\" ")
-                               .append("-map 0:v:0 -map \"[a1]\" -c:v copy -c:a aac -b:a 192k -shortest \"")
+                            cmd.append("-filter_complex \"[0:a]volume=").append(String.format(Locale.US, "%.2f", vFactor)).append("[a0];")
+                               .append("[1:a]volume=").append(String.format(Locale.US, "%.2f", aFactor)).append("[a1];")
+                               .append("[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]\" ")
+                               .append("-map 0:v:0 -map \"[aout]\" -c:v copy -c:a aac -b:a 192k -shortest \"")
                                .append(out.getAbsolutePath()).append("\"");
                         }
                     } else {

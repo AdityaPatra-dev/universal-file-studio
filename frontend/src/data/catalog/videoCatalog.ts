@@ -181,11 +181,11 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'extract_audio',
-    name: 'Extract Audio from Video',
+    name: 'Audio Studio & Track Ripper',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Audio & Speed',
-    description: 'Rip background music, speech, or soundtracks from video into an audio file.',
+    description: 'Losslessly rip or transcode studio-grade audio tracks (MP3, WAV, FLAC, AAC, OGG) with loudness normalization and vocal clarity filters.',
     iconName: 'Music',
     color: 'from-amber-500 to-orange-600',
     badge: 'popular',
@@ -194,9 +194,18 @@ export const VIDEO_TOOLS: StudioTool[] = [
     operation: 'extract_audio',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv'],
-    outputFormats: ['.mp3', '.wav', '.m4a', '.aac', '.flac'],
-    defaultParameters: { format: 'mp3', bitrate: 192 },
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv', '.m4v'],
+    outputFormats: ['.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg'],
+    defaultParameters: {
+      format: 'mp3',
+      bitrate: 192,
+      lossless_copy: false,
+      normalize: false,
+      voice_enhance: false,
+      trim_range: false,
+      start_time: '00:00:00',
+      end_time: '00:00:30'
+    },
     parameters: [
       {
         name: 'format',
@@ -205,25 +214,48 @@ export const VIDEO_TOOLS: StudioTool[] = [
         default: 'mp3',
         options: [
           { label: 'MP3 (.MP3) — Universal Compatibility', value: 'mp3' },
-          { label: 'WAV (.WAV) — Uncompressed Lossless', value: 'wav' },
-          { label: 'AAC (.M4A) — High Quality Apple', value: 'm4a' },
-          { label: 'FLAC (.FLAC) — Studio Lossless', value: 'flac' }
+          { label: 'FLAC (.FLAC) — Audiophile Lossless 24-bit', value: 'flac' },
+          { label: 'WAV (.WAV) — Uncompressed PCM Studio Master', value: 'wav' },
+          { label: 'AAC / M4A (.M4A) — High-Efficiency Apple Spec', value: 'm4a' },
+          { label: 'OGG Vorbis (.OGG) — Open Web Media Standard', value: 'ogg' }
         ]
       },
       {
         name: 'bitrate',
-        label: 'Audio Bitrate',
+        label: 'Audio Bitrate / Quality',
         type: 'select',
         default: 192,
         options: [
-          { label: '128 kbps (Standard Voice)', value: 128 },
-          { label: '192 kbps (High Quality Music)', value: 192 },
-          { label: '320 kbps (Maximum Bitrate)', value: 320 }
+          { label: '128 kbps (Standard Voice / Speech)', value: 128 },
+          { label: '192 kbps (High Quality Streaming Music)', value: 192 },
+          { label: '256 kbps (Premium Audio Grade)', value: 256 },
+          { label: '320 kbps (Maximum Broadcast CD Quality)', value: 320 }
         ]
+      },
+      {
+        name: 'lossless_copy',
+        label: 'Direct Lossless Demux (0.1s Zero-Loss Copy)',
+        type: 'boolean',
+        default: false,
+        description: 'Extracts the exact native audio stream without re-encoding a single byte'
+      },
+      {
+        name: 'normalize',
+        label: 'EBU R128 Loudness Normalization',
+        type: 'boolean',
+        default: false,
+        description: 'Auto-balances audio loudness to standard broadcast levels'
+      },
+      {
+        name: 'voice_enhance',
+        label: 'Vocal & Dialogue Clarity Isolation',
+        type: 'boolean',
+        default: false,
+        description: 'Applies frequency filtering to isolate human speech and remove low rumble'
       }
     ],
-    keywords: ['extract audio', 'rip audio', 'mp4 to mp3', 'video to audio', 'save sound from video'],
-    examples: ['extract audio', 'mp4 to mp3']
+    keywords: ['extract audio', 'rip audio', 'mp4 to mp3', 'video to audio', 'save sound from video', 'audio ripper', 'wav extractor'],
+    examples: ['extract audio', 'mp4 to mp3', 'rip wav from video']
   },
   {
     id: 'video_to_gif',
@@ -443,37 +475,67 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_speed',
-    name: 'Change Video Playback Speed',
+    name: 'Motion Velocity & Time Warp Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Audio & Speed',
-    description: 'Create dramatic slow-motion (0.5x) or fast timelapse (1.5x, 2x, 4x) videos.',
+    description: 'Cinematic slow-motion (0.25x-0.75x) with frame blending or high-speed timelapses (1.5x-8.0x) with natural voice pitch tone.',
     iconName: 'FastForward',
     color: 'from-amber-500 to-yellow-600',
     rank: 10,
     operation: 'video_change_speed',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov', '.webm'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv', '.avi'],
     outputFormats: ['.mp4'],
-    defaultParameters: { speed: 1.5 },
+    defaultParameters: {
+      speed: 1.5,
+      preserve_pitch: true,
+      motion_blur_smooth: true,
+      mute_audio: false
+    },
     parameters: [
       {
         name: 'speed',
-        label: 'Playback Speed Multiplier',
+        label: 'Motion Speed Multiplier',
         type: 'select',
         default: 1.5,
         options: [
-          { label: '0.5x (Slow Motion)', value: 0.5 },
+          { label: '0.25x (Ultra Slo-Mo)', value: 0.25 },
+          { label: '0.5x (Half-Speed Cinematic)', value: 0.5 },
           { label: '0.75x (Subtle Slow)', value: 0.75 },
-          { label: '1.25x (Slight Speedup)', value: 1.25 },
-          { label: '1.5x (Fast Motion)', value: 1.5 },
-          { label: '2.0x (Double Speed Timelapse)', value: 2.0 }
+          { label: '1.0x (Standard Speed)', value: 1.0 },
+          { label: '1.25x (Snappy Pace)', value: 1.25 },
+          { label: '1.5x (Fast Speech / Podcast)', value: 1.5 },
+          { label: '2.0x (Double Speed Recap)', value: 2.0 },
+          { label: '4.0x (Hyper Timelapse)', value: 4.0 },
+          { label: '8.0x (Extreme Fast-Forward)', value: 8.0 }
         ]
+      },
+      {
+        name: 'preserve_pitch',
+        label: 'Natural Voice Pitch (atempo)',
+        type: 'boolean',
+        default: true,
+        description: 'Maintains normal human vocal pitch without chipmunk or demon distortion'
+      },
+      {
+        name: 'motion_blur_smooth',
+        label: 'Optical Flow Frame Blending',
+        type: 'boolean',
+        default: true,
+        description: 'Blends adjacent frames for silky-smooth slow motion playback'
+      },
+      {
+        name: 'mute_audio',
+        label: 'Mute Audio in Timelapse',
+        type: 'boolean',
+        default: false,
+        description: 'Removes chaotic high-speed sound for clean fast-forward clips'
       }
     ],
-    keywords: ['video speed', 'slow motion video', 'fast video', 'speed up video', 'timelapse'],
-    examples: ['speed up video', 'slow motion video']
+    keywords: ['video speed', 'slow motion video', 'fast video', 'speed up video', 'timelapse', 'hyperlapse', 'velocity warp'],
+    examples: ['speed up video', 'slow motion video', 'make timelapse']
   },
   {
     id: 'video_concat',
@@ -771,11 +833,11 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_add_audio',
-    name: 'Add Music / Audio to Video',
+    name: 'Dual Audio Mixer & Dubbing Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Audio & Speed',
-    description: 'Overlay background music or dub voiceover onto a silent or muted video.',
+    description: 'Mix background music, dubbing, or voiceovers with original video audio featuring smart ducking, volume balance, and auto-looping.',
     iconName: 'Music2',
     color: 'from-pink-600 to-rose-700',
     rank: 21,
@@ -783,12 +845,54 @@ export const VIDEO_TOOLS: StudioTool[] = [
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
     acceptsMultipleFiles: true,
-    inputFormats: ['.mp4', '.mov', '.mkv', '.webm', '.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg'],
+    inputFormats: ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg'],
     outputFormats: ['.mp4'],
-    defaultParameters: {},
-    parameters: [],
-    keywords: ['add audio to video', 'add music to video', 'dub video', 'background music video'],
-    examples: ['add music to video']
+    defaultParameters: {
+      video_volume: 100,
+      audio_volume: 50,
+      loop_audio: true,
+      ducking: false,
+      fade_out: true
+    },
+    parameters: [
+      {
+        name: 'video_volume',
+        label: 'Original Video Audio Volume (%)',
+        type: 'number',
+        default: 100,
+        description: '0% mutes original sound, 100% normal, 150% amplified'
+      },
+      {
+        name: 'audio_volume',
+        label: 'Added BGM / Music Track Volume (%)',
+        type: 'number',
+        default: 50,
+        description: 'Relative volume level of the added audio track'
+      },
+      {
+        name: 'ducking',
+        label: 'Auto Audio Ducking (Sidechain)',
+        type: 'boolean',
+        default: false,
+        description: 'Automatically lowers background music when video dialogue/speech is detected'
+      },
+      {
+        name: 'loop_audio',
+        label: 'Seamless BGM Audio Loop',
+        type: 'boolean',
+        default: true,
+        description: 'Repeats background music seamlessly if video duration exceeds audio track'
+      },
+      {
+        name: 'fade_out',
+        label: 'Smooth Outro Fade-Out',
+        type: 'boolean',
+        default: true,
+        description: 'Applies gentle 2-second audio fade-out at the end of the video'
+      }
+    ],
+    keywords: ['add audio to video', 'add music to video', 'dub video', 'background music video', 'audio mixer', 'bgm overlay', 'sidechain ducking'],
+    examples: ['add music to video', 'mix bgm with video']
   }
 ];
 

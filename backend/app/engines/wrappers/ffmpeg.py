@@ -332,9 +332,40 @@ class FFmpegEngine(BaseEngine):
         self,
         input_path: str,
         output_path: str,
-        audio_codec: str = "copy"
+        audio_codec: str = "copy",
+        bitrate: int = 192,
+        lossless_copy: bool = False,
+        normalize: bool = False,
+        voice_enhance: bool = False,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
     ) -> ProcessResult:
-        cmd = ["ffmpeg", "-y", "-i", input_path, "-vn", "-c:a", audio_codec, output_path]
+        cmd = ["ffmpeg", "-y"]
+        if start_time:
+            cmd.extend(["-ss", str(start_time)])
+        if end_time:
+            cmd.extend(["-to", str(end_time)])
+        cmd.extend(["-i", input_path, "-vn"])
+
+        af_filters = []
+        if normalize:
+            af_filters.append("loudnorm=I=-16:TP=-1.5:LRA=11")
+        if voice_enhance:
+            af_filters.append("highpass=f=120,lowpass=f=7500")
+
+        if lossless_copy and not af_filters and not start_time:
+            cmd.extend(["-c:a", "copy"])
+        else:
+            if af_filters:
+                cmd.extend(["-af", ",".join(af_filters)])
+            if audio_codec == "copy":
+                ext = Path(output_path).suffix.lower()
+                audio_codec = "libmp3lame" if ext == ".mp3" else ("pcm_s16le" if ext == ".wav" else ("flac" if ext == ".flac" else "aac"))
+            cmd.extend(["-c:a", audio_codec])
+            if audio_codec in ["libmp3lame", "aac", "libvorbis"] and bitrate > 0:
+                cmd.extend(["-b:a", f"{bitrate}k"])
+
+        cmd.append(output_path)
         return await self.execute(cmd)
 
     async def extract_frames(
@@ -398,19 +429,92 @@ class FFmpegEngine(BaseEngine):
         input_path: str,
         output_path: str,
         video_multiplier: float = 1.0,
-        audio_multiplier: float = 1.0
+        audio_multiplier: float = 1.0,
+        preserve_pitch: bool = True,
+        motion_blur_smooth: bool = False,
+        mute_audio: bool = False
     ) -> ProcessResult:
         pts_factor = 1.0 / video_multiplier if video_multiplier != 0 else 1.0
         ext = Path(output_path).suffix
         v_codec = self.get_best_video_encoder(ext)
         a_codec = self.get_best_audio_encoder(ext)
+
+        v_filter = f"setpts={pts_factor}*PTS"
+        if motion_blur_smooth and video_multiplier < 1.0:
+            v_filter += ",tblend=all_mode=average"
+
+        if mute_audio:
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-vf", v_filter,
+                "-an",
+                "-c:v", v_codec,
+                output_path
+            ]
+            return await self.execute(cmd)
+
+        if preserve_pitch:
+            atempos = []
+            cur_speed = audio_multiplier
+            while cur_speed > 2.0:
+                atempos.append("atempo=2.0")
+                cur_speed /= 2.0
+            while cur_speed < 0.5:
+                atempos.append("atempo=0.5")
+                cur_speed /= 0.5
+            atempos.append(f"atempo={max(0.5, min(2.0, cur_speed)):.4f}")
+            a_filter = ",".join(atempos)
+        else:
+            a_filter = f"asetrate=44100*{audio_multiplier:.4f},aresample=44100"
+
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
-            "-filter_complex", f"[0:v]setpts={pts_factor}*PTS[v];[0:a]atempo={audio_multiplier}[a]",
+            "-filter_complex", f"[0:v]{v_filter}[v];[0:a]{a_filter}[a]",
             "-map", "[v]", "-map", "[a]",
             "-c:v", v_codec, "-c:a", a_codec,
             output_path
         ]
+        return await self.execute(cmd)
+
+    async def add_audio(
+        self,
+        video_path: str,
+        audio_path: str,
+        output_path: str,
+        video_volume: float = 1.0,
+        audio_volume: float = 0.5,
+        loop_audio: bool = True,
+        ducking: bool = False
+    ) -> ProcessResult:
+        cmd = ["ffmpeg", "-y", "-i", video_path]
+        if loop_audio:
+            cmd.extend(["-stream_loop", "-1"])
+        cmd.extend(["-i", audio_path])
+
+        if video_volume <= 0:
+            filter_complex = f"[1:a]volume={audio_volume:.2f}[aout]"
+        elif ducking:
+            filter_complex = (
+                f"[0:a]volume={video_volume:.2f}[va];"
+                f"[1:a]volume={audio_volume:.2f}[ma];"
+                f"[ma][va]sidechaincompress=threshold=0.12:ratio=4:attack=15:release=250[ducked_m];"
+                f"[va][ducked_m]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            )
+        else:
+            filter_complex = (
+                f"[0:a]volume={video_volume:.2f}[va];"
+                f"[1:a]volume={audio_volume:.2f}[ma];"
+                f"[va][ma]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            )
+
+        cmd.extend([
+            "-filter_complex", filter_complex,
+            "-map", "0:v:0", "-map", "[aout]",
+            "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k",
+            "-shortest",
+            output_path
+        ])
         return await self.execute(cmd)
 
     async def reverse(

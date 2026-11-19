@@ -1388,59 +1388,145 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
         </div>
       )}
 
-      {/* E. VIDEO SPEED / MOTION APP WORKBENCH */}
-      {toolId === 'video_speed' && (
-        <div className="p-4 rounded-2xl bg-surface-900 border border-emerald-500/30 space-y-3">
+      {/* E. VIDEO SPEED & VELOCITY APP WORKBENCH */}
+      {(toolId === 'video_speed' || toolId === 'video_change_speed') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-emerald-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FastForward className="h-4 w-4 text-emerald-400" />
-              <span className="text-xs font-bold text-white">Motion Speed Curve</span>
+              <span className="text-xs font-bold text-white">Motion Velocity & Time Warp Studio</span>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs">
-              {parameters.speed || 1.5}x Speed
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30">
+              {parameters.speed || 1.5}x Speed Multiplier
             </span>
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+          {/* Speed Preset Curve */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-1.5">
             {[
-              { val: 0.25, label: '0.25x Slo-Mo' },
-              { val: 0.5, label: '0.5x Slow' },
-              { val: 1.0, label: '1.0x Normal' },
-              { val: 1.5, label: '1.5x Snappy' },
-              { val: 2.0, label: '2.0x Double' },
-              { val: 4.0, label: '4.0x Hyper' },
+              { val: 0.25, label: '0.25x', sub: 'Ultra Slo-Mo' },
+              { val: 0.5, label: '0.5x', sub: 'Half Speed' },
+              { val: 0.75, label: '0.75x', sub: 'Cinematic' },
+              { val: 1.0, label: '1.0x', sub: 'Original' },
+              { val: 1.25, label: '1.25x', sub: 'Snappy' },
+              { val: 1.5, label: '1.5x', sub: 'Podcast/Recap' },
+              { val: 2.0, label: '2.0x', sub: 'Double Speed' },
+              { val: 4.0, label: '4.0x', sub: 'Timelapse' },
             ].map((s) => {
-              const active = (parameters.speed || 1.5) === s.val;
+              const active = Math.abs((parameters.speed || 1.5) - s.val) < 0.01;
               return (
                 <button
                   key={s.val}
                   type="button"
                   onClick={() => updateParam('speed', s.val)}
-                  className={`py-2 px-1 rounded-xl text-center font-bold text-xs border transition ${
+                  className={`py-2 px-1 rounded-xl text-center border transition flex flex-col items-center ${
                     active
-                      ? 'bg-emerald-600 text-white border-emerald-500'
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm shadow-emerald-500/20'
                       : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
                   }`}
                 >
-                  {s.label}
+                  <span className="text-xs font-bold font-mono">{s.label}</span>
+                  <span className="text-[9px] text-slate-400 mt-0.5">{s.sub}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between text-xs">
-            <div>
-              <div className="font-bold text-white">Natural Voice Pitch Filter (atempo)</div>
-              <div className="text-[11px] text-slate-400">Preserves original voice tone without chipmunk distortion</div>
+          {/* Continuous Speed Multiplier Slider */}
+          <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-semibold">Fine Velocity Control</span>
+              <span className="text-emerald-400 font-mono font-bold text-sm">{parameters.speed || 1.5}x</span>
+            </div>
+            <input
+              type="range"
+              min={0.2}
+              max={8.0}
+              step={0.05}
+              value={parameters.speed || 1.5}
+              onChange={(e) => updateParam('speed', parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-surface-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+            />
+            <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+              <span>0.2x Extreme Slo-Mo</span>
+              <span>1.0x Realtime</span>
+              <span>8.0x Hyperlapse</span>
+            </div>
+          </div>
+
+          {/* Resulting Video Duration Calculator Card */}
+          {duration > 0 && (
+            <div className="p-3 rounded-xl bg-surface-950 border border-emerald-500/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-emerald-400" />
+                <div>
+                  <div className="text-xs font-bold text-white">Estimated Output Duration</div>
+                  <div className="text-[10px] text-slate-400">
+                    Original: <span className="font-mono text-slate-300">{formatSecondsToTime(duration)}</span> → Output: <span className="font-mono text-emerald-300 font-bold">{formatSecondsToTime(duration / (parameters.speed || 1.5))}</span>
+                  </div>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                {(parameters.speed || 1.5) > 1.0 ? `-${Math.round((1 - 1 / (parameters.speed || 1.5)) * 100)}% time` : `+${Math.round(((1 / (parameters.speed || 1.5)) - 1) * 100)}% time`}
+              </span>
+            </div>
+          )}
+
+          {/* Smooth Slow-Mo Frame Blending & Audio Handling */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Optical Frame Blending</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Prevents stuttering in slow-motion by blending adjacent frames</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.motion_blur_smooth !== false}
+                  onChange={(e) => updateParam('motion_blur_smooth', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600" />
+              </label>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white">Natural Voice Pitch Filter</div>
+                <div className="text-[10px] text-slate-400">Preserves original voice tone without chipmunk distortion</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.preserve_pitch !== false}
+                  onChange={(e) => updateParam('preserve_pitch', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600" />
+              </label>
+            </div>
+          </div>
+
+          {/* Mute in Timelapse */}
+          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <VolumeX className="h-4 w-4 text-slate-400" />
+              <div>
+                <div className="text-xs font-bold text-white">Mute Audio Track in Fast Motion</div>
+                <div className="text-[10px] text-slate-400">Removes chaotic high-speed sound for clean timelapses</div>
+              </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={parameters.preserve_pitch !== false}
-                onChange={(e) => updateParam('preserve_pitch', e.target.checked)}
+                checked={parameters.mute_audio === true}
+                onChange={(e) => updateParam('mute_audio', e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
+              <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600" />
             </label>
           </div>
         </div>
@@ -1780,20 +1866,228 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
         </div>
       )}
 
-      {/* G. ADD AUDIO & MUSIC MIXER APP WORKBENCH */}
-      {toolId === 'video_add_audio' && (
+      {/* F3. EXTRACT AUDIO & TRACK RIPPER STUDIO */}
+      {(toolId === 'extract_audio' || toolId === 'video_extract_audio') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-amber-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Music className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-bold text-white">Audio Studio & Sound Ripper</span>
+            </div>
+            <span className="text-[11px] text-amber-300 font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+              Lossless Demux & Mastering
+            </span>
+          </div>
+
+          {/* Format Presets */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-slate-300">Target Audio Format & Codec</label>
+              {parameters.lossless_copy && (
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                  STREAM COPY ACTIVE
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {[
+                { id: 'mp3', label: 'MP3', sub: 'Universal 320k', tag: 'Most Compatible' },
+                { id: 'flac', label: 'FLAC', sub: '24-bit Lossless', tag: 'Audiophile Master' },
+                { id: 'wav', label: 'WAV', sub: 'Uncompressed PCM', tag: 'Studio Raw' },
+                { id: 'm4a', label: 'AAC / M4A', sub: 'Apple Spec', tag: 'High Efficiency' },
+                { id: 'ogg', label: 'OGG', sub: 'Vorbis Q5', tag: 'Open Standard' },
+              ].map((fmt) => {
+                const active = (parameters.format || 'mp3') === fmt.id && !parameters.lossless_copy;
+                return (
+                  <button
+                    key={fmt.id}
+                    type="button"
+                    onClick={() => {
+                      updateParam('format', fmt.id);
+                      updateParam('lossless_copy', false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                      active
+                        ? 'bg-amber-600/20 border-amber-500 text-white shadow-sm shadow-amber-500/20'
+                        : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-xs font-bold">{fmt.label}</div>
+                      <div className="text-[10px] text-slate-400">{fmt.sub}</div>
+                    </div>
+                    <span className="text-[8px] text-amber-400/80 font-mono mt-1.5">{fmt.tag}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Direct Stream Demux Toggle Card */}
+          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-emerald-400" />
+              <div>
+                <div className="text-xs font-bold text-white">Direct Stream Demux (Instant 0.1s Copy)</div>
+                <div className="text-[10px] text-slate-400">Rips original embedded audio stream with 0% transcoding loss</div>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={parameters.lossless_copy === true}
+                onChange={(e) => updateParam('lossless_copy', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-600" />
+            </label>
+          </div>
+
+          {/* Bitrate Selector (when transcoding) */}
+          {!parameters.lossless_copy && (parameters.format === 'mp3' || parameters.format === 'm4a' || !parameters.format) && (
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">Target Audio Bitrate</span>
+                <span className="text-[10px] text-slate-400">Higher bitrates deliver cleaner high-frequencies and wider stereo soundstage</span>
+              </div>
+              <div className="flex gap-1.5">
+                {[128, 192, 256, 320].map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => updateParam('bitrate', b)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                      (parameters.bitrate || 192) === b
+                        ? 'bg-amber-600 text-white border-amber-500'
+                        : 'bg-surface-900 border-surface-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {b}k
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Audio Mastering & Post-Processing */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Activity className="h-3.5 w-3.5 text-amber-400" />
+                  <span>EBU R128 Loudness Normalization</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Auto-levels volume to broadcast standard (-16 LUFS)</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.normalize === true}
+                  onChange={(e) => updateParam('normalize', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-600" />
+              </label>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Vocal & Dialogue Clarity Filter</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Isolates speech frequencies and removes low rumble noise</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.voice_enhance === true}
+                  onChange={(e) => updateParam('voice_enhance', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-600" />
+              </label>
+            </div>
+          </div>
+
+          {/* Segment Trimming Options */}
+          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">Time-Segment Sound Extraction</span>
+                <span className="text-[10px] text-slate-400">Extract only a specific portion of the soundtrack</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.trim_range === true}
+                  onChange={(e) => updateParam('trim_range', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-600" />
+              </label>
+            </div>
+
+            {parameters.trim_range && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-surface-800">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Start Time</span>
+                    <button
+                      type="button"
+                      onClick={() => updateParam('start_time', formatSecondsToTime(currentTime))}
+                      className="text-amber-400 hover:text-amber-300 font-semibold"
+                    >
+                      Set Current ({formatSecondsToTime(currentTime)})
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={parameters.start_time || '00:00:00'}
+                    onChange={(e) => updateParam('start_time', e.target.value)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">End Time</span>
+                    <button
+                      type="button"
+                      onClick={() => updateParam('end_time', formatSecondsToTime(currentTime))}
+                      className="text-amber-400 hover:text-amber-300 font-semibold"
+                    >
+                      Set Current ({formatSecondsToTime(currentTime)})
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={parameters.end_time || formatSecondsToTime(Math.min(duration || 30, 30))}
+                    onChange={(e) => updateParam('end_time', e.target.value)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* G. DUAL AUDIO TRACK MIXER & DUBBING APP WORKBENCH */}
+      {(toolId === 'video_add_audio' || toolId === 'add_audio') && (
         <div className="p-4 rounded-2xl bg-surface-900 border border-violet-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Music className="h-4 w-4 text-violet-400" />
-              <span className="text-xs font-bold text-white">Dual Audio Track Mixer</span>
+              <span className="text-xs font-bold text-white">Dual Audio Mixer & Dubbing Studio</span>
             </div>
-            <span className="text-[11px] text-violet-300 font-semibold">Video + Background Music</span>
+            <span className="text-[11px] text-violet-300 font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20">
+              Multi-Track Balance Engine
+            </span>
           </div>
 
           {/* Secondary Audio Track Selection */}
-          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
-            <span className="text-[11px] text-slate-400 font-semibold block">Select Music / Audio Track</span>
+          <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
+            <span className="text-[11px] text-slate-300 font-semibold block">Select Background Music / Voiceover Track</span>
             {audioLibraryFiles.length > 0 ? (
               <select
                 value={parameters.secondary_file_id || ''}
@@ -1803,7 +2097,7 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
                   const chosen = audioLibraryFiles.find((f) => String(f.id) === String(id));
                   if (chosen) updateParam('audio_filename', chosen.filename);
                 }}
-                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2.5 text-xs text-white"
               >
                 <option value="">-- Choose an audio file from your library --</option>
                 {audioLibraryFiles.map((af) => (
@@ -1813,18 +2107,21 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
                 ))}
               </select>
             ) : (
-              <div className="text-[11px] text-slate-400 p-2 rounded-lg bg-surface-900 border border-surface-800">
-                Notice: Upload an audio track (MP3/WAV) to your library or select it to mix with this video.
+              <div className="text-[11px] text-slate-400 p-2.5 rounded-lg bg-surface-900 border border-surface-800">
+                Notice: Select or upload your soundtrack (MP3, WAV, AAC, FLAC) in the file slot above to mix with this video.
               </div>
             )}
           </div>
 
-          {/* Dual Volume Sliders */}
+          {/* Dual Volume Sliders & Presets */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1.5">
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-semibold">Original Video Audio</span>
-                <span className="text-brand-400 font-mono font-bold">{parameters.video_volume ?? 100}%</span>
+                <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Volume2 className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Original Video Audio</span>
+                </span>
+                <span className="text-blue-400 font-mono font-bold">{parameters.video_volume ?? 100}%</span>
               </div>
               <input
                 type="range"
@@ -1832,13 +2129,37 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
                 max={200}
                 value={parameters.video_volume ?? 100}
                 onChange={(e) => updateParam('video_volume', parseInt(e.target.value, 10))}
-                className="w-full h-1.5 bg-surface-800 rounded-lg appearance-none cursor-pointer accent-brand-500"
+                className="w-full h-1.5 bg-surface-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
               />
+              <div className="flex gap-1 pt-1">
+                {[
+                  { v: 0, label: 'Mute (0%)' },
+                  { v: 30, label: 'Low (30%)' },
+                  { v: 100, label: 'Normal (100%)' },
+                  { v: 150, label: 'Boost (150%)' },
+                ].map((b) => (
+                  <button
+                    key={b.v}
+                    type="button"
+                    onClick={() => updateParam('video_volume', b.v)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition ${
+                      (parameters.video_volume ?? 100) === b.v
+                        ? 'bg-blue-600 text-white border-blue-500'
+                        : 'bg-surface-900 border-surface-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1.5">
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-semibold">Added Music Track</span>
+                <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Music className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Added Music / BGM</span>
+                </span>
                 <span className="text-violet-400 font-mono font-bold">{parameters.audio_volume ?? 50}%</span>
               </div>
               <input
@@ -1849,7 +2170,83 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
                 onChange={(e) => updateParam('audio_volume', parseInt(e.target.value, 10))}
                 className="w-full h-1.5 bg-surface-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
               />
+              <div className="flex gap-1 pt-1">
+                {[
+                  { v: 20, label: 'Subtle (20%)' },
+                  { v: 50, label: 'Balanced (50%)' },
+                  { v: 100, label: 'Full (100%)' },
+                  { v: 150, label: 'Loud (150%)' },
+                ].map((b) => (
+                  <button
+                    key={b.v}
+                    type="button"
+                    onClick={() => updateParam('audio_volume', b.v)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition ${
+                      (parameters.audio_volume ?? 50) === b.v
+                        ? 'bg-violet-600 text-white border-violet-500'
+                        : 'bg-surface-900 border-surface-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
             </div>
+          </div>
+
+          {/* Pro Mixer Controls: Ducking, Looping, Passthrough */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Activity className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Smart Sidechain Ducking</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Automatically lowers music volume when speech/dialogue is heard</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.ducking === true}
+                  onChange={(e) => updateParam('ducking', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-600" />
+              </label>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <RefreshCw className="h-3.5 w-3.5 text-violet-400" />
+                  <span>Auto-Loop Music Track</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Repeats soundtrack seamlessly if video is longer than audio</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.loop_audio !== false}
+                  onChange={(e) => updateParam('loop_audio', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-600" />
+              </label>
+            </div>
+          </div>
+
+          {/* Lossless Video Stream Copy Badge */}
+          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
+              <div>
+                <div className="text-xs font-bold text-white">Lossless Video Passthrough (-c:v copy)</div>
+                <div className="text-[10px] text-slate-400">Zero re-encoding on video frames: renders at lightning speed with 100% video quality preserved</div>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              ZERO PIXEL LOSS
+            </span>
           </div>
         </div>
       )}
