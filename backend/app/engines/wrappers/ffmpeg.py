@@ -84,23 +84,56 @@ class FFmpegEngine(BaseEngine):
         input_path: str,
         output_path: str,
         target_bitrate_k: Optional[int] = None,
-        crf: int = 28
+        crf: int = 28,
+        video_codec: Optional[str] = None,
+        preset: Optional[str] = None,
+        scale: Optional[str] = None,
+        copy_audio: bool = False,
+        mute_audio: bool = False,
+        audio_bitrate_k: Optional[int] = 128
     ) -> ProcessResult:
         ext = Path(output_path).suffix
-        v_codec = self.get_best_video_encoder(ext)
-        a_codec = self.get_best_audio_encoder(ext)
+        info = self.get_info()
+        available_encoders = info.capabilities.encoders if info and info.capabilities else []
+
+        if video_codec and video_codec in available_encoders:
+            v_codec = video_codec
+        else:
+            v_codec = self.get_best_video_encoder(ext)
 
         cmd = ["ffmpeg", "-y", "-i", input_path]
-        if target_bitrate_k:
-            cmd.extend(["-c:v", v_codec, "-b:v", f"{target_bitrate_k}k"])
-        else:
-            cmd.extend(["-c:v", v_codec])
-            if v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
-                cmd.extend(["-crf", str(crf)])
-            else:
-                cmd.extend(["-b:v", "1200k"])
+        if scale:
+            cmd.extend(["-vf", scale])
 
-        cmd.extend(["-c:a", a_codec, "-b:a", "128k", output_path])
+        cmd.extend(["-c:v", v_codec])
+        if target_bitrate_k and target_bitrate_k > 0:
+            cmd.extend([
+                "-b:v", f"{target_bitrate_k}k",
+                "-maxrate", f"{int(target_bitrate_k * 1.5)}k",
+                "-bufsize", f"{int(target_bitrate_k * 2)}k"
+            ])
+        elif v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
+            cmd.extend(["-crf", str(crf)])
+        else:
+            cmd.extend(["-b:v", "1200k"])
+
+        if preset and v_codec in ["libx264", "libx265"]:
+            cmd.extend(["-preset", preset])
+
+        if v_codec == "libx265":
+            cmd.extend(["-tag:v", "hvc1"])
+
+        cmd.extend(["-pix_fmt", "yuv420p"])
+
+        if mute_audio:
+            cmd.append("-an")
+        elif copy_audio:
+            cmd.extend(["-c:a", "copy"])
+        else:
+            a_codec = self.get_best_audio_encoder(ext)
+            cmd.extend(["-c:a", a_codec, "-b:a", f"{audio_bitrate_k or 128}k"])
+
+        cmd.append(output_path)
         return await self.execute(cmd)
 
     async def trim(

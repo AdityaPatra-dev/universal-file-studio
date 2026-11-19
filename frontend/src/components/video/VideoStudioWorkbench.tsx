@@ -3,7 +3,8 @@ import {
   Play, Pause, Scissors, Crop, Minimize2, Volume2, VolumeX,
   RotateCw, FastForward, Clock, Image as ImageIcon,
   Check, Sliders, Type, FileText, Smartphone, Monitor,
-  Square, Film, Music, Sparkles, RefreshCw, Layers
+  Square, Film, Music, Sparkles, RefreshCw, Layers,
+  Zap, Info, AlertTriangle, ShieldCheck, HardDrive, ArrowRight, Activity, Percent, Cpu
 } from 'lucide-react';
 import { FileRecord } from '../../types/api';
 import { universalEngine } from '../../services/universalEngine';
@@ -169,6 +170,93 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
   const audioLibraryFiles = libraryFiles.filter(
     (f) => f.category === 'audio' || f.filename.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i)
   );
+
+  // Deep Video Compression Analysis & Engineering
+  const fileSizeMB = (file.size_bytes || 0) / (1024 * 1024);
+  const sourceBitrateKbps = duration > 0 && file.size_bytes
+    ? Math.round((file.size_bytes * 8) / (duration * 1000))
+    : 0;
+  const sourceBitrateMbps = (sourceBitrateKbps / 1000).toFixed(1);
+
+  const compMode: 'ratio' | 'crf' | 'target_size' = parameters.compression_mode || 'ratio';
+  const selectedCodec: string = parameters.codec || 'libx265';
+  const selectedResolution: string = parameters.resolution || 'original';
+  const selectedPreset: string = parameters.preset || 'medium';
+  const selectedAudioMode: string = parameters.audio_mode || 'aac_128';
+
+  const ratioTier: 'archive' | 'balanced' | 'web' | 'saver' = parameters.reduction_tier || 'balanced';
+  const ratioFactor = ratioTier === 'archive' ? 0.65 : ratioTier === 'balanced' ? 0.50 : ratioTier === 'web' ? 0.30 : 0.15;
+
+  const selectedCrf: number = parameters.crf ?? (selectedCodec === 'libx265' ? 26 : 24);
+  const customTargetMB: number = parameters.target_size_mb || Math.max(1, Math.round(fileSizeMB * 0.5));
+
+  let estOutputMB = 0;
+  let estOutputBitrateKbps = 0;
+
+  if (compMode === 'ratio') {
+    estOutputMB = Math.max(0.5, fileSizeMB * ratioFactor);
+    estOutputBitrateKbps = sourceBitrateKbps > 0
+      ? Math.round(sourceBitrateKbps * ratioFactor)
+      : Math.round((estOutputMB * 8192) / Math.max(1, duration));
+  } else if (compMode === 'crf') {
+    const crfBaseline = selectedCodec === 'libx265' ? 26 : 23;
+    const crfDelta = crfBaseline - selectedCrf;
+    const factor = Math.pow(1.12, crfDelta);
+    const efficiency = selectedCodec === 'libx265' ? 0.70 : 1.0;
+    estOutputMB = Math.min(fileSizeMB * 0.98, Math.max(fileSizeMB * 0.05, fileSizeMB * 0.5 * factor * efficiency));
+    estOutputBitrateKbps = duration > 0 ? Math.round((estOutputMB * 8192) / duration) : Math.round(sourceBitrateKbps * factor * efficiency);
+  } else {
+    estOutputMB = customTargetMB;
+    estOutputBitrateKbps = Math.max(64, Math.round(((customTargetMB * 8192) / Math.max(1, duration))));
+  }
+
+  let effW = videoDimensions.width || 1920;
+  let effH = videoDimensions.height || 1080;
+  if (selectedResolution === '1080p') {
+    effW = Math.min(1920, effW);
+    effH = Math.min(1080, effH);
+  } else if (selectedResolution === '720p') {
+    effW = Math.min(1280, effW);
+    effH = Math.min(720, effH);
+  } else if (selectedResolution === '480p') {
+    effW = Math.min(854, effW);
+    effH = Math.min(480, effH);
+  }
+
+  const pixelRate = effW * effH * 30;
+  const rawBpp = pixelRate > 0 ? (estOutputBitrateKbps * 1000) / pixelRate : 0.08;
+  const effectiveBpp = selectedCodec === 'libx265' ? rawBpp * 1.5 : rawBpp;
+
+  let healthStatus: { label: string; color: string; desc: string; isWarning: boolean; autoFixResolution?: string } = {
+    label: 'Optimal Clarity',
+    color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    desc: 'Bitrate is generous; pristine detail retention without noticeable compression degradation.',
+    isWarning: false,
+  };
+  if (effectiveBpp < 0.028) {
+    healthStatus = {
+      label: 'Severe Blockiness Alert',
+      color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+      desc: 'Bitrate is too low for this resolution. High motion scenes will show blockiness and macroblocking.',
+      isWarning: true,
+      autoFixResolution: effW > 1280 ? '720p' : '480p',
+    };
+  } else if (effectiveBpp < 0.05) {
+    healthStatus = {
+      label: 'Moderate Softness',
+      color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+      desc: 'Slight compression softening. Consider downscaling resolution to keep sharper edge fidelity.',
+      isWarning: true,
+      autoFixResolution: effW > 1920 ? '1080p' : effW > 1280 ? '720p' : undefined,
+    };
+  } else if (effectiveBpp < 0.09) {
+    healthStatus = {
+      label: 'Good Balance',
+      color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+      desc: 'Smooth playback with crisp visuals and high space savings.',
+      isWarning: false,
+    };
+  }
 
   return (
     <div className="space-y-4">
@@ -498,71 +586,458 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
       {/* C. VIDEO COMPRESSOR APP WORKBENCH */}
       {toolId === 'video_compress' && (
         <div className="p-4 rounded-2xl bg-surface-900 border border-cyan-500/30 space-y-4">
-          <div className="flex items-center justify-between">
+          {/* Header & Source Stream Telemetry */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-surface-800">
             <div className="flex items-center gap-2">
-              <Minimize2 className="h-4 w-4 text-cyan-400" />
-              <span className="text-xs font-bold text-white">Target Compression Profiler</span>
+              <Minimize2 className="h-5 w-5 text-cyan-400" />
+              <div>
+                <span className="text-xs font-bold text-white tracking-wide uppercase">Intelligent Video Compression Studio</span>
+                <p className="text-[11px] text-slate-400">Adaptive stream analysis with live bitrate & fidelity modeling</p>
+              </div>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold text-xs">
-              Original: {formatBytes(file.size_bytes)}
-            </span>
+            <div className="flex items-center gap-1.5 self-start sm:self-auto">
+              <span className="px-2.5 py-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-mono text-[11px] font-bold flex items-center gap-1">
+                <HardDrive className="h-3 w-3" />
+                Original: {formatBytes(file.size_bytes)}
+              </span>
+            </div>
           </div>
 
-          {/* Quick Target Presets */}
+          {/* 1. Deep Video Stream Analysis Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="p-2.5 rounded-xl bg-surface-950/80 border border-surface-800">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold mb-1">
+                <HardDrive className="h-3 w-3 text-cyan-400" />
+                <span>Source Size</span>
+              </div>
+              <div className="text-xs font-mono font-bold text-white">{formatBytes(file.size_bytes)}</div>
+              <div className="text-[10px] text-slate-500">{fileSizeMB.toFixed(1)} MB total</div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-surface-950/80 border border-surface-800">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold mb-1">
+                <Clock className="h-3 w-3 text-cyan-400" />
+                <span>Duration</span>
+              </div>
+              <div className="text-xs font-mono font-bold text-white">
+                {duration > 0 ? formatSecondsToTime(duration) : 'Probing...'}
+              </div>
+              <div className="text-[10px] text-slate-500">{Math.round(duration)} seconds</div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-surface-950/80 border border-surface-800">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold mb-1">
+                <Film className="h-3 w-3 text-cyan-400" />
+                <span>Native Resolution</span>
+              </div>
+              <div className="text-xs font-mono font-bold text-white">
+                {videoDimensions.width > 0 ? `${videoDimensions.width}×${videoDimensions.height}` : 'Probing...'}
+              </div>
+              <div className="text-[10px] text-cyan-400">
+                {videoDimensions.width >= 3840
+                  ? '4K UHD'
+                  : videoDimensions.width >= 1920
+                  ? '1080p FHD'
+                  : videoDimensions.width >= 1280
+                  ? '720p HD'
+                  : 'SD'}
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-surface-950/80 border border-surface-800">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold mb-1">
+                <Activity className="h-3 w-3 text-cyan-400" />
+                <span>Source Bitrate</span>
+              </div>
+              <div className="text-xs font-mono font-bold text-white">
+                {sourceBitrateKbps > 0 ? `~${sourceBitrateMbps} Mbps` : 'Probing...'}
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {sourceBitrateKbps > 0 ? `${sourceBitrateKbps} kbps` : 'Calculating'}
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Mode Selector Tabs */}
+          <div className="flex rounded-xl bg-surface-950 p-1 border border-surface-800">
             {[
-              { id: 'discord', label: 'Discord / Slack', target: '< 25 MB', crf: 28 },
-              { id: 'whatsapp', label: 'WhatsApp / Chat', target: '< 16 MB', crf: 30 },
-              { id: 'email', label: 'Email Attachment', target: '< 10 MB', crf: 32 },
-              { id: 'balanced', label: 'Balanced HD', target: '70% Smaller', crf: 26 },
-            ].map((p) => {
-              const active = (parameters.target_preset || 'balanced') === p.id;
+              { id: 'ratio', label: 'Smart Reduction Tiers', icon: Percent },
+              { id: 'crf', label: 'Perceptual Quality (CRF)', icon: Sliders },
+              { id: 'target_size', label: 'Custom Target File Size', icon: HardDrive },
+            ].map((tab) => {
+              const active = compMode === tab.id;
+              const TabIcon = tab.icon;
               return (
                 <button
-                  key={p.id}
+                  key={tab.id}
                   type="button"
                   onClick={() => {
-                    updateParam('target_preset', p.id);
-                    updateParam('crf', p.crf);
+                    updateParam('compression_mode', tab.id);
+                    if (tab.id === 'ratio') {
+                      updateParam('crf', selectedCodec === 'libx265' ? 26 : 24);
+                      updateParam('target_bitrate_kbps', estOutputBitrateKbps);
+                    } else if (tab.id === 'crf') {
+                      updateParam('crf', selectedCrf);
+                      updateParam('target_bitrate_kbps', 0);
+                    } else {
+                      updateParam('target_size_mb', customTargetMB);
+                      updateParam('target_bitrate_kbps', estOutputBitrateKbps);
+                    }
                   }}
-                  className={`p-2.5 rounded-xl border text-left transition ${
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
                     active
-                      ? 'bg-cyan-600/20 border-cyan-500 text-white'
-                      : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                      ? 'bg-cyan-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <div className="text-xs font-bold">{p.label}</div>
-                  <div className="text-[11px] text-cyan-400 font-mono font-semibold">{p.target}</div>
+                  <TabIcon className="h-3.5 w-3.5" />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Codec Selection */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* Mode A: Smart Reduction Tiers */}
+          {compMode === 'ratio' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                {[
+                  {
+                    id: 'archive',
+                    name: 'Archive Master',
+                    percent: '-35%',
+                    ratio: 0.65,
+                    crf: selectedCodec === 'libx265' ? 22 : 20,
+                    desc: 'Pristine visual fidelity, near indistinguishable from source',
+                    tag: 'Recommended for Keepsake',
+                  },
+                  {
+                    id: 'balanced',
+                    name: 'Balanced Halving',
+                    percent: '-50%',
+                    ratio: 0.50,
+                    crf: selectedCodec === 'libx265' ? 26 : 24,
+                    desc: 'Cuts size exactly in half with crisp details',
+                    tag: 'Most Popular',
+                  },
+                  {
+                    id: 'web',
+                    name: 'Web & Sharing',
+                    percent: '-70%',
+                    ratio: 0.30,
+                    crf: selectedCodec === 'libx265' ? 29 : 27,
+                    desc: 'Optimized for fast uploads, Discord, and messaging',
+                    tag: 'Cloud & Chat',
+                  },
+                  {
+                    id: 'saver',
+                    name: 'Ultra Space Saver',
+                    percent: '-85%',
+                    ratio: 0.15,
+                    crf: selectedCodec === 'libx265' ? 32 : 30,
+                    desc: 'Maximum storage recovery for quick mobile transmission',
+                    tag: 'Smallest Size',
+                  },
+                ].map((tier) => {
+                  const active = ratioTier === tier.id;
+                  const calculatedMB = Math.max(0.5, fileSizeMB * tier.ratio);
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => {
+                        updateParam('reduction_tier', tier.id);
+                        updateParam('crf', tier.crf);
+                        const newEstBitrate = sourceBitrateKbps > 0
+                          ? Math.round(sourceBitrateKbps * tier.ratio)
+                          : Math.round((calculatedMB * 8192) / Math.max(1, duration));
+                        updateParam('target_bitrate_kbps', newEstBitrate);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                        active
+                          ? 'bg-cyan-600/20 border-cyan-500 text-white shadow-md'
+                          : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold">{tier.name}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold text-[10px]">
+                            {tier.percent}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 leading-tight mb-2">{tier.desc}</div>
+                      </div>
+                      <div className="pt-2 border-t border-surface-800/80 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-400 font-mono text-[10px]">{tier.tag}</span>
+                        <span className="font-mono font-bold text-cyan-300">
+                          {calculatedMB >= 1024
+                            ? `${(calculatedMB / 1024).toFixed(2)} GB`
+                            : `${Math.round(calculatedMB)} MB`}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Mode B: Perceptual Quality (CRF) Slider */}
+          {compMode === 'crf' && (
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white">Constant Rate Factor (CRF)</span>
+                  <p className="text-[11px] text-slate-400">Direct perceptual quality control without hard bitrate limits</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-mono font-bold text-xs">
+                    CRF {selectedCrf}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-300">
+                    {selectedCrf <= 20
+                      ? 'Visually Lossless Master'
+                      : selectedCrf <= 24
+                      ? 'Studio High Definition'
+                      : selectedCrf <= 28
+                      ? 'Web Balanced'
+                      : 'High Compression'}
+                  </span>
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min="18"
+                max="34"
+                step="1"
+                value={selectedCrf}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  updateParam('crf', val);
+                  updateParam('target_bitrate_kbps', 0);
+                }}
+                className="w-full accent-cyan-500 cursor-pointer h-2 bg-surface-800 rounded-lg"
+              />
+
+              <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                <span>18 (Near-Lossless / Larger)</span>
+                <span>24 (Studio Default)</span>
+                <span>28 (Balanced)</span>
+                <span>34 (Ultra Saver)</span>
+              </div>
+            </div>
+          )}
+
+          {/* Mode C: Custom Target File Size */}
+          {compMode === 'target_size' && (
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white">Desired Output File Size</span>
+                  <p className="text-[11px] text-slate-400">System calculates exact bitrate needed to hit your target</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max={Math.max(10, Math.round(fileSizeMB))}
+                    value={customTargetMB}
+                    onChange={(e) => {
+                      const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                      updateParam('target_size_mb', val);
+                      const reqBitrate = Math.max(64, Math.round(((val * 8192) / Math.max(1, duration))));
+                      updateParam('target_bitrate_kbps', reqBitrate);
+                    }}
+                    className="w-24 px-2 py-1 bg-surface-900 border border-cyan-500/40 rounded-lg text-xs font-mono font-bold text-cyan-300 text-right"
+                  />
+                  <span className="text-xs text-slate-300 font-bold">MB</span>
+                </div>
+              </div>
+
+              {/* Slider for Target Size */}
+              <input
+                type="range"
+                min="5"
+                max={Math.max(20, Math.round(fileSizeMB))}
+                step={fileSizeMB > 500 ? 10 : 1}
+                value={customTargetMB}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  updateParam('target_size_mb', val);
+                  const reqBitrate = Math.max(64, Math.round(((val * 8192) / Math.max(1, duration))));
+                  updateParam('target_bitrate_kbps', reqBitrate);
+                }}
+                className="w-full accent-cyan-500 cursor-pointer h-2 bg-surface-800 rounded-lg"
+              />
+
+              {/* Quick Size Shortcuts */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="text-[10px] text-slate-400 font-semibold">Quick Targets:</span>
+                {[
+                  { label: '25% of Source', mb: Math.max(5, Math.round(fileSizeMB * 0.25)) },
+                  { label: '50% (Half Size)', mb: Math.max(5, Math.round(fileSizeMB * 0.50)) },
+                  { label: '75% (Light Touch)', mb: Math.max(5, Math.round(fileSizeMB * 0.75)) },
+                  ...(fileSizeMB > 150 ? [{ label: '100 MB', mb: 100 }] : []),
+                  ...(fileSizeMB > 600 ? [{ label: '500 MB', mb: 500 }] : []),
+                ].map((s, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      updateParam('target_size_mb', s.mb);
+                      const reqBitrate = Math.max(64, Math.round(((s.mb * 8192) / Math.max(1, duration))));
+                      updateParam('target_bitrate_kbps', reqBitrate);
+                    }}
+                    className="px-2 py-1 rounded bg-surface-900 border border-surface-700 hover:border-cyan-500/50 text-[10px] font-mono text-slate-300 transition"
+                  >
+                    {s.label} ({s.mb} MB)
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 3. Live Health & Fidelity Telemetry Banner */}
+          <div className="p-3.5 rounded-xl bg-surface-950/90 border border-surface-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-400 font-semibold">Estimated Output:</span>
+                <span className="text-xs font-mono font-bold text-white">
+                  {formatBytes(file.size_bytes)}
+                </span>
+                <ArrowRight className="h-3 w-3 text-cyan-400" />
+                <span className="text-xs font-mono font-bold text-cyan-300">
+                  {estOutputMB >= 1024
+                    ? `${(estOutputMB / 1024).toFixed(2)} GB`
+                    : `${Math.round(estOutputMB)} MB`}
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
+                  {fileSizeMB > 0 ? `-${Math.max(0, Math.round(((fileSizeMB - estOutputMB) / fileSizeMB) * 100))}%` : '0%'}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Calculated stream bitrate: <span className="text-cyan-300 font-mono font-bold">{estOutputBitrateKbps} kbps</span> (~{(estOutputBitrateKbps / 1000).toFixed(2)} Mbps)
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className={`px-3 py-1.5 rounded-xl border text-[11px] font-semibold flex items-center gap-1.5 ${healthStatus.color}`}>
+                {healthStatus.isWarning ? (
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                )}
+                <span>{healthStatus.label}</span>
+              </div>
+
+              {healthStatus.autoFixResolution && selectedResolution !== healthStatus.autoFixResolution && (
+                <button
+                  type="button"
+                  onClick={() => updateParam('resolution', healthStatus.autoFixResolution)}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[10px] font-bold transition flex items-center gap-1"
+                >
+                  <Zap className="h-3 w-3" />
+                  Auto-Downscale to {healthStatus.autoFixResolution}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 4. Professional Studio Stream & Codec Controls */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            {/* Codec */}
             <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
-              <span className="text-[11px] text-slate-400 font-semibold">Video Codec</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                  <Cpu className="h-3 w-3 text-cyan-400" />
+                  Video Codec
+                </span>
+                <span className="text-[9px] font-mono text-cyan-400 uppercase">
+                  {selectedCodec === 'libx265' ? '+50% Efficiency' : 'Max Compatible'}
+                </span>
+              </div>
               <select
-                value={parameters.codec || 'libx264'}
+                value={selectedCodec}
                 onChange={(e) => updateParam('codec', e.target.value)}
                 className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
               >
-                <option value="libx264">H.264 (AVC) — Universal Phone & Web Compatibility</option>
                 <option value="libx265">H.265 (HEVC) — 50% Higher Efficiency</option>
+                <option value="libx264">H.264 (AVC) — Universal Phone & Web</option>
               </select>
             </div>
 
+            {/* Resolution Downscale */}
             <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
-              <span className="text-[11px] text-slate-400 font-semibold">Resolution Downscaling</span>
+              <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                <Monitor className="h-3 w-3 text-cyan-400" />
+                Resolution Strategy
+              </span>
               <select
-                value={parameters.resolution || 'original'}
+                value={selectedResolution}
                 onChange={(e) => updateParam('resolution', e.target.value)}
                 className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
               >
-                <option value="original">Keep Original Resolution</option>
-                <option value="1080p">Downscale to 1080p Full HD</option>
-                <option value="720p">Downscale to 720p HD (Recommended for Chat)</option>
-                <option value="480p">Downscale to 480p SD (Compact)</option>
+                <option value="original">
+                  Keep Original {videoDimensions.width > 0 ? `(${videoDimensions.width}×${videoDimensions.height})` : ''}
+                </option>
+                <option value="1080p">Downscale to 1080p FHD (Save up to 75% for 4K)</option>
+                <option value="720p">Downscale to 720p HD (Best for Fast Messaging)</option>
+                <option value="480p">Downscale to 480p SD (Ultra Compact)</option>
+              </select>
+            </div>
+
+            {/* Encoding Preset */}
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                <FastForward className="h-3 w-3 text-cyan-400" />
+                Encoding Profile
+              </span>
+              <select
+                value={selectedPreset}
+                onChange={(e) => updateParam('preset', e.target.value)}
+                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+              >
+                <option value="medium">Medium — Balanced Speed & Size</option>
+                <option value="slow">Slow — Multi-pass (Best File Size)</option>
+                <option value="veryfast">Very Fast — Rapid Turnaround</option>
+              </select>
+            </div>
+
+            {/* Audio Stream Strategy */}
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
+              <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                <Music className="h-3 w-3 text-cyan-400" />
+                Audio Strategy
+              </span>
+              <select
+                value={selectedAudioMode}
+                onChange={(e) => {
+                  const mode = e.target.value;
+                  updateParam('audio_mode', mode);
+                  if (mode === 'copy') {
+                    updateParam('copy_audio', true);
+                    updateParam('mute_audio', false);
+                  } else if (mode === 'mute') {
+                    updateParam('mute_audio', true);
+                    updateParam('copy_audio', false);
+                  } else if (mode === 'aac_96') {
+                    updateParam('audio_bitrate', 96);
+                    updateParam('copy_audio', false);
+                    updateParam('mute_audio', false);
+                  } else {
+                    updateParam('audio_bitrate', 128);
+                    updateParam('copy_audio', false);
+                    updateParam('mute_audio', false);
+                  }
+                }}
+                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+              >
+                <option value="aac_128">AAC 128 kbps (Crystal Clear Stereo)</option>
+                <option value="aac_96">AAC 96 kbps (Mobile Speech Optimized)</option>
+                <option value="copy">Lossless Audio Copy (Bit-for-Bit Copy)</option>
+                <option value="mute">Mute / Discard Audio (Save Extra Size)</option>
               </select>
             </div>
           </div>

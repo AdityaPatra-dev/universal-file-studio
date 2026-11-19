@@ -864,35 +864,87 @@ public class UniversalNativeEnginePlugin extends Plugin {
                        .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("compress_video".equals(operation) || "video_compress".equals(operation)) {
-                    String preset = params.optString("target_preset", "balanced").toLowerCase();
                     String codec = params.optString("codec", "libx264");
-                    int crf = params.optInt("crf", 28);
+                    int crf = params.optInt("crf", 26);
+                    int targetBitrateKbps = params.optInt("target_bitrate_kbps", 0);
+                    if (targetBitrateKbps <= 0) {
+                        targetBitrateKbps = params.optInt("bitrate_k", 0);
+                    }
+
+                    String speedPreset = params.optString("preset", "veryfast").toLowerCase();
+                    if (!speedPreset.matches("ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow")) {
+                        speedPreset = "veryfast";
+                    }
+
+                    String resolution = params.optString("resolution", "original").toLowerCase();
                     String scale = "";
-                    int audioBitrate = 128;
-                    if ("discord".equals(preset)) {
-                        crf = 28;
-                        scale = "scale='min(1280,iw)':-2,";
-                        audioBitrate = 96;
-                    } else if ("whatsapp".equals(preset)) {
-                        crf = 30;
-                        scale = "scale='min(854,iw)':-2,";
-                        audioBitrate = 96;
-                    } else if ("email".equals(preset)) {
-                        crf = 32;
-                        scale = "scale='min(640,iw)':-2,";
-                        audioBitrate = 64;
+                    if ("1080p".equals(resolution)) {
+                        scale = "scale='min(1920,iw)':-2";
+                    } else if ("720p".equals(resolution)) {
+                        scale = "scale='min(1280,iw)':-2";
+                    } else if ("480p".equals(resolution)) {
+                        scale = "scale='min(854,iw)':-2";
                     }
+
+                    String audioMode = params.optString("audio_mode", "aac").toLowerCase();
+                    boolean copyAudio = "copy".equals(audioMode) || params.optBoolean("copy_audio", false);
+                    boolean muteAudio = "mute".equals(audioMode) || params.optBoolean("mute_audio", false);
+                    int audioBitrate = params.optInt("audio_bitrate", 128);
+
+                    // Support legacy presets if target_bitrate_kbps was not provided
+                    if (targetBitrateKbps <= 0 && params.has("target_preset")) {
+                        String preset = params.optString("target_preset", "balanced").toLowerCase();
+                        if ("discord".equals(preset)) {
+                            crf = 28;
+                            if (scale.isEmpty()) scale = "scale='min(1280,iw)':-2";
+                            audioBitrate = 96;
+                        } else if ("whatsapp".equals(preset)) {
+                            crf = 30;
+                            if (scale.isEmpty()) scale = "scale='min(854,iw)':-2";
+                            audioBitrate = 96;
+                        } else if ("email".equals(preset)) {
+                            crf = 32;
+                            if (scale.isEmpty()) scale = "scale='min(640,iw)':-2";
+                            audioBitrate = 64;
+                        }
+                    }
+
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
-                    if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
-                    if ("libx265".equals(codec)) {
-                        cmd.append("-c:v libx265 -crf ").append(crf)
-                           .append(" -preset veryfast -tag:v hvc1 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k \"")
-                           .append(out.getAbsolutePath()).append("\"");
-                    } else {
-                        cmd.append("-c:v libx264 -crf ").append(crf)
-                           .append(" -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k \"")
-                           .append(out.getAbsolutePath()).append("\"");
+                    if (!scale.isEmpty()) {
+                        cmd.append("-vf \"").append(scale).append("\" ");
                     }
+
+                    if ("libx265".equals(codec)) {
+                        cmd.append("-c:v libx265 ");
+                        if (targetBitrateKbps > 0) {
+                            cmd.append("-b:v ").append(targetBitrateKbps).append("k -maxrate ")
+                               .append((int)(targetBitrateKbps * 1.5)).append("k -bufsize ")
+                               .append(targetBitrateKbps * 2).append("k ");
+                        } else {
+                            cmd.append("-crf ").append(crf).append(" ");
+                        }
+                        cmd.append("-preset ").append(speedPreset).append(" -tag:v hvc1 -pix_fmt yuv420p ");
+                    } else {
+                        cmd.append("-c:v libx264 ");
+                        if (targetBitrateKbps > 0) {
+                            cmd.append("-b:v ").append(targetBitrateKbps).append("k -maxrate ")
+                               .append((int)(targetBitrateKbps * 1.5)).append("k -bufsize ")
+                               .append(targetBitrateKbps * 2).append("k ");
+                        } else {
+                            cmd.append("-crf ").append(crf).append(" ");
+                        }
+                        cmd.append("-preset ").append(speedPreset).append(" -pix_fmt yuv420p ");
+                    }
+
+                    if (muteAudio) {
+                        cmd.append("-an ");
+                    } else if (copyAudio) {
+                        cmd.append("-map 0:v:0 -map 0:a? -c:a copy ");
+                    } else {
+                        cmd.append("-map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k ");
+                    }
+
+                    cmd.append("\"").append(out.getAbsolutePath()).append("\"");
                 } else if ("video_reverse".equals(operation) || "reverse".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
                        .append("-vf \"reverse\" -af \"areverse\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 128k \"")

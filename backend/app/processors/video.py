@@ -60,8 +60,42 @@ class VideoProcessor(BaseProcessor):
         elif operation in ["video_compress", "compress_video"]:
             out_file = str(out_d / f"{in_p.stem}_compressed_{job_id[:8]}.mp4")
             crf = _safe_int(parameters.get("crf", 28), 28, min_val=0, max_val=51)
-            bitrate = _safe_int(parameters.get("bitrate_k"), 1000, min_val=64, max_val=50000) if parameters.get("bitrate_k") else None
-            res = await ffmpeg_engine.compress(input_path, out_file, target_bitrate_k=bitrate, crf=crf)
+            raw_bitrate = parameters.get("target_bitrate_kbps") or parameters.get("bitrate_k")
+            bitrate = _safe_int(raw_bitrate, 1000, min_val=64, max_val=100000) if raw_bitrate else None
+            codec_param = parameters.get("codec")
+            codec = str(codec_param).lower() if codec_param else None
+            if codec and codec not in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
+                codec = None
+            preset = str(parameters.get("preset", "medium")).lower()
+            if preset not in ALLOWED_PRESETS:
+                preset = "medium"
+
+            resolution = str(parameters.get("resolution", "original")).lower()
+            scale = None
+            if resolution == "1080p":
+                scale = "scale='min(1920,iw)':-2"
+            elif resolution == "720p":
+                scale = "scale='min(1280,iw)':-2"
+            elif resolution == "480p":
+                scale = "scale='min(854,iw)':-2"
+
+            audio_mode = str(parameters.get("audio_mode", "aac")).lower()
+            copy_audio = audio_mode == "copy" or bool(parameters.get("copy_audio", False))
+            mute_audio = audio_mode == "mute" or bool(parameters.get("mute_audio", False))
+            audio_bitrate = _safe_int(parameters.get("audio_bitrate", 128), 128, min_val=32, max_val=384)
+
+            res = await ffmpeg_engine.compress(
+                input_path,
+                out_file,
+                target_bitrate_k=bitrate,
+                crf=crf,
+                video_codec=codec,
+                preset=preset,
+                scale=scale,
+                copy_audio=copy_audio,
+                mute_audio=mute_audio,
+                audio_bitrate_k=audio_bitrate
+            )
             return out_file, res
 
         # 3. Video Trim
