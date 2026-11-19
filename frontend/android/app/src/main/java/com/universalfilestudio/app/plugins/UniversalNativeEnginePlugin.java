@@ -1136,8 +1136,19 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     }
                 } else if ("video_adjust_volume".equals(operation) || "adjust_volume".equals(operation)) {
                     String vol = params.optString("volume", "150%");
+                    boolean antiClip = params.optBoolean("anti_clip", true);
+                    boolean dialogueBoost = params.optBoolean("dialogue_boost", false);
+
+                    StringBuilder af = new StringBuilder("volume=").append(vol);
+                    if (dialogueBoost) {
+                        af.append(",acompressor=threshold=-21dB:ratio=4:attack=5:release=50");
+                    }
+                    if (antiClip) {
+                        af.append(",alimiter=limit=0.95");
+                    }
+
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-c:v copy -af \"volume=").append(vol).append("\" \"")
+                       .append("-c:v copy -af \"").append(af.toString()).append("\" -c:a aac -b:a 192k \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_to_gif".equals(operation) || "gif".equals(operation) || "gif".equals(outExt)) {
                     int fps = params.optInt("fps", 15);

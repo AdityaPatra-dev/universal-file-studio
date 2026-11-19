@@ -863,20 +863,20 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_adjust_volume',
-    name: 'Adjust / Boost Video Audio Volume',
+    name: 'Studio Volume & Gain Equalizer',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Audio & Speed',
-    description: 'Amplify quiet video dialogue up to 200% or lower loud background volume.',
+    description: 'Boost quiet speech dialogue up to 300% or attenuate loudness with an anti-clip soft limiter and dynamic speech compressor, leaving video stream untouched.',
     iconName: 'Volume2',
     color: 'from-amber-600 to-red-600',
     rank: 15,
     operation: 'video_adjust_volume',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm', '.mov'],
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.ts'],
     outputFormats: ['.mp4'],
-    defaultParameters: { volume: '150%' },
+    defaultParameters: { volume: '150%', anti_clip: true, dialogue_boost: false },
     parameters: [
       {
         name: 'volume',
@@ -884,46 +884,64 @@ export const VIDEO_TOOLS: StudioTool[] = [
         type: 'select',
         default: '150%',
         options: [
-          { label: 'Boost +50% (150% volume)', value: '150%' },
-          { label: 'Double Volume (200% volume)', value: '200%' },
-          { label: 'Reduce -50% (50% volume)', value: '50%' }
+          { label: 'Boost +50% (150% Volume - Moderate Speech Lift)', value: '150%' },
+          { label: 'Double Volume (200% Volume - Quiet Recordings)', value: '200%' },
+          { label: 'Triple Volume (300% Volume - Maximum Amplification)', value: '300%' },
+          { label: 'Reduce -25% (75% Volume - Lower Background)', value: '75%' },
+          { label: 'Half Volume (50% Volume - Background Muffle)', value: '50%' }
         ]
+      },
+      {
+        name: 'anti_clip',
+        label: 'Anti-Clip Soft Limiter Guard',
+        type: 'boolean',
+        default: true,
+        description: 'Prevents digital distortion and speaker crackle at boosted peak amplitudes'
+      },
+      {
+        name: 'dialogue_boost',
+        label: 'Speech & Dialogue Dynamic Compressor',
+        type: 'boolean',
+        default: false,
+        description: 'Brings quiet whispers forward without blowing out loud sound effects'
       }
     ],
-    keywords: ['boost video volume', 'increase video sound', 'make video louder', 'video volume'],
-    examples: ['boost video sound', 'make video louder']
+    keywords: ['boost video volume', 'increase video sound', 'make video louder', 'video volume', 'dialogue booster', 'audio limiter'],
+    examples: ['boost video sound', 'make video louder', 'increase dialogue clarity']
   },
   {
     id: 'video_change_fps',
-    name: 'Change Video Frame Rate (FPS)',
+    name: 'Cinema Frame Rate & Cadence Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Transcode',
-    description: 'Convert video frame rate to cinematic 24fps, standard 30fps, or smooth 60fps.',
+    description: 'Conform video frame rate to cinematic 24p, broadcast PAL 25p, web 30p, or high-frame-rate 60p/120p with frame blending and pitch-stable audio.',
     iconName: 'Clock',
     color: 'from-slate-600 to-zinc-700',
     rank: 16,
     operation: 'video_change_fps',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov', '.webm'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv', '.ts'],
     outputFormats: ['.mp4'],
     defaultParameters: { fps: 30 },
     parameters: [
       {
         name: 'fps',
-        label: 'Target Frame Rate',
+        label: 'Target Motion Cadence (FPS)',
         type: 'select',
         default: 30,
         options: [
-          { label: '24 FPS (Cinematic standard)', value: 24 },
-          { label: '30 FPS (Web & social standard)', value: 30 },
-          { label: '60 FPS (Ultra smooth playback)', value: 60 }
+          { label: '24 FPS (Hollywood Film Cinematic Cadence)', value: 24 },
+          { label: '25 FPS (European PAL Standard)', value: 25 },
+          { label: '30 FPS (Web & Social Standard)', value: 30 },
+          { label: '60 FPS (Ultra Smooth Action & Gaming)', value: 60 },
+          { label: '120 FPS (High Frame Rate / Slo-Mo Prep)', value: 120 }
         ]
       }
     ],
-    keywords: ['change video fps', 'convert frame rate', 'video to 60fps', 'video to 24fps'],
-    examples: ['convert video to 30fps']
+    keywords: ['change video fps', 'convert frame rate', 'video to 60fps', 'video to 24fps', 'cinematic 24p', 'frame rate converter'],
+    examples: ['convert video to 60fps', 'convert video to 24fps cinema']
   },
   {
     id: 'video_thumbnail',
@@ -995,59 +1013,103 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_watermark',
-    name: 'Watermark Video (Logo / Text)',
+    name: 'Brand Stamp & Dynamic Lower-Third',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Stamp a copyright text mark or corner logo onto video.',
+    description: 'Protect and brand your video content with custom typography, 9-point anchor alignment, opacity tuning, and backing pill badges.',
     iconName: 'Stamp',
     color: 'from-orange-600 to-amber-700',
     rank: 18,
     operation: 'video_watermark',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv'],
     outputFormats: ['.mp4'],
-    defaultParameters: { text: 'CONFIDENTIAL' },
+    defaultParameters: { text: '@UniversalFileStudio', position: 'bottom-right', opacity: 85, font_size: 36, box_bg: true },
     parameters: [
       {
         name: 'text',
-        label: 'Watermark Text',
+        label: 'Watermark Brand Text',
         type: 'text',
-        default: 'CONFIDENTIAL',
-        placeholder: 'Enter watermark text'
+        default: '@UniversalFileStudio',
+        placeholder: 'Enter branding text or copyright'
+      },
+      {
+        name: 'position',
+        label: 'Grid Placement Anchor',
+        type: 'select',
+        default: 'bottom-right',
+        options: [
+          { label: 'Bottom Right Corner (Standard)', value: 'bottom-right' },
+          { label: 'Bottom Left Corner', value: 'bottom-left' },
+          { label: 'Top Right Corner', value: 'top-right' },
+          { label: 'Top Left Corner', value: 'top-left' },
+          { label: 'Dead Center (Maximum Piracy Guard)', value: 'center' }
+        ]
+      },
+      {
+        name: 'opacity',
+        label: 'Watermark Opacity',
+        type: 'select',
+        default: 85,
+        options: [
+          { label: '85% Opacity (Standard Clear)', value: 85 },
+          { label: '50% Opacity (Subtle Watermark)', value: 50 },
+          { label: '25% Opacity (Ghost Protection)', value: 25 },
+          { label: '100% Opacity (Solid Branding)', value: 100 }
+        ]
+      },
+      {
+        name: 'font_size',
+        label: 'Typography Scale',
+        type: 'select',
+        default: 36,
+        options: [
+          { label: '24px (Small Subtle)', value: 24 },
+          { label: '36px (Standard Balanced)', value: 36 },
+          { label: '48px (Large Prominent)', value: 48 },
+          { label: '64px (Jumbo Headline)', value: 64 }
+        ]
+      },
+      {
+        name: 'box_bg',
+        label: 'Contrast Backing Box',
+        type: 'boolean',
+        default: true,
+        description: 'Renders a semi-transparent black pill behind the text for readability on bright scenes'
       }
     ],
-    keywords: ['watermark video', 'stamp video', 'logo on video', 'video copyright'],
-    examples: ['watermark video']
+    keywords: ['watermark video', 'stamp video', 'logo on video', 'video copyright', 'brand video', 'video text overlay'],
+    examples: ['watermark video', 'stamp copyright on video']
   },
   {
     id: 'video_stabilize',
-    name: 'Stabilize Shaky Video',
+    name: 'Gimbal Shaky Cam Stabilizer',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Smooth out hand-held camera jitter and shaky mobile footage.',
+    description: 'Eliminate handheld camera wobble, micro-jitters, and walking vibrations using hardware-accelerated motion vector compensation.',
     iconName: 'Shield',
     color: 'from-emerald-600 to-teal-700',
     rank: 19,
     operation: 'video_stabilize',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv'],
     outputFormats: ['.mp4'],
     defaultParameters: {},
     parameters: [],
-    keywords: ['stabilize video', 'fix shaky video', 'smooth video', 'remove video jitter'],
-    examples: ['stabilize shaky video']
+    keywords: ['stabilize video', 'fix shaky video', 'smooth video', 'remove video jitter', 'gimbal video', 'deshake video'],
+    examples: ['stabilize shaky video', 'smooth handheld footage']
   },
   {
     id: 'video_burn_subtitles',
-    name: 'Burn / Hardcode Subtitles',
+    name: 'Cinema Caption & Subtitle Hardcoder',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Audio & Speed',
-    description: 'Hardcode SRT or VTT subtitle tracks directly into video pixels.',
+    description: 'Burn SRT, VTT, and ASS subtitles permanently into video frames with cinema typography, high-contrast outlines, and lossless audio retention.',
     iconName: 'Captions',
     color: 'from-blue-600 to-indigo-700',
     rank: 20,
@@ -1057,10 +1119,33 @@ export const VIDEO_TOOLS: StudioTool[] = [
     acceptsMultipleFiles: true,
     inputFormats: ['.mp4', '.mkv', '.mov', '.webm', '.srt', '.vtt', '.ass'],
     outputFormats: ['.mp4'],
-    defaultParameters: {},
-    parameters: [],
-    keywords: ['burn subtitles', 'hardcode subtitles', 'embed srt to video', 'add subtitles'],
-    examples: ['burn subtitles onto video']
+    defaultParameters: { font_size: 22, primary_color: '&H00FFFFFF' },
+    parameters: [
+      {
+        name: 'font_size',
+        label: 'Subtitle Typography Size',
+        type: 'select',
+        default: 22,
+        options: [
+          { label: '18px (Compact Mobile)', value: 18 },
+          { label: '22px (Standard Cinema)', value: 22 },
+          { label: '28px (Large Prominent)', value: 28 },
+          { label: '34px (High-Visibility Jumbo)', value: 34 }
+        ]
+      },
+      {
+        name: 'primary_color',
+        label: 'Caption Color Palette',
+        type: 'select',
+        default: '&H00FFFFFF',
+        options: [
+          { label: 'Crisp Cinema White (&H00FFFFFF)', value: '&H00FFFFFF' },
+          { label: 'Classic Film Yellow (&H0000FFFF)', value: '&H0000FFFF' }
+        ]
+      }
+    ],
+    keywords: ['burn subtitles', 'hardcode subtitles', 'embed srt to video', 'add subtitles', 'subtitle hardcoder', 'caption video'],
+    examples: ['burn subtitles onto video', 'hardcode srt captions']
   },
   {
     id: 'video_add_audio',

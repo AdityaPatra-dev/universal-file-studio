@@ -6,7 +6,7 @@ import {
   Square, Film, Music, Sparkles, RefreshCw, Layers,
   Zap, Info, AlertTriangle, ShieldCheck, HardDrive, ArrowRight, Activity, Percent, Cpu,
   Camera, Grid, LayoutGrid, Eye, Download, Shield, Copy, Settings2,
-  Repeat, RotateCcw, GitMerge, Plus, Trash2
+  Repeat, RotateCcw, GitMerge, Plus, Trash2, Captions
 } from 'lucide-react';
 import { FileRecord } from '../../types/api';
 import { universalEngine } from '../../services/universalEngine';
@@ -3245,6 +3245,246 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
                   Zero-Loss Stream Copy
                 </label>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* N. STUDIO VOLUME & GAIN EQUALIZER WORKBENCH */}
+      {(toolId === 'video_adjust_volume' || toolId === 'adjust_volume') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-amber-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Volume2 className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Studio Volume & Gain Equalizer</span>
+            </div>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded border border-amber-500/30">
+              Lossless Video Stream Copy
+            </span>
+          </div>
+
+          {/* Volume Multiplier Presets */}
+          <div>
+            <label className="block text-[11px] text-slate-400 font-semibold mb-1.5">Volume Multiplier</label>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { val: '50%', label: '50%', sub: 'Half' },
+                { val: '75%', label: '75%', sub: '-25%' },
+                { val: '150%', label: '150%', sub: '+50%' },
+                { val: '200%', label: '200%', sub: 'Double' },
+                { val: '300%', label: '300%', sub: 'Triple' }
+              ].map((vol) => {
+                const active = (parameters.volume || '150%') === vol.val;
+                return (
+                  <button
+                    key={vol.val}
+                    type="button"
+                    onClick={() => updateParam('volume', vol.val)}
+                    className={`p-2.5 rounded-xl border text-center transition ${
+                      active
+                        ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm shadow-amber-500/20'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{vol.label}</div>
+                    <div className="text-[9px] text-slate-400">{vol.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Anti-Clip & Dialogue Boost Toggles */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between p-3 bg-surface-950 rounded-xl border border-surface-800">
+              <div className="flex items-center gap-2">
+                <input
+                  id="anti_clip_toggle"
+                  type="checkbox"
+                  checked={parameters.anti_clip !== false}
+                  onChange={(e) => updateParam('anti_clip', e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500 focus:ring-0 bg-surface-900 border-surface-700"
+                />
+                <label htmlFor="anti_clip_toggle" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                  Anti-Clip Soft Limiter
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-surface-950 rounded-xl border border-surface-800">
+              <div className="flex items-center gap-2">
+                <input
+                  id="dialogue_boost_toggle"
+                  type="checkbox"
+                  checked={Boolean(parameters.dialogue_boost)}
+                  onChange={(e) => updateParam('dialogue_boost', e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500 focus:ring-0 bg-surface-900 border-surface-700"
+                />
+                <label htmlFor="dialogue_boost_toggle" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                  Dialogue Speech Lift
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-200">
+            <ShieldCheck className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <span>
+              <strong>Zero Transcoding Delay on Video:</strong> Passes through original H.264/HEVC video frames bit-for-bit without touching video quality, ensuring 100% preservation while amplifying sound channels with soft limiting.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* O. CINEMA FRAME RATE & CADENCE WORKBENCH */}
+      {(toolId === 'video_change_fps' || toolId === 'change_fps') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-slate-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-slate-300" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Cinema Frame Rate & Cadence Studio</span>
+            </div>
+            <span className="text-[10px] bg-slate-500/20 text-slate-300 font-semibold px-2 py-0.5 rounded border border-slate-500/30">
+              Cadence Motion Conformance
+            </span>
+          </div>
+
+          {/* Cadence Selection */}
+          <div>
+            <label className="block text-[11px] text-slate-400 font-semibold mb-1.5">Target Cadence (FPS)</label>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { val: 24, label: '24 FPS', sub: 'Film Cadence' },
+                { val: 25, label: '25 FPS', sub: 'PAL Europe' },
+                { val: 30, label: '30 FPS', sub: 'Web Standard' },
+                { val: 60, label: '60 FPS', sub: 'Smooth Action' },
+                { val: 120, label: '120 FPS', sub: 'High Frame Rate' }
+              ].map((cad) => {
+                const active = (parameters.fps || 30) === cad.val;
+                return (
+                  <button
+                    key={cad.val}
+                    type="button"
+                    onClick={() => updateParam('fps', cad.val)}
+                    className={`p-2.5 rounded-xl border text-center transition ${
+                      active
+                        ? 'bg-slate-400/20 border-slate-300 text-white shadow-sm shadow-white/10'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{cad.label}</div>
+                    <div className="text-[9px] text-slate-400">{cad.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 p-2.5 bg-slate-500/10 border border-slate-500/20 rounded-xl text-[11px] text-slate-300">
+            <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+            <span>
+              <strong>Motion Cadence Resampling:</strong> Re-indexes timestamps to the exact target cadence while preserving bit-perfect audio sync without pitch drifting or jitter.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* P. GIMBAL SHAKY CAM STABILIZER WORKBENCH */}
+      {(toolId === 'video_stabilize' || toolId === 'stabilize') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-emerald-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Gimbal Shaky Cam Stabilizer</span>
+            </div>
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded border border-emerald-500/30">
+              Motion Vector Compensation
+            </span>
+          </div>
+
+          <div className="p-3 bg-surface-950 rounded-xl border border-surface-800 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-semibold">Motion Stabilization Profile</span>
+              <span className="text-emerald-400 font-mono text-[11px]">Hardware Accelerated</span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Detects camera rotational wobble, walking stride bounces, and hand tremors, synthesizing smooth fluid camera movements.
+            </p>
+          </div>
+
+          <div className="flex items-start gap-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-200">
+            <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>
+              <strong>Full Sensor Pass:</strong> Calculates horizontal, vertical, and rotational motion vectors across consecutive frames to smooth jerky camera movements without edge distortion.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Q. CINEMA CAPTION & SUBTITLE HARDCODER WORKBENCH */}
+      {(toolId === 'video_burn_subtitles' || toolId === 'burn_subtitles') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-blue-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Captions className="h-4 w-4 text-blue-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Cinema Caption & Subtitle Hardcoder</span>
+            </div>
+            <span className="text-[10px] bg-blue-500/20 text-blue-300 font-semibold px-2 py-0.5 rounded border border-blue-500/30">
+              SRT / VTT / ASS Permanent Burn
+            </span>
+          </div>
+
+          {/* Subtitle File Picker from Library */}
+          <div className="space-y-1.5">
+            <label className="block text-[11px] text-slate-400 font-semibold">
+              Subtitle File (Select from Library)
+            </label>
+            <select
+              value={parameters.secondary_file_id || ''}
+              onChange={(e) => updateParam('secondary_file_id', e.target.value ? Number(e.target.value) : undefined)}
+              className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
+            >
+              <option value="">
+                {libraryFiles.filter((f) => f.mime_type?.includes('subrip') || f.original_filename?.endsWith('.srt') || f.original_filename?.endsWith('.vtt') || f.original_filename?.endsWith('.ass')).length > 0
+                  ? 'Select subtitle track...'
+                  : 'No subtitle files found in library (drag & drop an .srt or .vtt file)'}
+              </option>
+              {libraryFiles
+                .filter((f) => f.id !== file.id && (f.mime_type?.includes('subrip') || f.original_filename?.endsWith('.srt') || f.original_filename?.endsWith('.vtt') || f.original_filename?.endsWith('.ass')))
+                .map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.original_filename} ({formatBytes(f.size_bytes)})
+                  </option>
+                ))}
+            </select>
+          </div>
+
+          {/* Font Size & Primary Color */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Typography Size</label>
+              <select
+                value={parameters.font_size || 22}
+                onChange={(e) => updateParam('font_size', parseInt(e.target.value, 10))}
+                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
+              >
+                <option value={18}>18px (Compact Mobile)</option>
+                <option value={22}>22px (Standard Cinema)</option>
+                <option value={28}>28px (Large Prominent)</option>
+                <option value={34}>34px (High-Visibility Jumbo)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Caption Palette</label>
+              <select
+                value={parameters.primary_color || '&H00FFFFFF'}
+                onChange={(e) => updateParam('primary_color', e.target.value)}
+                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
+              >
+                <option value="&H00FFFFFF">Crisp Cinema White</option>
+                <option value="&H0000FFFF">Classic Documentary Yellow</option>
+              </select>
             </div>
           </div>
         </div>

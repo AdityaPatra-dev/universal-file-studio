@@ -267,13 +267,11 @@ class VideoProcessor(BaseProcessor):
             )
             return out_file, res
 
-        # 7. Change FPS
+        # 7. Change FPS & Cadence
         elif operation in ["video_change_fps", "change_fps"]:
-            fps = _safe_float(parameters.get("fps", 30), 30.0, min_val=1.0, max_val=120.0)
+            fps = _safe_float(parameters.get("fps", 30), 30.0, min_val=1.0, max_val=240.0)
             out_file = str(out_d / f"{in_p.stem}_{int(fps)}fps_{job_id[:8]}.mp4")
-            v_codec = ffmpeg_engine.get_best_video_encoder(".mp4")
-            cmd = ["ffmpeg", "-y", "-i", input_path, "-r", str(fps), "-c:v", v_codec, out_file]
-            res = await ffmpeg_engine.execute(cmd)
+            res = await ffmpeg_engine.change_fps(input_path, out_file, fps=fps)
             return out_file, res
 
         # 8. Video Change Speed
@@ -537,6 +535,99 @@ class VideoProcessor(BaseProcessor):
                 output_path=out_file,
                 stream_copy=stream_copy,
                 target_resolution=target_res
+            )
+            return out_file, res
+
+        # 14. Adjust / Boost Volume
+        elif operation in ["video_adjust_volume", "adjust_volume"]:
+            raw_vol = str(parameters.get("volume", "150%")).strip()
+            vol_factor = 1.5
+            if raw_vol.endswith("%"):
+                try:
+                    vol_factor = float(raw_vol.rstrip("%")) / 100.0
+                except Exception:
+                    vol_factor = 1.5
+            else:
+                vol_factor = _safe_float(raw_vol, 1.5, min_val=0.0, max_val=10.0)
+
+            anti_clip = bool(parameters.get("anti_clip", True))
+            dialogue_boost = bool(parameters.get("dialogue_boost", False))
+            out_file = str(out_d / f"{in_p.stem}_vol_{job_id[:8]}.mp4")
+            res = await ffmpeg_engine.adjust_volume(
+                input_path,
+                out_file,
+                volume_factor=vol_factor,
+                anti_clip=anti_clip,
+                dialogue_boost=dialogue_boost
+            )
+            return out_file, res
+
+        # 15. Video Watermark
+        elif operation in ["video_watermark", "watermark", "add_watermark"]:
+            text = str(parameters.get("text") or parameters.get("watermark_text") or "@UniversalFileStudio")
+            position = str(parameters.get("position", "bottom-right")).lower()
+            opacity = _safe_int(parameters.get("opacity", 85), 85, min_val=10, max_val=100)
+            font_size = _safe_int(parameters.get("font_size", 36), 36, min_val=12, max_val=120)
+            box_bg = bool(parameters.get("box_bg", True))
+            out_file = str(out_d / f"{in_p.stem}_watermarked_{job_id[:8]}.mp4")
+            res = await ffmpeg_engine.watermark(
+                input_path,
+                out_file,
+                text=text,
+                position=position,
+                opacity=opacity,
+                font_size=font_size,
+                box_bg=box_bg
+            )
+            return out_file, res
+
+        # 16. Video Stabilize
+        elif operation in ["video_stabilize", "stabilize", "deshake"]:
+            out_file = str(out_d / f"{in_p.stem}_stabilized_{job_id[:8]}.mp4")
+            res = await ffmpeg_engine.stabilize(input_path, out_file)
+            return out_file, res
+
+        # 17. Burn Subtitles
+        elif operation in ["video_burn_subtitles", "burn_subtitles"]:
+            out_file = str(out_d / f"{in_p.stem}_subbed_{job_id[:8]}.mp4")
+            sub_path = parameters.get("subtitle_path")
+            if not sub_path or not os.path.exists(str(sub_path)):
+                sec_id = parameters.get("secondary_file_id")
+                add_ids = parameters.get("additional_file_ids") or []
+                check_ids = [sec_id] if sec_id else add_ids
+                if check_ids:
+                    try:
+                        from app.database import AsyncSessionLocal
+                        from app.models.file_record import FileRecord
+                        from sqlalchemy import select
+                        async with AsyncSessionLocal() as session:
+                            stmt = select(FileRecord).where(FileRecord.id.in_([int(i) for i in check_ids if i is not None]))
+                            r = await session.execute(stmt)
+                            recs = r.scalars().all()
+                            for rec in recs:
+                                if rec.upload_path and os.path.exists(rec.upload_path):
+                                    sub_path = rec.upload_path
+                                    break
+                    except Exception as err:
+                        logger.warning(f"Failed to lookup subtitle file from db: {err}")
+
+            if not sub_path or not os.path.exists(str(sub_path)):
+                return out_file, ProcessResult(
+                    returncode=1,
+                    stdout="",
+                    stderr="No valid subtitle file provided to burn into video.",
+                    success=False,
+                    command=["ffmpeg", "burn_subtitles"]
+                )
+
+            font_size = _safe_int(parameters.get("font_size", 20), 20, min_val=8, max_val=72)
+            primary_color = str(parameters.get("primary_color", "&H00FFFFFF"))
+            res = await ffmpeg_engine.burn_subtitles(
+                input_video=input_path,
+                input_sub=str(sub_path),
+                output_path=out_file,
+                font_size=font_size,
+                primary_color=primary_color
             )
             return out_file, res
 

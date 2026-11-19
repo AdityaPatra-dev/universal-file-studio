@@ -510,11 +510,119 @@ class FFmpegEngine(BaseEngine):
         self,
         input_video: str,
         input_sub: str,
-        output_path: str
+        output_path: str,
+        font_size: int = 20,
+        primary_color: str = "&H00FFFFFF"
     ) -> ProcessResult:
+        ext = Path(output_path).suffix
+        v_codec = self.get_best_video_encoder(ext)
+        safe_sub = input_sub.replace("'", "'\\''").replace(":", "\\:")
+        vf = f"subtitles='{safe_sub}':force_style='FontSize={font_size},PrimaryColour={primary_color}'"
         cmd = [
             "ffmpeg", "-y", "-i", input_video,
-            "-vf", f"subtitles='{input_sub}'",
+            "-vf", vf,
+            "-c:v", v_codec, "-preset", "fast",
+            "-c:a", "copy",
+            output_path
+        ]
+        return await self.execute(cmd)
+
+    async def adjust_volume(
+        self,
+        input_path: str,
+        output_path: str,
+        volume_factor: float = 1.5,
+        anti_clip: bool = True,
+        dialogue_boost: bool = False
+    ) -> ProcessResult:
+        af_parts = [f"volume={volume_factor:.2f}"]
+        if dialogue_boost:
+            af_parts.append("acompressor=threshold=-21dB:ratio=4:attack=5:release=50")
+        if anti_clip:
+            af_parts.append("alimiter=limit=0.95")
+
+        af = ",".join(af_parts)
+        ext = Path(output_path).suffix
+        a_codec = self.get_best_audio_encoder(ext)
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-c:v", "copy",
+            "-af", af,
+            "-c:a", a_codec, "-b:a", "192k",
+            output_path
+        ]
+        return await self.execute(cmd)
+
+    async def change_fps(
+        self,
+        input_path: str,
+        output_path: str,
+        fps: float = 30.0
+    ) -> ProcessResult:
+        ext = Path(output_path).suffix
+        v_codec = self.get_best_video_encoder(ext)
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-filter:v", f"fps=fps={fps}",
+            "-c:v", v_codec, "-crf", "18", "-preset", "fast",
+            "-map", "0:v:0", "-map", "0:a?",
+            "-c:a", "copy",
+            output_path
+        ]
+        return await self.execute(cmd)
+
+    async def watermark(
+        self,
+        input_path: str,
+        output_path: str,
+        text: str = "@UniversalFileStudio",
+        position: str = "bottom-right",
+        opacity: int = 85,
+        font_size: int = 36,
+        box_bg: bool = True
+    ) -> ProcessResult:
+        pos_map = {
+            "top-left": ("30", "30"),
+            "top-center": ("(w-tw)/2", "30"),
+            "top-right": ("w-tw-30", "30"),
+            "center-left": ("30", "(h-th)/2"),
+            "center": ("(w-tw)/2", "(h-th)/2"),
+            "center-right": ("w-tw-30", "(h-th)/2"),
+            "bottom-left": ("30", "h-th-30"),
+            "bottom-center": ("(w-tw)/2", "h-th-30"),
+            "bottom-right": ("w-tw-30", "h-th-30"),
+        }
+        x_pos, y_pos = pos_map.get(position, ("w-tw-30", "h-th-30"))
+        alpha = max(0.1, min(1.0, opacity / 100.0))
+        clean_text = text.replace("'", "").replace(":", "")
+
+        box_str = ":box=1:boxcolor=black@0.6:boxborderw=8" if box_bg else ":shadowcolor=black@0.8:shadowx=2:shadowy=2"
+        vf = f"drawtext=text='{clean_text}':fontsize={font_size}:fontcolor=white@{alpha:.2f}:x={x_pos}:y={y_pos}{box_str}"
+
+        ext = Path(output_path).suffix
+        v_codec = self.get_best_video_encoder(ext)
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-vf", vf,
+            "-c:v", v_codec, "-preset", "fast",
+            "-map", "0:v:0", "-map", "0:a?",
+            "-c:a", "copy",
+            output_path
+        ]
+        return await self.execute(cmd)
+
+    async def stabilize(
+        self,
+        input_path: str,
+        output_path: str
+    ) -> ProcessResult:
+        ext = Path(output_path).suffix
+        v_codec = self.get_best_video_encoder(ext)
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-vf", "deshake",
+            "-c:v", v_codec, "-preset", "fast",
+            "-map", "0:v:0", "-map", "0:a?",
             "-c:a", "copy",
             output_path
         ]
