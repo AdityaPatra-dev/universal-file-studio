@@ -223,14 +223,45 @@ class FFmpegEngine(BaseEngine):
         output_path: str,
         width: int,
         height: int,
-        keep_aspect_ratio: bool = True
+        keep_aspect_ratio: bool = True,
+        fit_mode: str = "letterbox",
+        sharpen: bool = False,
+        pad_color: str = "black"
     ) -> ProcessResult:
-        scale_filter = f"scale={width}:{height}"
-        if keep_aspect_ratio:
-            scale_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-
         ext = Path(output_path).suffix
         v_codec = self.get_best_video_encoder(ext)
+
+        if fit_mode == "blurred_background":
+            blur_filter = (
+                f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
+                f"boxblur=25:5[bg];"
+                f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+                f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+            )
+            if sharpen:
+                blur_filter += ",unsharp=5:5:0.8:3:3:0.4"
+            blur_filter += "[v]"
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-filter_complex", blur_filter,
+                "-map", "[v]", "-map", "0:a?",
+                "-c:v", v_codec,
+                "-c:a", "copy",
+                output_path
+            ]
+            return await self.execute(cmd)
+
+        scale_filter = f"scale={width}:{height}:flags=lanczos"
+        if fit_mode == "crop":
+            scale_filter = f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,crop={width}:{height}"
+        elif fit_mode == "stretch":
+            scale_filter = f"scale={width}:{height}:flags=lanczos"
+        elif keep_aspect_ratio or fit_mode == "letterbox":
+            scale_filter = f"scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color={pad_color}"
+
+        if sharpen:
+            scale_filter += ",unsharp=5:5:0.8:3:3:0.4"
+
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
             "-vf", scale_filter,
@@ -238,6 +269,63 @@ class FFmpegEngine(BaseEngine):
             "-c:a", "copy",
             output_path
         ]
+        return await self.execute(cmd)
+
+    async def extract_single_frame(
+        self,
+        input_path: str,
+        output_path: str,
+        time_str: str = "00:00:01",
+        sharpen: bool = False
+    ) -> ProcessResult:
+        cmd = ["ffmpeg", "-y", "-ss", time_str, "-i", input_path]
+        if sharpen:
+            cmd.extend(["-vf", "unsharp=5:5:0.8:3:3:0.4"])
+        cmd.extend(["-vframes", "1", "-q:v", "2", output_path])
+        return await self.execute(cmd)
+
+    async def generate_storyboard(
+        self,
+        input_path: str,
+        output_path: str,
+        columns: int = 3,
+        rows: int = 3,
+        thumb_width: int = 480
+    ) -> ProcessResult:
+        tile_filter = f"select='not(mod(n\\,60))',scale={thumb_width}:-2:flags=lanczos,tile={columns}x{rows}:padding=6:margin=12:color=black"
+        cmd = ["ffmpeg", "-y", "-i", input_path, "-vf", tile_filter, "-vframes", "1", "-q:v", "2", output_path]
+        return await self.execute(cmd)
+
+    async def mute_audio(
+        self,
+        input_path: str,
+        output_path: str,
+        mute_mode: str = "complete",
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        track_index: int = 0
+    ) -> ProcessResult:
+        if mute_mode == "segment" and start_time and end_time:
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-af", f"volume=enable='between(t,{start_time},{end_time})':volume=0",
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k",
+                output_path
+            ]
+        elif mute_mode == "primary_only":
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-map", "0:v:0", "-map", f"0:a:{track_index}",
+                "-c", "copy",
+                output_path
+            ]
+        else:
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-an", "-c:v", "copy",
+                output_path
+            ]
         return await self.execute(cmd)
 
     async def extract_audio(

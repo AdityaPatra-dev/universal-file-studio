@@ -721,6 +721,8 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     outExt = "gif";
                 } else if ("gif_to_video".equals(operation)) {
                     outExt = "mp4";
+                } else if ("extract_frame".equals(operation) || "video_thumbnail".equals(operation) || "storyboard".equals(operation)) {
+                    outExt = params.optString("format", "png").toLowerCase();
                 } else if (params.has("format")) {
                     outExt = params.optString("format", "mp4").toLowerCase();
                 }
@@ -773,7 +775,22 @@ public class UniversalNativeEnginePlugin extends Plugin {
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vn -c:a libmp3lame -b:a ").append(bitrate).append("k \"").append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("remove_audio".equals(operation) || "mute".equals(operation) || "video_remove_audio".equals(operation)) {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
+                    String muteMode = params.optString("mute_mode", "complete").toLowerCase();
+                    if ("segment".equals(muteMode)) {
+                        String start = params.optString("start_time", params.optString("start", "00:00:00"));
+                        String end = params.optString("end_time", params.optString("end", "00:00:10"));
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-af \"volume=enable='between(t,").append(start).append(",").append(end).append(")':volume=0\" ")
+                           .append("-c:v copy -c:a aac -b:a 192k \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else if ("primary_only".equals(muteMode)) {
+                        int trackIdx = params.optInt("track_index", 0);
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-map 0:v:0 -map 0:a:").append(trackIdx).append(" -c copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_rotate".equals(operation) || "rotate".equals(operation)) {
                     int deg = params.optInt("degrees", params.optInt("rotation", params.optInt("angle", 90)));
                     boolean flipH = params.optBoolean("flip_h", false);
@@ -790,35 +807,72 @@ public class UniversalNativeEnginePlugin extends Plugin {
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_resize".equals(operation) || "scale".equals(operation)) {
                     String fitMode = params.optString("fit_mode", "blurred_background");
-                    String res = params.optString("preset", params.optString("resolution", "1080p")).toLowerCase();
-                    int targetW = 1920;
-                    int targetH = 1080;
+                    String res = params.optString("preset", params.optString("resolution", "9:16")).toLowerCase();
+                    boolean sharpen = params.optBoolean("sharpen", true);
+                    String padColor = params.optString("pad_color", "black");
+                    String codec = params.optString("codec", "libx264");
+
+                    int targetW = params.optInt("width", 1080);
+                    int targetH = params.optInt("height", 1920);
+
                     if (res.contains("9:16") || res.contains("vertical")) {
                         targetW = 1080;
                         targetH = 1920;
                     } else if (res.contains("1:1") || res.contains("square")) {
                         targetW = 1080;
                         targetH = 1080;
-                    } else if (res.contains("720")) {
+                    } else if (res.contains("4:5")) {
+                        targetW = 1080;
+                        targetH = 1350;
+                    } else if (res.contains("21:9")) {
+                        targetW = 2560;
+                        targetH = 1080;
+                    } else if (res.contains("1080") || res.contains("fhd")) {
+                        targetW = 1920;
+                        targetH = 1080;
+                    } else if (res.contains("720") || res.contains("hd")) {
                         targetW = 1280;
                         targetH = 720;
-                    } else if (res.contains("480")) {
+                    } else if (res.contains("480") || res.contains("sd")) {
                         targetW = 854;
                         targetH = 480;
                     }
 
+                    String vCodec = "libx265".equals(codec) ? "libx265 -tag:v hvc1" : "libx264";
+
                     if ("blurred_background".equals(fitMode)) {
+                        StringBuilder filter = new StringBuilder();
+                        filter.append("[0:v]scale=").append(targetW).append(":").append(targetH)
+                              .append(":force_original_aspect_ratio=increase,crop=").append(targetW).append(":").append(targetH)
+                              .append(",boxblur=25:5[bg];[0:v]scale=").append(targetW).append(":").append(targetH)
+                              .append(":force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2");
+                        if (sharpen) {
+                            filter.append(",unsharp=5:5:0.8:3:3:0.4");
+                        }
+                        filter.append("[v]");
+
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                           .append("-filter_complex \"[0:v]scale=").append(targetW).append(":").append(targetH)
-                           .append(":force_original_aspect_ratio=increase,crop=").append(targetW).append(":").append(targetH)
-                           .append(",boxblur=25:5[bg];[0:v]scale=").append(targetW).append(":").append(targetH)
-                           .append(":force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]\" ")
-                           .append("-map \"[v]\" -map 0:a? -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a copy \"")
+                           .append("-filter_complex \"").append(filter).append("\" ")
+                           .append("-map \"[v]\" -map 0:a? -c:v ").append(vCodec)
+                           .append(" -preset medium -crf 20 -pix_fmt yuv420p -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else if ("crop".equals(fitMode)) {
+                        String vf = "scale=" + targetW + ":" + targetH + ":force_original_aspect_ratio=increase:flags=lanczos,crop=" + targetW + ":" + targetH;
+                        if (sharpen) vf += ",unsharp=5:5:0.8:3:3:0.4";
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                           .append("-c:v ").append(vCodec).append(" -preset medium -crf 20 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else if ("stretch".equals(fitMode)) {
+                        String vf = "scale=" + targetW + ":" + targetH + ":flags=lanczos";
+                        if (sharpen) vf += ",unsharp=5:5:0.8:3:3:0.4";
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                           .append("-c:v ").append(vCodec).append(" -preset medium -crf 20 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     } else {
-                        String vf = "scale=" + targetW + ":" + targetH + ":force_original_aspect_ratio=decrease,pad=" + targetW + ":" + targetH + ":(ow-iw)/2:(oh-ih)/2";
+                        String vf = "scale=" + targetW + ":" + targetH + ":force_original_aspect_ratio=decrease:flags=lanczos,pad=" + targetW + ":" + targetH + ":(ow-iw)/2:(oh-ih)/2:color=" + padColor;
+                        if (sharpen) vf += ",unsharp=5:5:0.8:3:3:0.4";
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
-                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                           .append("-c:v ").append(vCodec).append(" -preset medium -crf 20 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("video_crop".equals(operation) || "crop".equals(operation)) {
@@ -972,6 +1026,29 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
                        .append("-vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \"")
                        .append(out.getAbsolutePath()).append("\"");
+                } else if ("extract_frame".equals(operation) || "video_thumbnail".equals(operation) || "storyboard".equals(operation)) {
+                    String mode = params.optString("mode", "single").toLowerCase();
+                    boolean sharpen = params.optBoolean("sharpen", true);
+                    if ("storyboard".equals(mode) || "storyboard".equals(operation)) {
+                        String grid = params.optString("grid_layout", "3x3").toLowerCase();
+                        int cols = 3, rows = 3;
+                        if (grid.contains("x")) {
+                            String[] parts = grid.split("x");
+                            try {
+                                cols = Integer.parseInt(parts[0]);
+                                rows = Integer.parseInt(parts[1]);
+                            } catch (Exception ignored) {}
+                        }
+                        String tileFilter = "select='not(mod(n\\,60))',scale=480:-2:flags=lanczos,tile=" + cols + "x" + rows + ":padding=6:margin=12:color=black";
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(tileFilter).append("\" -vframes 1 -q:v 2 \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        String timeStr = params.optString("time", params.optString("timestamp", "00:00:01"));
+                        cmd.append("-ss \"").append(timeStr).append("\" -i \"").append(in.getAbsolutePath()).append("\" ");
+                        if (sharpen) {
+                            cmd.append("-vf \"unsharp=5:5:0.8:3:3:0.4\" ");
+                        }
+                        cmd.append("-vframes 1 -q:v 2 \"").append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_watermark".equals(operation) || "watermark".equals(operation)) {
                     String text = params.optString("text", "@UniversalFileStudio").replace("'", "").replace(":", "");
                     int opacity = params.optInt("opacity", 85);

@@ -338,6 +338,8 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
     'video_compress',
     'video_speed',
     'video_resize',
+    'video_remove_audio',
+    'remove_audio',
     'video_to_gif',
     'video_watermark',
     'video_rotate',

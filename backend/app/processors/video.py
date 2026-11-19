@@ -166,10 +166,38 @@ class VideoProcessor(BaseProcessor):
         # 4. Video Resize
         elif operation in ["video_resize", "resize_video"]:
             out_file = str(out_d / f"{in_p.stem}_resized_{job_id[:8]}.mp4")
-            w = _safe_int(parameters.get("width", 1280), 1280, min_val=16, max_val=7680)
-            h = _safe_int(parameters.get("height", 720), 720, min_val=16, max_val=4320)
+            preset = str(parameters.get("preset", "")).lower()
+            w = _safe_int(parameters.get("width"), 1280, min_val=16, max_val=7680)
+            h = _safe_int(parameters.get("height"), 720, min_val=16, max_val=4320)
+            if preset == "9:16":
+                w, h = 1080, 1920
+            elif preset == "1:1":
+                w, h = 1080, 1080
+            elif preset in ["1080p", "fhd"]:
+                w, h = 1920, 1080
+            elif preset == "4:5":
+                w, h = 1080, 1350
+            elif preset == "21:9":
+                w, h = 2560, 1080
+            elif preset == "720p":
+                w, h = 1280, 720
+            elif preset == "480p":
+                w, h = 854, 480
+
+            fit_mode = str(parameters.get("fit_mode", "blurred_background" if preset == "9:16" else "letterbox")).lower()
+            sharpen = bool(parameters.get("sharpen", True))
+            pad_color = str(parameters.get("pad_color", "black"))
             keep_aspect = bool(parameters.get("keep_aspect_ratio", True))
-            res = await ffmpeg_engine.resize(input_path, out_file, width=w, height=h, keep_aspect_ratio=keep_aspect)
+            res = await ffmpeg_engine.resize(
+                input_path,
+                out_file,
+                width=w,
+                height=h,
+                keep_aspect_ratio=keep_aspect,
+                fit_mode=fit_mode,
+                sharpen=sharpen,
+                pad_color=pad_color
+            )
             return out_file, res
 
         # 5. Video Crop
@@ -238,14 +266,49 @@ class VideoProcessor(BaseProcessor):
             res = await ffmpeg_engine.extract_audio(input_path, out_file, audio_codec=codec)
             return out_file, res
 
-        # 11. Remove Audio
-        elif operation in ["remove_audio", "video_remove_audio"]:
+        # 11. Remove / Mute Audio
+        elif operation in ["remove_audio", "video_remove_audio", "mute_video"]:
             out_file = str(out_d / f"{in_p.stem}_muted_{job_id[:8]}.mp4")
-            cmd = ["ffmpeg", "-y", "-i", input_path, "-an", "-c:v", "copy", out_file]
-            res = await ffmpeg_engine.execute(cmd)
+            mute_mode = str(parameters.get("mute_mode", "complete")).lower()
+            start_time = parameters.get("start_time") or parameters.get("start")
+            end_time = parameters.get("end_time") or parameters.get("end")
+            track_index = _safe_int(parameters.get("track_index", 0), 0)
+            res = await ffmpeg_engine.mute_audio(
+                input_path,
+                out_file,
+                mute_mode=mute_mode,
+                start_time=str(start_time) if start_time else None,
+                end_time=str(end_time) if end_time else None,
+                track_index=track_index
+            )
             return out_file, res
 
-        # 12. Extract Frames
+        # 12. Single Hero Frame, Storyboard, or Burst Extract Frames
+        elif operation in ["extract_frame", "video_thumbnail", "thumbnail_video", "storyboard"]:
+            mode = str(parameters.get("mode", "single")).lower()
+            fmt = sanitize_format(parameters.get("format"), {"png", "jpg", "jpeg", "webp"}, "png")
+            sharpen = bool(parameters.get("sharpen", True))
+            if mode == "storyboard":
+                out_file = str(out_d / f"{in_p.stem}_storyboard_{job_id[:8]}.{fmt}")
+                grid = str(parameters.get("grid_layout", "3x3")).lower()
+                cols, rows = 3, 3
+                if "x" in grid:
+                    parts = grid.split("x")
+                    cols = _safe_int(parts[0], 3, min_val=1, max_val=8)
+                    rows = _safe_int(parts[1], 3, min_val=1, max_val=8)
+                res = await ffmpeg_engine.generate_storyboard(input_path, out_file, columns=cols, rows=rows)
+                return out_file, res
+            elif mode == "burst":
+                out_sub_d = str(out_d / f"{in_p.stem}_burst_{job_id[:8]}")
+                fps = _safe_float(parameters.get("fps", 1.0), 1.0, min_val=0.01, max_val=10.0)
+                res = await ffmpeg_engine.extract_frames(input_path, out_sub_d, fps=fps, format=fmt)
+                return out_sub_d, res
+            else:
+                out_file = str(out_d / f"{in_p.stem}_thumb_{job_id[:8]}.{fmt}")
+                time_str = str(parameters.get("time") or parameters.get("timestamp") or "00:00:01")
+                res = await ffmpeg_engine.extract_single_frame(input_path, out_file, time_str=time_str, sharpen=sharpen)
+                return out_file, res
+
         elif operation in ["extract_frames", "video_extract_frames"]:
             out_sub_d = str(out_d / f"{in_p.stem}_frames_{job_id[:8]}")
             fps = _safe_float(parameters.get("fps", 1.0), 1.0, min_val=0.01, max_val=10.0)

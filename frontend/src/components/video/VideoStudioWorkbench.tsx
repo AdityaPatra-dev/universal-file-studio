@@ -4,7 +4,8 @@ import {
   RotateCw, FastForward, Clock, Image as ImageIcon,
   Check, Sliders, Type, FileText, Smartphone, Monitor,
   Square, Film, Music, Sparkles, RefreshCw, Layers,
-  Zap, Info, AlertTriangle, ShieldCheck, HardDrive, ArrowRight, Activity, Percent, Cpu
+  Zap, Info, AlertTriangle, ShieldCheck, HardDrive, ArrowRight, Activity, Percent, Cpu,
+  Camera, Grid, LayoutGrid, Eye, Download, Shield, Copy, Settings2
 } from 'lucide-react';
 import { FileRecord } from '../../types/api';
 import { universalEngine } from '../../services/universalEngine';
@@ -158,6 +159,7 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
       setCapturedThumb(dataUrl);
       updateParam('timestamp', currentTime.toFixed(2));
       updateParam('time', currentTime.toFixed(2));
+      updateParam('time_offset', currentTime.toFixed(2));
     }
   };
 
@@ -1446,44 +1448,335 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
 
       {/* F. RESIZE & SOCIAL PADDING APP WORKBENCH */}
       {toolId === 'video_resize' && (
-        <div className="p-4 rounded-2xl bg-surface-900 border border-blue-500/30 space-y-3">
+        <div className="p-4 rounded-2xl bg-surface-900 border border-blue-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Layers className="h-4 w-4 text-blue-400" />
-              <span className="text-xs font-bold text-white">Social Dimension & Padding Studio</span>
+              <span className="text-xs font-bold text-white">Social Canvas & Aspect Scaler Studio</span>
             </div>
-            <span className="text-[11px] text-blue-300 font-semibold">TikTok / Reels / YouTube</span>
+            <span className="text-[11px] text-blue-300 font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+              Lanczos-3 Sinc Scaler
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
-              <span className="text-[11px] text-slate-400 font-semibold">Aspect Ratio Adaptation</span>
-              <select
-                value={parameters.fit_mode || 'blurred_background'}
-                onChange={(e) => updateParam('fit_mode', e.target.value)}
-                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
-              >
-                <option value="blurred_background">✨ Blurred Background Padding (TikTok Aesthetic)</option>
-                <option value="letterbox">⬛ Classic Black Letterbox Bars</option>
-                <option value="crop">✂️ Center Crop to Fill (No Bars)</option>
-                <option value="stretch">↔️ Stretch Video to Canvas</option>
-              </select>
+          {/* Aspect Ratio Presets */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-slate-300 block">Canvas Aspect Ratio Preset</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+              {[
+                { id: '9:16', label: '9:16 Reels', sub: '1080×1920', icon: Smartphone },
+                { id: '1:1', label: '1:1 Square', sub: '1080×1080', icon: Square },
+                { id: '4:5', label: '4:5 Portrait', sub: '1080×1350', icon: LayoutGrid },
+                { id: '16:9', label: '16:9 Landscape', sub: '1920×1080', icon: Monitor },
+                { id: '21:9', label: '21:9 Cinema', sub: '2560×1080', icon: Film },
+                { id: 'custom', label: 'Custom Canvas', sub: 'Any Res', icon: Settings2 },
+              ].map((p) => {
+                const active = (parameters.preset || '9:16') === p.id;
+                const IconComp = p.icon;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      updateParam('preset', p.id);
+                      if (p.id === '9:16') { updateParam('width', 1080); updateParam('height', 1920); }
+                      else if (p.id === '1:1') { updateParam('width', 1080); updateParam('height', 1080); }
+                      else if (p.id === '4:5') { updateParam('width', 1080); updateParam('height', 1350); }
+                      else if (p.id === '16:9') { updateParam('width', 1920); updateParam('height', 1080); }
+                      else if (p.id === '21:9') { updateParam('width', 2560); updateParam('height', 1080); }
+                    }}
+                    className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition text-left ${
+                      active
+                        ? 'bg-blue-600/20 border-blue-500 text-white shadow-sm shadow-blue-500/20'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <IconComp className={`h-4 w-4 ${active ? 'text-blue-400' : 'text-slate-500'}`} />
+                    <span className="text-[11px] font-bold text-center leading-tight">{p.label}</span>
+                    <span className="text-[9px] text-slate-400">{p.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Custom Width & Height Inputs if custom */}
+          {parameters.preset === 'custom' && (
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-slate-400 font-semibold block mb-1">Canvas Width (px)</label>
+                <input
+                  type="number"
+                  min={120}
+                  max={7680}
+                  step={2}
+                  value={parameters.width || 1080}
+                  onChange={(e) => updateParam('width', parseInt(e.target.value, 10) || 1080)}
+                  className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-400 font-semibold block mb-1">Canvas Height (px)</label>
+                <input
+                  type="number"
+                  min={120}
+                  max={4320}
+                  step={2}
+                  value={parameters.height || 1920}
+                  onChange={(e) => updateParam('height', parseInt(e.target.value, 10) || 1920)}
+                  className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Framing / Fit Modes */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-slate-300 block">Framing & Social Aesthetic</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                {
+                  id: 'blurred_background',
+                  title: '✨ Ambient Blurred Clone (TikTok / Reels)',
+                  desc: 'Scales and blurs video as dynamic background, keeping foreground video sharp and uncropped',
+                },
+                {
+                  id: 'letterbox',
+                  title: '⬛ Studio Letterbox / Pillarbox',
+                  desc: 'Maintains exact aspect ratio with elegant solid borders (customizable background color)',
+                },
+                {
+                  id: 'crop',
+                  title: '✂️ Smart Center Zoom & Fill',
+                  desc: 'Fills the complete frame with zero black bars by center-zooming the video',
+                },
+                {
+                  id: 'stretch',
+                  title: '↔️ Canvas Exact Stretch',
+                  desc: 'Forces video to fill exact canvas dimensions without cropping or borders',
+                },
+              ].map((m) => {
+                const active = (parameters.fit_mode || 'blurred_background') === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => updateParam('fit_mode', m.id)}
+                    className={`p-2.5 rounded-xl border text-left transition ${
+                      active
+                        ? 'bg-blue-600/15 border-blue-500 text-white'
+                        : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{m.title}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">{m.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Letterbox Background Color Palette if letterbox */}
+          {(parameters.fit_mode === 'letterbox') && (
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white">Letterbox Canvas Color</div>
+                <div className="text-[10px] text-slate-400">Color filling the pillar/letterbox bars</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { color: '#000000', name: 'Black' },
+                  { color: '#111827', name: 'Dark Gray' },
+                  { color: '#ffffff', name: 'White' },
+                  { color: '#1e1b4b', name: 'Deep Indigo' },
+                  { color: '#064e3b', name: 'Dark Emerald' },
+                ].map((c) => (
+                  <button
+                    key={c.color}
+                    type="button"
+                    title={c.name}
+                    onClick={() => updateParam('pad_color', c.color)}
+                    style={{ backgroundColor: c.color }}
+                    className={`h-6 w-6 rounded-full border-2 transition ${
+                      (parameters.pad_color || '#000000') === c.color ? 'border-blue-400 scale-110 shadow-md' : 'border-surface-700 opacity-80 hover:opacity-100'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sharpening & Quality Filter */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Lanczos Edge Sharpen</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Unsharp mask compensates for scaling blur</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.sharpen !== false}
+                  onChange={(e) => updateParam('sharpen', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600" />
+              </label>
             </div>
 
-            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
-              <span className="text-[11px] text-slate-400 font-semibold">Target Canvas Preset</span>
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white">Video Encoder</div>
+                <div className="text-[10px] text-slate-400">H.265 (High Efficiency) or H.264 (Universal)</div>
+              </div>
               <select
-                value={parameters.preset || '1080p'}
-                onChange={(e) => updateParam('preset', e.target.value)}
-                className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                value={parameters.codec || 'h264'}
+                onChange={(e) => updateParam('codec', e.target.value)}
+                className="bg-surface-900 border border-surface-700 rounded-lg px-2 py-1 text-xs text-white font-mono"
               >
-                <option value="9:16">9:16 TikTok / Instagram Reels (1080x1920)</option>
-                <option value="1080p">16:9 Full HD Landscape (1920x1080)</option>
-                <option value="1:1">1:1 Square (1080x1080)</option>
-                <option value="720p">16:9 HD Standard (1280x720)</option>
+                <option value="h264">H.264 (AVC)</option>
+                <option value="h265">H.265 (HEVC)</option>
               </select>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* F2. PRO MUTE & AUDIO TRACK DIRECTOR */}
+      {(toolId === 'video_remove_audio' || toolId === 'remove_audio') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-rose-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <VolumeX className="h-4 w-4 text-rose-400" />
+              <span className="text-xs font-bold text-white">Pro Mute & Audio Track Director</span>
+            </div>
+            <span className="text-[11px] text-rose-300 font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20">
+              Lossless Demux Engine
+            </span>
+          </div>
+
+          {/* Mode Selection */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              {
+                id: 'complete',
+                title: '⚡ Instant Zero-Loss Mute',
+                badge: '< 0.3s runtime',
+                desc: 'Lossless stream copy (-c:v copy -an). Strips all sound without re-encoding a single video pixel.',
+              },
+              {
+                id: 'segment',
+                title: '⏱️ Segment / Censor Mute',
+                badge: 'Time-range censor',
+                desc: 'Silences audio only during a specific interval (e.g. bleep/mute sensitive speech or noise).',
+              },
+              {
+                id: 'primary_only',
+                title: '🎚️ Discard Secondary Dubs',
+                badge: 'Clean multi-track',
+                desc: 'Keeps main sound track (Track 1) and strips commentator, secondary dubs, or descriptive tracks.',
+              },
+            ].map((m) => {
+              const active = (parameters.mute_mode || 'complete') === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => updateParam('mute_mode', m.id)}
+                  className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+                    active
+                      ? 'bg-rose-600/15 border-rose-500 text-white shadow-sm shadow-rose-500/20'
+                      : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-xs font-bold">{m.title}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-snug">{m.desc}</p>
+                  </div>
+                  <span className={`text-[9px] font-mono mt-2 self-start px-1.5 py-0.5 rounded ${
+                    active ? 'bg-rose-500/20 text-rose-300' : 'bg-surface-900 text-slate-500'
+                  }`}>
+                    {m.badge}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Segment Time Range Controls when segment */}
+          {parameters.mute_mode === 'segment' && (
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-white">Censor Silence Interval</span>
+                <span className="text-[10px] text-slate-400">Audio will be 0% volume between start and end</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Start Silence</span>
+                    <button
+                      type="button"
+                      onClick={() => updateParam('mute_start', currentTime.toFixed(2))}
+                      className="text-rose-400 hover:text-rose-300 font-semibold"
+                    >
+                      Set Current ({formatSecondsToTime(currentTime)})
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0}
+                    max={duration || 3600}
+                    value={parameters.mute_start || 0}
+                    onChange={(e) => updateParam('mute_start', parseFloat(e.target.value) || 0)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">End Silence</span>
+                    <button
+                      type="button"
+                      onClick={() => updateParam('mute_end', currentTime.toFixed(2))}
+                      className="text-rose-400 hover:text-rose-300 font-semibold"
+                    >
+                      Set Current ({formatSecondsToTime(currentTime)})
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0}
+                    max={duration || 3600}
+                    value={parameters.mute_end || Math.min(duration || 10, 10)}
+                    onChange={(e) => updateParam('mute_end', parseFloat(e.target.value) || 0)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lossless Indicator badge */}
+          {parameters.mute_mode !== 'segment' && (
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <div>
+                  <div className="text-xs font-bold text-white">Guaranteed Bit-Perfect Video Stream</div>
+                  <div className="text-[10px] text-slate-400">Preserves original video bitrate, color matrix, HDR metadata, and timestamps</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                PASSTHROUGH
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -1616,37 +1909,180 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
         </div>
       )}
 
-      {/* I. COVER THUMBNAIL / FRAME GRABBER APP WORKBENCH */}
+      {/* I. HERO FRAME & CINEMA STORYBOARD SUITE */}
       {(toolId === 'video_thumbnail' || toolId === 'extract_frame') && (
-        <div className="p-4 rounded-2xl bg-surface-900 border border-teal-500/30 space-y-3">
+        <div className="p-4 rounded-2xl bg-surface-900 border border-teal-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ImageIcon className="h-4 w-4 text-teal-400" />
-              <span className="text-xs font-bold text-white">Hero Frame & Cover Grabber</span>
+              <Camera className="h-4 w-4 text-teal-400" />
+              <span className="text-xs font-bold text-white">Hero Frame & Cinema Storyboard Suite</span>
             </div>
-            <button
-              type="button"
-              onClick={captureFrameAtCurrentTime}
-              className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-teal-600/30 btn-press"
-            >
-              <ImageIcon className="h-3.5 w-3.5" />
-              <span>Capture Frame at {formatSecondsToTime(currentTime)}</span>
-            </button>
+            <span className="text-[11px] text-teal-300 font-semibold px-2 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/20">
+              Full-Sensor 4K Raw Grab
+            </span>
           </div>
 
+          {/* Extraction Mode Tabs */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              {
+                id: 'single',
+                title: '📸 Hero Still Frame',
+                desc: 'Uncompressed raw full-resolution grab at exact keyframe',
+              },
+              {
+                id: 'storyboard',
+                title: '🎞️ Cinema Storyboard Sheet',
+                desc: 'Evenly sampled multi-frame contact sheet with timecode badges',
+              },
+              {
+                id: 'burst',
+                title: '⚡ Action Burst Sequence',
+                desc: 'High-speed sequence of 5-20 frames around the scrub mark',
+              },
+            ].map((m) => {
+              const active = (parameters.extract_mode || 'single') === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => updateParam('extract_mode', m.id)}
+                  className={`p-2.5 rounded-xl border text-left transition ${
+                    active
+                      ? 'bg-teal-600/20 border-teal-500 text-white shadow-sm shadow-teal-500/20'
+                      : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">{m.title}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">{m.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mode-specific controls */}
+          {parameters.extract_mode === 'storyboard' ? (
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white">Storyboard Grid Matrix</span>
+                  <p className="text-[10px] text-slate-400">Samples key moments across video duration</p>
+                </div>
+                <div className="flex gap-1.5">
+                  {[
+                    { id: '2x2', label: '2×2 (4 frames)' },
+                    { id: '3x3', label: '3×3 (9 frames)' },
+                    { id: '4x4', label: '4×4 (16 frames)' },
+                    { id: '5x3', label: '5×3 (15 frames)' },
+                  ].map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => updateParam('grid', g.id)}
+                      className={`px-2 py-1 rounded-lg text-xs font-semibold border transition ${
+                        (parameters.grid || '3x3') === g.id
+                          ? 'bg-teal-600 text-white border-teal-500'
+                          : 'bg-surface-900 border-surface-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : parameters.extract_mode === 'burst' ? (
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white">Burst Frame Count</span>
+                <p className="text-[10px] text-slate-400">Extracted consecutively around {formatSecondsToTime(currentTime)}</p>
+              </div>
+              <div className="flex gap-1.5">
+                {[5, 10, 15, 20].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => updateParam('burst_count', count)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                      (parameters.burst_count || 10) === count
+                        ? 'bg-teal-600 text-white border-teal-500'
+                        : 'bg-surface-900 border-surface-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {count} frames
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs">
+                <span className="font-bold text-white block">Current Scrub Mark: {formatSecondsToTime(currentTime)}</span>
+                <span className="text-[10px] text-slate-400">Scrub above video timeline to target your exact frame</span>
+              </div>
+              <button
+                type="button"
+                onClick={captureFrameAtCurrentTime}
+                className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-teal-600/30 btn-press"
+              >
+                <Camera className="h-3.5 w-3.5" />
+                <span>Snap Frame at {formatSecondsToTime(currentTime)}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Captured Preview Card */}
           {capturedThumb && (
             <div className="p-3 rounded-xl bg-surface-950 border border-teal-500/40 flex items-center gap-3">
-              <img src={capturedThumb} alt="Hero Snapshot" className="h-16 w-28 object-cover rounded-lg border border-surface-700" />
-              <div className="text-xs space-y-0.5">
+              <img src={capturedThumb} alt="Hero Snapshot" className="h-16 w-28 object-cover rounded-lg border border-surface-700 shadow" />
+              <div className="text-xs space-y-0.5 flex-1">
                 <div className="font-bold text-white flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-teal-400" />
-                  <span>Frame Ready for Export</span>
+                  <span>Frame Staged for Export</span>
                 </div>
-                <div className="text-[11px] text-slate-400">Timestamp: {formatSecondsToTime(currentTime)}</div>
-                <div className="text-[11px] text-slate-400">Resolution: {videoDimensions.width}×{videoDimensions.height}</div>
+                <div className="text-[11px] text-slate-400">Target Time: {formatSecondsToTime(currentTime)} ({currentTime.toFixed(2)}s)</div>
+                <div className="text-[11px] text-slate-400">Sensor Resolution: {videoDimensions.width || 1920}×{videoDimensions.height || 1080}</div>
               </div>
             </div>
           )}
+
+          {/* Format & Enhancement Options */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">Export Image Format</span>
+                <span className="text-[10px] text-slate-400">PNG Lossless, WebP Compact, or JPEG</span>
+              </div>
+              <select
+                value={parameters.format || 'png'}
+                onChange={(e) => updateParam('format', e.target.value)}
+                className="bg-surface-900 border border-surface-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono"
+              >
+                <option value="png">PNG (Lossless 24-bit)</option>
+                <option value="webp">WebP (Smallest File)</option>
+                <option value="jpeg">JPEG (High Quality 95%)</option>
+              </select>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-teal-400" />
+                  <span>Unsharp Detail Boost</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Enhances edges and micro-contrast for thumbnail clickability</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.enhance !== false}
+                  onChange={(e) => updateParam('enhance', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-600" />
+              </label>
+            </div>
+          </div>
         </div>
       )}
 

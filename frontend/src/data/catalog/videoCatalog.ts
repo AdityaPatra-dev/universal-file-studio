@@ -272,11 +272,11 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_resize',
-    name: 'Resize Video Resolution',
+    name: 'Social Canvas & Aspect Scaler',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Scale video down to 1080p, 720p, or 480p with aspect ratio locking.',
+    description: 'Transform aspect ratio to 9:16 Reels/TikTok, 1:1 Square, 4K/1080p with cinematic blurred background padding, letterboxing, or Lanczos-3 sharpening.',
     iconName: 'Maximize2',
     color: 'from-blue-600 to-indigo-700',
     badge: 'top',
@@ -285,32 +285,54 @@ export const VIDEO_TOOLS: StudioTool[] = [
     operation: 'video_resize',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm', '.mov'],
-    outputFormats: ['.mp4'],
-    defaultParameters: { width: 1280, height: 720 },
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.ts'],
+    outputFormats: ['.mp4', '.mkv', '.mov'],
+    defaultParameters: { preset: '9:16', fit_mode: 'blurred_background', sharpen: true, codec: 'libx264' },
     parameters: [
       {
         name: 'preset',
-        label: 'Standard Resolution Preset',
+        label: 'Canvas Aspect & Platform Preset',
         type: 'select',
-        default: '720p',
+        default: '9:16',
         options: [
-          { label: '1080p Full HD (1920x1080)', value: '1080p' },
-          { label: '720p HD (1280x720)', value: '720p' },
-          { label: '480p SD (854x480)', value: '480p' }
+          { label: '9:16 Vertical Story / Reels / TikTok (1080x1920)', value: '9:16' },
+          { label: '1:1 Square Instagram Feed (1080x1080)', value: '1:1' },
+          { label: '16:9 Full HD Landscape (1920x1080)', value: '1080p' },
+          { label: '4:5 Portrait Feed (1080x1350)', value: '4:5' },
+          { label: '21:9 UltraWide Cinema (2560x1080)', value: '21:9' },
+          { label: '16:9 Standard HD (1280x720)', value: '720p' },
+          { label: 'Custom Canvas Dimensions', value: 'custom' }
         ]
+      },
+      {
+        name: 'fit_mode',
+        label: 'Canvas Framing & Background Style',
+        type: 'select',
+        default: 'blurred_background',
+        options: [
+          { label: '✨ Aesthetic Blurred Video Background (TikTok / Reels Style)', value: 'blurred_background' },
+          { label: '⬛ Studio Letterbox / Pillarbox with Pad Color', value: 'letterbox' },
+          { label: '✂️ Smart Center Zoom & Fill Canvas (No Bars)', value: 'crop' },
+          { label: '↔️ Stretch Video to Exact Canvas', value: 'stretch' }
+        ]
+      },
+      {
+        name: 'sharpen',
+        label: 'Lanczos-3 Sinc Interpolation & Edge Sharpening',
+        type: 'boolean',
+        default: true
       }
     ],
-    keywords: ['resize video', 'scale video', 'change video resolution', 'video downscale'],
-    examples: ['resize video', 'scale to 720p']
+    keywords: ['resize video', 'scale video', 'change video resolution', 'video downscale', '9:16 vertical', 'blurred background', 'video canvas'],
+    examples: ['resize video', 'scale to 9:16', 'add blurred background']
   },
   {
     id: 'video_remove_audio',
-    name: 'Mute / Remove Video Audio',
+    name: 'Pro Mute & Audio Track Director',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Audio & Speed',
-    description: 'Remove all audio tracks and voice channels, leaving a silent video file.',
+    description: 'Instant lossless 0-second video muting, selective time-range censor muting, or multi-track commentary stripping.',
     iconName: 'VolumeX',
     color: 'from-slate-600 to-zinc-700',
     badge: 'top',
@@ -319,12 +341,38 @@ export const VIDEO_TOOLS: StudioTool[] = [
     operation: 'remove_audio',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi'],
-    outputFormats: ['.mp4'],
-    defaultParameters: {},
-    parameters: [],
-    keywords: ['mute video', 'remove audio from video', 'silent video', 'strip sound from video'],
-    examples: ['mute video', 'remove audio']
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.ts'],
+    outputFormats: ['.mp4', '.mkv', '.mov'],
+    defaultParameters: { mute_mode: 'complete', start_time: '00:00:00', end_time: '00:00:10', track_index: 0 },
+    parameters: [
+      {
+        name: 'mute_mode',
+        label: 'Muting & Audio Stripping Mode',
+        type: 'select',
+        default: 'complete',
+        options: [
+          { label: '⚡ Complete Mute (Instant 0-Second Lossless Copy)', value: 'complete' },
+          { label: '⏱️ Mute Time Range Segment (Censor / Bleep Range)', value: 'segment' },
+          { label: '🎙️ Keep Primary Track Only (Strip Secondary Commentary)', value: 'primary_only' }
+        ]
+      },
+      {
+        name: 'start_time',
+        label: 'Segment Start (HH:MM:SS)',
+        type: 'text',
+        default: '00:00:00',
+        placeholder: '00:00:00'
+      },
+      {
+        name: 'end_time',
+        label: 'Segment End (HH:MM:SS)',
+        type: 'text',
+        default: '00:00:10',
+        placeholder: '00:00:10'
+      }
+    ],
+    keywords: ['mute video', 'remove audio from video', 'silent video', 'strip sound from video', 'censor video audio'],
+    examples: ['mute video', 'remove audio', 'mute segment']
   },
 
   // ==================== 🎬 EXTENDED VIDEO TOOLS (TOOLS 8 - 21) ====================
@@ -586,31 +634,71 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_thumbnail',
-    name: 'Extract Video Cover Thumbnail',
+    name: 'Hero Frame & Cinema Storyboard',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Capture a high-definition image frame at any timestamp to use as a cover picture.',
+    description: 'Extract true 4K native sensor frames, burst sequences, or cinema storyboard proof sheets with timecodes.',
     iconName: 'Camera',
     color: 'from-rose-500 to-pink-600',
     rank: 17,
     operation: 'extract_frame',
     backendEngine: 'ffmpeg',
-    mobileEngine: 'canvas',
-    inputFormats: ['.mp4', '.mov', '.webm', '.mkv'],
-    outputFormats: ['.jpg', '.png'],
-    defaultParameters: { time: '00:00:01' },
+    mobileEngine: 'ffmpeg',
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.ts'],
+    outputFormats: ['.png', '.jpg', '.webp'],
+    defaultParameters: { mode: 'single', time: '00:00:01', grid_layout: '3x3', format: 'png', sharpen: true },
     parameters: [
       {
+        name: 'mode',
+        label: 'Extraction Studio Mode',
+        type: 'select',
+        default: 'single',
+        options: [
+          { label: '📸 Precision Native Frame Grabber (Full 4K/1080p)', value: 'single' },
+          { label: '🎬 Cinema Storyboard Proof Sheet (Visual Grid with Timecodes)', value: 'storyboard' },
+          { label: '⚡ Burst Frame Sequence (ZIP of Numbered Frames)', value: 'burst' }
+        ]
+      },
+      {
+        name: 'grid_layout',
+        label: 'Storyboard Grid Layout',
+        type: 'select',
+        default: '3x3',
+        options: [
+          { label: '3 × 3 (9 Frames Across Video)', value: '3x3' },
+          { label: '4 × 4 (16 Frames High Density)', value: '4x4' },
+          { label: '5 × 3 (15 Frames Cinematic Panoramic)', value: '5x3' },
+          { label: '2 × 3 (6 Frames Quick Summary)', value: '2x3' }
+        ]
+      },
+      {
+        name: 'format',
+        label: 'Image Format',
+        type: 'select',
+        default: 'png',
+        options: [
+          { label: 'PNG — Lossless 100% Master Quality', value: 'png' },
+          { label: 'JPEG — High Quality (95% Compression)', value: 'jpg' },
+          { label: 'WebP — Ultra-Compact Modern Format', value: 'webp' }
+        ]
+      },
+      {
         name: 'time',
-        label: 'Timestamp to Capture',
+        label: 'Hero Frame Timestamp (HH:MM:SS)',
         type: 'text',
         default: '00:00:01',
         placeholder: '00:00:01'
+      },
+      {
+        name: 'sharpen',
+        label: 'Unsharp Contrast Enhancer',
+        type: 'boolean',
+        default: true
       }
     ],
-    keywords: ['video thumbnail', 'extract video frame', 'video cover picture', 'snapshot video'],
-    examples: ['extract video thumbnail']
+    keywords: ['video thumbnail', 'extract video frame', 'video cover picture', 'snapshot video', 'storyboard', 'contact sheet'],
+    examples: ['extract video thumbnail', 'generate video storyboard']
   },
   {
     id: 'video_watermark',
