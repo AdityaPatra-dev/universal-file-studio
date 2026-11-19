@@ -13,6 +13,7 @@ import { universalEngine } from '../../services/universalEngine';
 import { UniversalNativeEngine } from '../../services/nativeEngineBridge';
 import { formatBytes } from '../../utils/format';
 import { CatalogIcon } from './CatalogIcon';
+import { VideoStudioWorkbench } from '../video/VideoStudioWorkbench';
 
 const EXT_TO_MIME: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -329,6 +330,20 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const matchingLibraryFiles = libraryFiles.filter(isFormatMatching);
 
   const isDualInput = ['video_burn_subtitles', 'video_add_audio', 'pdf_compare'].includes(tool?.id || '');
+  const isVideoStudioTool = tool?.category === 'video' || tool?.id.startsWith('video_') || tool?.id === 'extract_audio' || tool?.id === 'gif_to_video';
+  const hasDedicatedVideoWorkbench = [
+    'video_trim',
+    'video_crop',
+    'video_compress',
+    'video_speed',
+    'video_resize',
+    'video_to_gif',
+    'video_watermark',
+    'video_rotate',
+    'video_add_audio',
+    'video_thumbnail',
+    'extract_frame',
+  ].includes(tool?.id || '');
 
   let primaryLabel = 'Primary File';
   let primaryDesc = 'Main input file';
@@ -1428,8 +1443,21 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
             )}
           </div>
 
+          {/* Specialized Interactive Video Studio Workbench */}
+          {isVideoStudioTool && selectedFiles[0] && (
+            <div className="pt-2">
+              <VideoStudioWorkbench
+                toolId={tool.id}
+                file={selectedFiles[0]}
+                parameters={parameters}
+                onParametersChange={(newParams) => setParameters(newParams)}
+                libraryFiles={libraryFiles}
+              />
+            </div>
+          )}
+
           {/* Section 2: Tool Configuration Parameters */}
-          {tool.parameters.length > 0 && (
+          {tool.parameters.length > 0 && !hasDedicatedVideoWorkbench && (
             <div className="space-y-4 pt-3 border-t border-surface-800/80">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
@@ -1443,6 +1471,19 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
 
               <div className="space-y-4">{tool.parameters.map(renderParameterInput)}</div>
             </div>
+          )}
+
+          {/* Optional Advanced Drawer for dedicated video tools */}
+          {tool.parameters.length > 0 && hasDedicatedVideoWorkbench && (
+            <details className="pt-1 group">
+              <summary className="text-[11px] font-semibold text-slate-400 hover:text-slate-300 cursor-pointer flex items-center gap-1.5 select-none py-1">
+                <Sliders className="h-3 w-3 text-brand-400" />
+                <span>Show Advanced Parameters & Raw Overrides</span>
+              </summary>
+              <div className="mt-2.5 p-3.5 rounded-xl bg-surface-950/70 border border-surface-800 space-y-3">
+                {tool.parameters.map(renderParameterInput)}
+              </div>
+            </details>
           )}
 
           {/* Execution Progress & Status */}

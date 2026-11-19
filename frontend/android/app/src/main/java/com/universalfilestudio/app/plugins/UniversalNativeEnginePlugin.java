@@ -750,10 +750,17 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 if ("video_trim".equals(operation) || "trim".equals(operation)) {
                     String start = params.has("start") ? params.optString("start", "00:00:00") : params.optString("start_time", "00:00:00");
                     String end = params.has("end") ? params.optString("end", "00:00:30") : params.optString("end_time", "00:00:30");
-                    cmd.append("-ss \"").append(start).append("\" -to \"").append(end).append("\" ")
-                       .append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"")
-                       .append(out.getAbsolutePath()).append("\"");
+                    boolean isLossless = params.optBoolean("lossless", true);
+                    if (isLossless) {
+                        cmd.append("-ss \"").append(start).append("\" -to \"").append(end).append("\" ")
+                           .append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-c copy -map 0 \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-ss \"").append(start).append("\" -to \"").append(end).append("\" ")
+                           .append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 192k \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("extract_audio".equals(operation)) {
                     int bitrate = params.optInt("bitrate", 192);
                     if ("wav".equals(outExt)) {
@@ -769,30 +776,51 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -an -c:v copy \"").append(out.getAbsolutePath()).append("\"");
                 } else if ("video_rotate".equals(operation) || "rotate".equals(operation)) {
                     int deg = params.optInt("degrees", params.optInt("rotation", params.optInt("angle", 90)));
+                    boolean flipH = params.optBoolean("flip_h", false);
                     String vf = "transpose=1";
-                    if (deg == 180) {
+                    if (flipH) {
+                        vf = "hflip";
+                    } else if (deg == 180) {
                         vf = "transpose=2,transpose=2";
                     } else if (deg == 270) {
                         vf = "transpose=2";
                     }
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
-                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_resize".equals(operation) || "scale".equals(operation)) {
-                    String res = params.optString("preset", params.optString("resolution", "720p")).toLowerCase();
-                    String vf = "scale=-2:720";
-                    if (res.contains("1080")) {
-                        vf = "scale=-2:1080";
+                    String fitMode = params.optString("fit_mode", "blurred_background");
+                    String res = params.optString("preset", params.optString("resolution", "1080p")).toLowerCase();
+                    int targetW = 1920;
+                    int targetH = 1080;
+                    if (res.contains("9:16") || res.contains("vertical")) {
+                        targetW = 1080;
+                        targetH = 1920;
+                    } else if (res.contains("1:1") || res.contains("square")) {
+                        targetW = 1080;
+                        targetH = 1080;
+                    } else if (res.contains("720")) {
+                        targetW = 1280;
+                        targetH = 720;
                     } else if (res.contains("480")) {
-                        vf = "scale=-2:480";
-                    } else if (params.has("width") && params.has("height")) {
-                        int w = params.optInt("width", 1280);
-                        int h = params.optInt("height", 720);
-                        vf = "scale=" + w + ":" + h + ":force_original_aspect_ratio=decrease,pad=" + w + ":" + h + ":(ow-iw)/2:(oh-ih)/2";
+                        targetW = 854;
+                        targetH = 480;
                     }
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
-                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
-                       .append(out.getAbsolutePath()).append("\"");
+
+                    if ("blurred_background".equals(fitMode)) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                           .append("-filter_complex \"[0:v]scale=").append(targetW).append(":").append(targetH)
+                           .append(":force_original_aspect_ratio=increase,crop=").append(targetW).append(":").append(targetH)
+                           .append(",boxblur=25:5[bg];[0:v]scale=").append(targetW).append(":").append(targetH)
+                           .append(":force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]\" ")
+                           .append("-map \"[v]\" -map 0:a? -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        String vf = "scale=" + targetW + ":" + targetH + ":force_original_aspect_ratio=decrease,pad=" + targetW + ":" + targetH + ":(ow-iw)/2:(oh-ih)/2";
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_crop".equals(operation) || "crop".equals(operation)) {
                     String aspect = params.optString("aspect_ratio", params.optString("ratio", params.optString("aspect", "9:16")));
                     String vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)";
@@ -804,23 +832,40 @@ public class UniversalNativeEnginePlugin extends Plugin {
                         vf = "crop=min(iw\\,ih*4/5):min(ih\\,iw*5/4)";
                     }
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
-                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_change_speed".equals(operation) || "video_speed".equals(operation)) {
                     double speed = params.optDouble("speed", 1.5);
                     if (speed <= 0) speed = 1.0;
-                    double setpts = 1.0 / Math.max(0.25, Math.min(4.0, speed));
+                    double setpts = 1.0 / Math.max(0.125, Math.min(8.0, speed));
+                    boolean preservePitch = params.optBoolean("preserve_pitch", true);
+                    StringBuilder atempoFilter = new StringBuilder();
+                    if (preservePitch) {
+                        double remaining = speed;
+                        while (remaining > 2.0) {
+                            atempoFilter.append("atempo=2.0,");
+                            remaining /= 2.0;
+                        }
+                        while (remaining < 0.5) {
+                            atempoFilter.append("atempo=0.5,");
+                            remaining /= 0.5;
+                        }
+                        atempoFilter.append(String.format(Locale.US, "atempo=%.3f", Math.max(0.5, Math.min(2.0, remaining))));
+                    } else {
+                        atempoFilter.append(String.format(Locale.US, "asetrate=44100*%.3f,aresample=44100", speed));
+                    }
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-filter_complex \"[0:v]setpts=").append(String.format(Locale.US, "%.3f", setpts)).append("*PTS[v];[0:a]atempo=").append(String.format(Locale.US, "%.3f", Math.max(0.5, Math.min(2.0, speed)))).append("[a]\" ")
-                       .append("-map \"[v]\" -map \"[a]?\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
+                       .append("-filter_complex \"[0:v]setpts=").append(String.format(Locale.US, "%.3f", setpts)).append("*PTS[v];[0:a]").append(atempoFilter).append("[a]\" ")
+                       .append("-map \"[v]\" -map \"[a]?\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_change_fps".equals(operation) || "change_fps".equals(operation)) {
                     int fps = params.optInt("fps", 30);
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -r ").append(fps).append(" ")
-                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("compress_video".equals(operation) || "video_compress".equals(operation)) {
                     String preset = params.optString("target_preset", "balanced").toLowerCase();
+                    String codec = params.optString("codec", "libx264");
                     int crf = params.optInt("crf", 28);
                     String scale = "";
                     int audioBitrate = 128;
@@ -839,12 +884,18 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     }
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
                     if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
-                    cmd.append("-c:v libx264 -crf ").append(crf)
-                       .append(" -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k \"")
-                       .append(out.getAbsolutePath()).append("\"");
+                    if ("libx265".equals(codec)) {
+                        cmd.append("-c:v libx265 -crf ").append(crf)
+                           .append(" -preset veryfast -tag:v hvc1 -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-c:v libx264 -crf ").append(crf)
+                           .append(" -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k \"")
+                           .append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_reverse".equals(operation) || "reverse".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-vf \"reverse\" -af \"areverse\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
+                       .append("-vf \"reverse\" -af \"areverse\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_loop".equals(operation) || "loop".equals(operation)) {
                     int count = params.optInt("count", 3);
@@ -860,24 +911,47 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     int fps = params.optInt("fps", 15);
                     int width = params.optInt("width", 480);
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-vf \"fps=").append(fps).append(",scale=").append(width).append(":-2:flags=lanczos\" \"")
+                       .append("-filter_complex \"[0:v]fps=").append(fps)
+                       .append(",scale=").append(width).append(":-2:flags=lanczos,split[s0][s1];")
+                       .append("[s0]palettegen=max_colors=256:stats_mode=diff[p];")
+                       .append("[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle\" \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("gif_to_video".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -movflags +faststart \"")
+                       .append("-vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_watermark".equals(operation) || "watermark".equals(operation)) {
-                    String text = params.optString("text", "CONFIDENTIAL").replace("'", "").replace(":", "");
+                    String text = params.optString("text", "@UniversalFileStudio").replace("'", "").replace(":", "");
+                    int opacity = params.optInt("opacity", 85);
+                    String pos = params.optString("position", "bottom-right");
+                    String xPos = "w-tw-30";
+                    String yPos = "h-th-30";
+                    if ("top-left".equals(pos)) {
+                        xPos = "30";
+                        yPos = "30";
+                    } else if ("top-right".equals(pos)) {
+                        xPos = "w-tw-30";
+                        yPos = "30";
+                    } else if ("bottom-left".equals(pos)) {
+                        xPos = "30";
+                        yPos = "h-th-30";
+                    } else if ("center".equals(pos)) {
+                        xPos = "(w-tw)/2";
+                        yPos = "(h-th)/2";
+                    }
                     File font = new File("/system/fonts/Roboto-Regular.ttf");
                     String fontArg = font.exists() ? ":fontfile=/system/fonts/Roboto-Regular.ttf" : "";
+                    double alpha = Math.max(0.1, Math.min(1.0, opacity / 100.0));
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
                        .append("-vf \"drawtext=text='").append(text).append("'").append(fontArg)
-                       .append(":fontsize=36:fontcolor=white@0.85:x=w-tw-30:y=h-th-30:box=1:boxcolor=black@0.5:boxborderw=8\" ")
-                       .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append(":fontsize=36:fontcolor=white@").append(String.format(Locale.US, "%.2f", alpha))
+                       .append(":x=").append(xPos).append(":y=").append(yPos)
+                       .append(":box=1:boxcolor=black@0.6:boxborderw=10\" ")
+                       .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_stabilize".equals(operation) || "stabilize".equals(operation)) {
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-vf \"deshake\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                       .append("-vf \"deshake\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_burn_subtitles".equals(operation) || "burn_subtitles".equals(operation)) {
                     String videoPath = in.getAbsolutePath();
@@ -898,12 +972,12 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     if (subPath != null && !subPath.isEmpty() && new File(subPath).exists()) {
                         cmd.append("-i \"").append(videoPath).append("\" ")
                            .append("-vf \"subtitles='").append(subPath.replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
-                           .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy \"")
+                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     } else {
                         cmd.append("-i \"").append(videoPath).append("\" ")
                            .append("-vf \"subtitles='").append(videoPath.replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
-                           .append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy \"")
+                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("video_add_audio".equals(operation) || "add_audio".equals(operation)) {
@@ -923,10 +997,25 @@ public class UniversalNativeEnginePlugin extends Plugin {
                         audioPath = params.optString("audio_path", "");
                     }
                     if (audioPath != null && !audioPath.isEmpty() && new File(audioPath).exists()) {
-                        cmd.append("-i \"").append(videoPath).append("\" ")
-                           .append("-i \"").append(audioPath).append("\" ")
-                           .append("-c:v copy -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 -shortest \"")
-                           .append(out.getAbsolutePath()).append("\"");
+                        int videoVol = params.optInt("video_volume", 100);
+                        int audioVol = params.optInt("audio_volume", 50);
+                        double vFactor = Math.max(0.0, videoVol / 100.0);
+                        double aFactor = Math.max(0.0, audioVol / 100.0);
+                        if (vFactor > 0) {
+                            cmd.append("-i \"").append(videoPath).append("\" ")
+                               .append("-i \"").append(audioPath).append("\" ")
+                               .append("-filter_complex \"[0:a]volume=").append(String.format(Locale.US, "%.2f", vFactor)).append("[a0];")
+                               .append("[1:a]volume=").append(String.format(Locale.US, "%.2f", aFactor)).append("[a1];")
+                               .append("[a0][a1]amix=inputs=2:duration=first:dropout_transition=2[aout]\" ")
+                               .append("-map 0:v:0 -map \"[aout]\" -c:v copy -c:a aac -b:a 192k -shortest \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        } else {
+                            cmd.append("-i \"").append(videoPath).append("\" ")
+                               .append("-i \"").append(audioPath).append("\" ")
+                               .append("-filter_complex \"[1:a]volume=").append(String.format(Locale.US, "%.2f", aFactor)).append("[a1]\" ")
+                               .append("-map 0:v:0 -map \"[a1]\" -c:v copy -c:a aac -b:a 192k -shortest \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        }
                     } else {
                         cmd.append("-i \"").append(videoPath).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
                     }
