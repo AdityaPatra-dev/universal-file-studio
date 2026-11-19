@@ -6,7 +6,7 @@ from app.engines.wrappers.ffmpeg import ffmpeg_engine
 from app.engines.wrappers.base import ProcessResult
 from app.security.path_validation import sanitize_format
 
-ALLOWED_VIDEO_FORMATS = {"mp4", "webm", "mkv", "avi", "mov", "flv", "ts", "gif"}
+ALLOWED_VIDEO_FORMATS = {"mp4", "webm", "mkv", "avi", "mov", "flv", "ts", "gif", "wmv", "3gp", "ogv", "m4v"}
 ALLOWED_AUDIO_FORMATS = {"mp3", "aac", "wav", "flac", "ogg", "m4a", "opus"}
 ALLOWED_PRESETS = {"ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"}
 
@@ -49,11 +49,66 @@ class VideoProcessor(BaseProcessor):
         # 1. Video Convert
         if operation in ["video_convert", "convert_video"]:
             out_file = str(out_d / f"{in_p.stem}_{job_id[:8]}.{target_fmt}")
-            crf = _safe_int(parameters.get("crf"), 28, min_val=0, max_val=51) if parameters.get("crf") is not None else None
+            remux_lossless = bool(parameters.get("remux_lossless", False))
+
+            # Quality profile mapping
+            profile = str(parameters.get("quality_profile", "")).lower()
+            default_crf = 28
+            audio_bitrate_k = 192
+            if profile == "master_crf18":
+                default_crf = 18
+                audio_bitrate_k = 320
+            elif profile == "broadcast_crf21":
+                default_crf = 21
+                audio_bitrate_k = 256
+            elif profile == "high_crf23":
+                default_crf = 23
+                audio_bitrate_k = 192
+            elif profile == "balanced_crf26":
+                default_crf = 26
+                audio_bitrate_k = 128
+
+            crf = _safe_int(parameters.get("crf"), default_crf, min_val=0, max_val=51) if parameters.get("crf") is not None else default_crf
             preset = str(parameters.get("preset", "medium")).lower()
             if preset not in ALLOWED_PRESETS:
                 preset = "medium"
-            res = await ffmpeg_engine.convert(input_path, out_file, crf=crf, preset=preset)
+
+            vcodec_param = parameters.get("video_codec") or parameters.get("vcodec")
+            video_codec = str(vcodec_param).lower() if vcodec_param and str(vcodec_param).lower() != "auto" else None
+
+            acodec_param = parameters.get("audio_codec") or parameters.get("acodec")
+            audio_codec = str(acodec_param).lower() if acodec_param and str(acodec_param).lower() != "auto" else None
+
+            resolution = str(parameters.get("resolution", "original")).lower()
+            scale = None
+            if resolution in ["4k", "2160p"]:
+                scale = "scale='min(3840,iw)':-2"
+            elif resolution in ["1440p", "2k"]:
+                scale = "scale='min(2560,iw)':-2"
+            elif resolution in ["1080p", "fhd"]:
+                scale = "scale='min(1920,iw)':-2"
+            elif resolution in ["720p", "hd"]:
+                scale = "scale='min(1280,iw)':-2"
+            elif resolution in ["480p", "sd"]:
+                scale = "scale='min(854,iw)':-2"
+
+            raw_fps = parameters.get("fps")
+            fps = _safe_int(raw_fps, 0, min_val=1, max_val=240) if raw_fps and str(raw_fps).lower() != "original" else None
+            faststart = bool(parameters.get("faststart", True))
+
+            res = await ffmpeg_engine.convert(
+                input_path,
+                out_file,
+                video_codec=video_codec,
+                audio_codec=audio_codec,
+                crf=crf,
+                preset=preset,
+                scale=scale,
+                fps=fps,
+                remux_lossless=remux_lossless,
+                faststart=faststart,
+                audio_bitrate_k=audio_bitrate_k
+            )
             return out_file, res
 
         # 2. Video Compress

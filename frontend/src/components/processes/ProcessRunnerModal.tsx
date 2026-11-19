@@ -332,6 +332,7 @@ export const ProcessRunnerModal: React.FC<ProcessRunnerModalProps> = ({
   const isDualInput = ['video_burn_subtitles', 'video_add_audio', 'pdf_compare'].includes(tool?.id || '');
   const isVideoStudioTool = tool?.category === 'video' || tool?.id.startsWith('video_') || tool?.id === 'extract_audio' || tool?.id === 'gif_to_video';
   const hasDedicatedVideoWorkbench = [
+    'video_convert',
     'video_trim',
     'video_crop',
     'video_compress',

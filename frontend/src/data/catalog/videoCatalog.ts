@@ -8,7 +8,7 @@ export const VIDEO_TOOLS: StudioTool[] = [
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Transcode',
-    description: 'Convert video format between MP4, WebM, MKV, MOV, AVI, and FLV with hardware speed.',
+    description: 'Convert between any video format (MP4, WebM, MKV, MOV, AVI, TS, FLV, WMV) with studio-grade encoders and zero-loss remuxing.',
     iconName: 'Film',
     color: 'from-indigo-500 to-violet-600',
     badge: 'popular',
@@ -17,9 +17,9 @@ export const VIDEO_TOOLS: StudioTool[] = [
     operation: 'video_convert',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv', '.ts', '.m4v'],
-    outputFormats: ['.mp4', '.webm', '.mkv', '.mov', '.avi'],
-    defaultParameters: { format: 'mp4', crf: 23 },
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv', '.ts', '.m4v', '.wmv', '.3gp', '.ogv', '.vob', '.mts', '.m2ts', '.f4v'],
+    outputFormats: ['.mp4', '.webm', '.mkv', '.mov', '.avi', '.ts', '.flv', '.wmv', '.3gp', '.ogv'],
+    defaultParameters: { format: 'mp4', crf: 23, preset: 'medium', faststart: true, remux_lossless: false },
     parameters: [
       {
         name: 'format',
@@ -27,11 +27,16 @@ export const VIDEO_TOOLS: StudioTool[] = [
         type: 'select',
         default: 'mp4',
         options: [
-          { label: 'MP4 (.MP4) — Universal Playback', value: 'mp4' },
-          { label: 'WebM (.WEBM) — Web Optimized (VP9)', value: 'webm' },
-          { label: 'Matroska (.MKV) — High Quality Stream', value: 'mkv' },
-          { label: 'QuickTime (.MOV) — Apple Compatible', value: 'mov' },
-          { label: 'AVI (.AVI) — Legacy Standard', value: 'avi' }
+          { label: 'MP4 (.MP4) — Universal Phone & Web Master', value: 'mp4' },
+          { label: 'WebM (.WEBM) — Modern Web Standard (VP9 / Opus)', value: 'webm' },
+          { label: 'Matroska (.MKV) — Studio Master & Multi-Track', value: 'mkv' },
+          { label: 'QuickTime (.MOV) — Apple macOS / iOS / ProRes', value: 'mov' },
+          { label: 'AVI (.AVI) — Legacy Windows & Multimedia', value: 'avi' },
+          { label: 'Transport Stream (.TS) — Broadcast & IPTV', value: 'ts' },
+          { label: 'Flash Video (.FLV) — RTMP & Web Streaming', value: 'flv' },
+          { label: 'Windows Media (.WMV) — Windows Media Stream', value: 'wmv' },
+          { label: '3GP (.3GP) — Ultra-Light Mobile', value: '3gp' },
+          { label: 'Ogg Video (.OGV) — Open Theora Stream', value: 'ogv' }
         ]
       },
       {
@@ -41,14 +46,66 @@ export const VIDEO_TOOLS: StudioTool[] = [
         default: 'original',
         options: [
           { label: 'Keep Original Resolution', value: 'original' },
+          { label: '4K Ultra HD (3840x2160)', value: '4k' },
+          { label: '1440p Quad HD (2560x1440)', value: '1440p' },
           { label: '1080p Full HD (1920x1080)', value: '1080p' },
           { label: '720p HD (1280x720)', value: '720p' },
           { label: '480p SD (854x480)', value: '480p' }
         ]
+      },
+      {
+        name: 'video_codec',
+        label: 'Video Codec Engine',
+        type: 'select',
+        default: 'auto',
+        options: [
+          { label: 'Auto (Optimal for Selected Container)', value: 'auto' },
+          { label: 'H.265 / HEVC (+50% Efficiency, 4K/HDR Ready)', value: 'libx265' },
+          { label: 'H.264 / AVC (Universal Compatibility)', value: 'libx264' },
+          { label: 'VP9 (Google Royalty-Free Web Standard)', value: 'libvpx-vp9' },
+          { label: 'ProRes (Studio Editing Master)', value: 'prores_ks' },
+          { label: 'MPEG-4 (Xvid / DivX Compatible)', value: 'mpeg4' },
+          { label: 'Lossless Stream Copy (No Re-encoding)', value: 'copy' }
+        ]
+      },
+      {
+        name: 'quality_profile',
+        label: 'Studio Quality Profile',
+        type: 'select',
+        default: 'high_crf23',
+        options: [
+          { label: 'Studio Master (CRF 18 • 320k Audio • Film Fidelity)', value: 'master_crf18' },
+          { label: 'Broadcast Pro (CRF 21 • 256k Audio • Industry Standard)', value: 'broadcast_crf21' },
+          { label: 'Universal High (CRF 23 • 192k Audio • Transparent Quality)', value: 'high_crf23' },
+          { label: 'Balanced Web (CRF 26 • 128k Audio • Compact Size)', value: 'balanced_crf26' }
+        ]
+      },
+      {
+        name: 'preset',
+        label: 'Encoding Effort Profile',
+        type: 'select',
+        default: 'medium',
+        options: [
+          { label: 'Slow (Multi-Pass Precision • Best Compression)', value: 'slow' },
+          { label: 'Medium (Optimal Balance of Speed & Quality)', value: 'medium' },
+          { label: 'Very Fast (High Speed Export)', value: 'veryfast' }
+        ]
+      },
+      {
+        name: 'remux_lossless',
+        label: 'Instant Lossless Remux (Zero Quality Loss)',
+        type: 'boolean',
+        default: false
+      },
+      {
+        name: 'faststart',
+        label: 'Web Streaming Optimization (FastStart)',
+        type: 'boolean',
+        default: true
       }
     ],
-    keywords: ['video convert', 'convert video', 'mp4 to mkv', 'mkv to mp4', 'mov to mp4', 'avi to mp4', 'webm to mp4'],
-    examples: ['mp4 to mkv', 'mov to mp4', 'convert video']
+    keywords: ['video convert', 'convert video', 'mp4 to mkv', 'mkv to mp4', 'mov to mp4', 'avi to mp4', 'webm to mp4', 'video transcode', 'hevc convert', 'h265 convert'],
+    examples: ['mp4 to mkv', 'mov to mp4', 'convert video', 'webm to mp4', 'mkv to mp4']
   },
   {
     id: 'video_trim',

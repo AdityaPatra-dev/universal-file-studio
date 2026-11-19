@@ -438,6 +438,293 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
 
       {/* 2. BESPOKE APP WORKBENCHES TAILORED FOR EACH TOOL */}
 
+      {/* 0. UNIVERSAL STUDIO VIDEO CONVERTER WORKBENCH */}
+      {toolId === 'video_convert' && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-indigo-500/30 space-y-4">
+          {/* Header & Source Stream Telemetry */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-surface-800">
+            <div className="flex items-center gap-2">
+              <Film className="h-5 w-5 text-indigo-400" />
+              <div>
+                <span className="text-xs font-bold text-white tracking-wide uppercase">Universal Studio Video Converter</span>
+                <p className="text-[11px] text-slate-400">High-throughput multi-format transcoder & lossless container re-multiplexer</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 self-start sm:self-auto">
+              <span className="px-2.5 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-mono text-[11px] font-bold flex items-center gap-1">
+                <Layers className="h-3 w-3" />
+                Source: {file.filename.split('.').pop()?.toUpperCase() || 'VIDEO'} • {formatBytes(file.size_bytes)}
+              </span>
+            </div>
+          </div>
+
+          {/* 1. Target Format Selection Matrix */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <RefreshCw className="h-3.5 w-3.5 text-indigo-400" />
+                Target Container Format
+              </span>
+              <span className="text-[10px] text-slate-400">Select any target container</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+              {[
+                { id: 'mp4', name: 'MP4', sub: 'Universal Master', desc: 'Phones, Web, TV & Mac', badge: 'Standard', color: 'border-indigo-500/40 text-indigo-400' },
+                { id: 'webm', name: 'WebM', sub: 'Modern Web', desc: 'VP9 / Opus Royalty-Free', badge: 'High-Eff', color: 'border-emerald-500/40 text-emerald-400' },
+                { id: 'mkv', name: 'MKV', sub: 'Studio Matroska', desc: 'Multi-Track & Subtitles', badge: 'Pro Master', color: 'border-purple-500/40 text-purple-400' },
+                { id: 'mov', name: 'MOV', sub: 'QuickTime', desc: 'macOS, iOS & Final Cut', badge: 'Apple Native', color: 'border-cyan-500/40 text-cyan-400' },
+                { id: 'avi', name: 'AVI', sub: 'Legacy Windows', desc: 'DivX / Xvid Compatibility', badge: 'Classic', color: 'border-amber-500/40 text-amber-400' },
+                { id: 'ts', name: 'TS', sub: 'MPEG Transport', desc: 'Broadcast & IPTV Streaming', badge: 'Broadcast', color: 'border-blue-500/40 text-blue-400' },
+                { id: 'flv', name: 'FLV', sub: 'Flash Video', desc: 'RTMP Live Streaming', badge: 'RTMP', color: 'border-rose-500/40 text-rose-400' },
+                { id: 'wmv', name: 'WMV', sub: 'Windows Media', desc: 'Native Windows Video', badge: 'Windows', color: 'border-teal-500/40 text-teal-400' },
+                { id: '3gp', name: '3GP', sub: 'Mobile Compact', desc: 'Ultra-Lightweight Storage', badge: 'Mobile', color: 'border-orange-500/40 text-orange-400' },
+                { id: 'ogv', name: 'OGV', sub: 'Ogg Theora', desc: 'Open Source Media Stream', badge: 'Open', color: 'border-slate-500/40 text-slate-400' },
+              ].map((fmt) => {
+                const active = (parameters.format || 'mp4') === fmt.id;
+                return (
+                  <button
+                    key={fmt.id}
+                    type="button"
+                    onClick={() => updateParam('format', fmt.id)}
+                    className={`p-2.5 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                      active
+                        ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-md'
+                        : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold">{fmt.name}</span>
+                        {active ? (
+                          <Check className="h-3 w-3 text-indigo-400" />
+                        ) : (
+                          <span className="text-[9px] font-mono text-slate-400">{fmt.badge}</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-semibold text-slate-300">{fmt.sub}</div>
+                      <div className="text-[9px] text-slate-400 leading-tight">{fmt.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. Processing Strategy Switcher */}
+          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-3">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              Transcoding Strategy
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => updateParam('remux_lossless', true)}
+                className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                  parameters.remux_lossless
+                    ? 'bg-amber-600/20 border-amber-500 text-white'
+                    : 'bg-surface-900 border-surface-800 text-slate-300 hover:border-surface-700'
+                }`}
+              >
+                <Zap className={`h-4 w-4 shrink-0 mt-0.5 ${parameters.remux_lossless ? 'text-amber-400' : 'text-slate-400'}`} />
+                <div>
+                  <div className="text-xs font-bold flex items-center gap-1.5">
+                    <span>Instant Lossless Remux</span>
+                    <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">
+                      0-Second • No Quality Loss
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Stream copies bit-for-bit into the new container instantly without re-compressing pixels. 100% original quality preserved.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateParam('remux_lossless', false)}
+                className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                  !parameters.remux_lossless
+                    ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                    : 'bg-surface-900 border-surface-800 text-slate-300 hover:border-surface-700'
+                }`}
+              >
+                <Cpu className={`h-4 w-4 shrink-0 mt-0.5 ${!parameters.remux_lossless ? 'text-indigo-400' : 'text-slate-400'}`} />
+                <div>
+                  <div className="text-xs font-bold flex items-center gap-1.5">
+                    <span>Studio Re-Encode Engine</span>
+                    <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-mono font-bold">
+                      Multi-Threaded
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Custom video/audio codec, resolution downscaling, frame rate timing, and multi-pass precision encoding.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Studio Re-Encode Engine Controls (shown when not remuxing) */}
+          {!parameters.remux_lossless && (
+            <div className="space-y-3 pt-1">
+              {/* Studio Quality Profiles */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />
+                  Studio Quality Presets
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'master_crf18', label: 'Studio Master', sub: 'CRF 18 • 320k Audio', tag: 'Near-Lossless Film' },
+                    { id: 'broadcast_crf21', label: 'Broadcast Pro', sub: 'CRF 21 • 256k Audio', tag: 'Industry Delivery' },
+                    { id: 'high_crf23', label: 'Universal High', sub: 'CRF 23 • 192k Audio', tag: 'Balanced Master' },
+                    { id: 'balanced_crf26', label: 'Balanced Web', sub: 'CRF 26 • 128k Audio', tag: 'Compact & Crisp' },
+                  ].map((prof) => {
+                    const active = (parameters.quality_profile || 'high_crf23') === prof.id;
+                    return (
+                      <button
+                        key={prof.id}
+                        type="button"
+                        onClick={() => {
+                          updateParam('quality_profile', prof.id);
+                          const crfMap: Record<string, number> = {
+                            master_crf18: 18,
+                            broadcast_crf21: 21,
+                            high_crf23: 23,
+                            balanced_crf26: 26,
+                          };
+                          updateParam('crf', crfMap[prof.id]);
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition ${
+                          active
+                            ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                            : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">{prof.label}</div>
+                        <div className="text-[10px] text-indigo-300 font-mono">{prof.sub}</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">{prof.tag}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Advanced Codecs & Encoders Matrix */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Video Codec */}
+                <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                    <Cpu className="h-3 w-3 text-indigo-400" />
+                    Video Codec
+                  </span>
+                  <select
+                    value={parameters.video_codec || 'auto'}
+                    onChange={(e) => updateParam('video_codec', e.target.value)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="auto">Auto (Best for {((parameters.format || 'mp4') as string).toUpperCase()})</option>
+                    <option value="libx265">H.265 / HEVC (+50% Coding Efficiency)</option>
+                    <option value="libx264">H.264 / AVC (Universal Compatibility)</option>
+                    <option value="libvpx-vp9">VP9 (Royalty-Free Web)</option>
+                    <option value="prores_ks">ProRes (Studio Editing Master)</option>
+                    <option value="mpeg4">MPEG-4 (Legacy Xvid)</option>
+                    <option value="copy">Lossless Video Copy (-c:v copy)</option>
+                  </select>
+                </div>
+
+                {/* Audio Codec */}
+                <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                    <Music className="h-3 w-3 text-indigo-400" />
+                    Audio Codec
+                  </span>
+                  <select
+                    value={parameters.audio_codec || 'auto'}
+                    onChange={(e) => updateParam('audio_codec', e.target.value)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="auto">Auto (Optimized for Container)</option>
+                    <option value="aac">AAC (Crystal Clear Stereo)</option>
+                    <option value="libopus">Opus (High-Fidelity Audio)</option>
+                    <option value="libmp3lame">MP3 (Universal Legacy)</option>
+                    <option value="copy">Lossless Audio Copy (-c:a copy)</option>
+                  </select>
+                </div>
+
+                {/* Resolution Strategy */}
+                <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                    <Monitor className="h-3 w-3 text-indigo-400" />
+                    Resolution Strategy
+                  </span>
+                  <select
+                    value={parameters.resolution || 'original'}
+                    onChange={(e) => updateParam('resolution', e.target.value)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="original">
+                      Keep Original {videoDimensions.width > 0 ? `(${videoDimensions.width}×${videoDimensions.height})` : ''}
+                    </option>
+                    <option value="4k">4K Ultra HD (3840×2160)</option>
+                    <option value="1440p">1440p Quad HD (2560×1440)</option>
+                    <option value="1080p">1080p Full HD (1920×1080)</option>
+                    <option value="720p">720p HD (1280×720)</option>
+                    <option value="480p">480p SD (854×480)</option>
+                  </select>
+                </div>
+
+                {/* Frame Rate (FPS) */}
+                <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-indigo-400" />
+                    Target Frame Rate
+                  </span>
+                  <select
+                    value={parameters.fps || 'original'}
+                    onChange={(e) => updateParam('fps', e.target.value)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="original">Keep Source Frame Rate</option>
+                    <option value="60">60 FPS (Ultra Smooth)</option>
+                    <option value="30">30 FPS (Standard)</option>
+                    <option value="24">24 FPS (Cinematic Film)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Telemetry & Hardware Multi-Threading Information Banner */}
+          <div className="p-3 rounded-xl bg-surface-950/90 border border-surface-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+              <span className="text-slate-300 font-semibold">
+                Target Output: <span className="font-mono font-bold text-indigo-300">{file.filename.replace(/\.[^.]+$/, '')}.{(parameters.format || 'mp4')}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={parameters.faststart !== false}
+                  onChange={(e) => updateParam('faststart', e.target.checked)}
+                  className="rounded bg-surface-800 border-surface-700 text-indigo-600 focus:ring-0"
+                />
+                <span className="text-[11px]">Web Streaming FastStart</span>
+              </label>
+              <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-mono font-bold flex items-center gap-1">
+                <Cpu className="h-3 w-3" />
+                Octa-Threaded
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* A. VIDEO TRIMMER APP WORKBENCH */}
       {toolId === 'video_trim' && (
         <div className="p-4 rounded-2xl bg-surface-900 border border-brand-500/30 space-y-4">

@@ -54,28 +54,73 @@ class FFmpegEngine(BaseEngine):
         video_codec: Optional[str] = None,
         audio_codec: Optional[str] = None,
         crf: Optional[int] = None,
-        preset: Optional[str] = None
+        preset: Optional[str] = None,
+        scale: Optional[str] = None,
+        fps: Optional[int] = None,
+        remux_lossless: bool = False,
+        faststart: bool = True,
+        audio_bitrate_k: Optional[int] = 192
     ) -> ProcessResult:
-        cmd = ["ffmpeg", "-y", "-i", input_path]
         ext = Path(output_path).suffix.lower()
 
         if ext == ".gif":
-            cmd.extend(["-c:v", "gif", "-an"])
-        else:
-            v_codec = video_codec or self.get_best_video_encoder(ext)
-            a_codec = audio_codec or self.get_best_audio_encoder(ext)
+            cmd = ["ffmpeg", "-y", "-i", input_path]
+            if scale:
+                cmd.extend(["-vf", scale])
+            if fps:
+                cmd.extend(["-r", str(fps)])
+            cmd.extend(["-c:v", "gif", "-an", output_path])
+            return await self.execute(cmd)
 
-            cmd.extend(["-c:v", v_codec])
+        if remux_lossless:
+            cmd = ["ffmpeg", "-y", "-i", input_path, "-c", "copy", "-map", "0"]
+            if faststart and ext in [".mp4", ".mov", ".m4v"]:
+                cmd.extend(["-movflags", "+faststart"])
+            cmd.append(output_path)
+            return await self.execute(cmd)
+
+        info = self.get_info()
+        available_encoders = info.capabilities.encoders if info and info.capabilities else []
+
+        if video_codec and video_codec in available_encoders:
+            v_codec = video_codec
+        else:
+            v_codec = self.get_best_video_encoder(ext)
+
+        cmd = ["ffmpeg", "-y", "-i", input_path]
+        if scale:
+            cmd.extend(["-vf", scale])
+        if fps:
+            cmd.extend(["-r", str(fps)])
+
+        cmd.extend(["-c:v", v_codec])
+
+        # crf and preset only apply to x264/x265/vpx
+        if crf is not None and v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
+            cmd.extend(["-crf", str(crf)])
+        if preset and v_codec in ["libx264", "libx265"]:
+            cmd.extend(["-preset", preset])
+
+        if v_codec == "libx265":
+            cmd.extend(["-tag:v", "hvc1"])
+
+        if v_codec in ["libx264", "libx265"]:
+            cmd.extend(["-pix_fmt", "yuv420p"])
+
+        if audio_codec == "copy":
+            cmd.extend(["-c:a", "copy"])
+        else:
+            a_codec = audio_codec or self.get_best_audio_encoder(ext)
             cmd.extend(["-c:a", a_codec])
             if a_codec == "opus":
                 cmd.extend(["-strict", "-2"])
+            if a_codec in ["aac", "libmp3lame", "libopus", "opus"]:
+                cmd.extend(["-b:a", f"{audio_bitrate_k or 192}k"])
 
-            # crf and preset only apply to x264/x265/vpx
-            if crf is not None and v_codec in ["libx264", "libx265", "libvpx", "libvpx-vp9"]:
-                cmd.extend(["-crf", str(crf)])
-            if preset and v_codec in ["libx264", "libx265"]:
-                cmd.extend(["-preset", preset])
+        if faststart and ext in [".mp4", ".mov", ".m4v"]:
+            cmd.extend(["-movflags", "+faststart"])
 
+        cmd.extend(["-threads", "0"])
         cmd.append(output_path)
         return await self.execute(cmd)
 

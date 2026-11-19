@@ -1089,28 +1089,129 @@ public class UniversalNativeEnginePlugin extends Plugin {
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac \"").append(out.getAbsolutePath()).append("\"");
                     }
                 } else {
-                    String res = params.optString("resolution", "original").toLowerCase();
-                    String scale = "";
-                    if (res.contains("1080")) scale = "scale=-2:1080,";
-                    else if (res.contains("720")) scale = "scale=-2:720,";
-                    else if (res.contains("480")) scale = "scale=-2:480,";
-
-                    if ("webm".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
-                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
-                        cmd.append("-c:v libvpx -b:v 1.5M -crf 30 -map 0:v:0 -map 0:a? -c:a libvorbis \"").append(out.getAbsolutePath()).append("\"");
-                    } else if ("avi".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
-                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
-                        cmd.append("-c:v mpeg4 -vtag xvid -qscale:v 3 -map 0:v:0 -map 0:a? -c:a libmp3lame \"").append(out.getAbsolutePath()).append("\"");
-                    } else if ("mkv".equals(outExt)) {
-                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
-                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
-                        cmd.append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"").append(out.getAbsolutePath()).append("\"");
+                    // Universal Studio Video Conversion Engine (Hardware Multi-Threaded & Studio Transcoder)
+                    boolean remuxLossless = params.optBoolean("remux_lossless", false);
+                    if (remuxLossless) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c copy -map 0 ");
+                        if (("mp4".equals(outExt) || "mov".equals(outExt) || "m4v".equals(outExt)) && params.optBoolean("faststart", true)) {
+                            cmd.append("-movflags +faststart ");
+                        }
+                        cmd.append("\"").append(out.getAbsolutePath()).append("\"");
                     } else {
+                        String videoCodec = params.optString("video_codec", params.optString("codec", "auto")).toLowerCase();
+                        String audioCodec = params.optString("audio_codec", "auto").toLowerCase();
+                        String qualityProfile = params.optString("quality_profile", "high_crf23").toLowerCase();
+                        String speedPreset = params.optString("preset", "medium").toLowerCase();
+                        if (!speedPreset.matches("ultrafast|superfast|veryfast|faster|fast|medium|slow|slower|veryslow")) {
+                            speedPreset = "medium";
+                        }
+
+                        int defaultCrf = 23;
+                        int audioBitrate = 192;
+                        if ("master_crf18".equals(qualityProfile)) {
+                            defaultCrf = 18;
+                            audioBitrate = 320;
+                        } else if ("broadcast_crf21".equals(qualityProfile)) {
+                            defaultCrf = 21;
+                            audioBitrate = 256;
+                        } else if ("high_crf23".equals(qualityProfile)) {
+                            defaultCrf = 23;
+                            audioBitrate = 192;
+                        } else if ("balanced_crf26".equals(qualityProfile)) {
+                            defaultCrf = 26;
+                            audioBitrate = 128;
+                        }
+                        int crf = params.optInt("crf", defaultCrf);
+
+                        String res = params.optString("resolution", "original").toLowerCase();
+                        String scale = "";
+                        if (res.contains("4k") || res.contains("2160")) scale = "scale='min(3840,iw)':-2";
+                        else if (res.contains("1440") || res.contains("2k")) scale = "scale='min(2560,iw)':-2";
+                        else if (res.contains("1080") || res.contains("fhd")) scale = "scale='min(1920,iw)':-2";
+                        else if (res.contains("720") || res.contains("hd")) scale = "scale='min(1280,iw)':-2";
+                        else if (res.contains("480") || res.contains("sd")) scale = "scale='min(854,iw)':-2";
+
+                        int fps = params.optInt("fps", 0);
+                        boolean faststart = params.optBoolean("faststart", true);
+
                         cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
-                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale.substring(0, scale.length() - 1)).append("\" ");
-                        cmd.append("-c:v libx264 -preset ultrafast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k \"").append(out.getAbsolutePath()).append("\"");
+                        if (!scale.isEmpty()) cmd.append("-vf \"").append(scale).append("\" ");
+                        if (fps > 0) cmd.append("-r ").append(fps).append(" ");
+
+                        if ("webm".equals(outExt)) {
+                            cmd.append("-c:v libvpx -b:v 0 -crf ").append(Math.max(18, Math.min(40, crf + 4)))
+                               .append(" -pix_fmt yuv420p -map 0:v:0 -map 0:a? ");
+                            if ("copy".equals(audioCodec)) {
+                                cmd.append("-c:a copy ");
+                            } else {
+                                cmd.append("-c:a libopus -b:a 160k ");
+                            }
+                        } else if ("avi".equals(outExt)) {
+                            if ("libx264".equals(videoCodec)) {
+                                cmd.append("-c:v libx264 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -pix_fmt yuv420p ");
+                            } else {
+                                cmd.append("-c:v mpeg4 -vtag xvid -qscale:v 3 ");
+                            }
+                            cmd.append("-map 0:v:0 -map 0:a? ");
+                            if ("copy".equals(audioCodec)) {
+                                cmd.append("-c:a copy ");
+                            } else {
+                                cmd.append("-c:a libmp3lame -b:a ").append(audioBitrate).append("k ");
+                            }
+                        } else if ("mkv".equals(outExt)) {
+                            if ("libx265".equals(videoCodec) || "hevc".equals(videoCodec)) {
+                                cmd.append("-c:v libx265 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -tag:v hvc1 -pix_fmt yuv420p ");
+                            } else {
+                                cmd.append("-c:v libx264 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -pix_fmt yuv420p ");
+                            }
+                            cmd.append("-map 0:v:0 -map 0:a? ");
+                            if ("copy".equals(audioCodec)) {
+                                cmd.append("-c:a copy ");
+                            } else {
+                                cmd.append("-c:a aac -b:a ").append(audioBitrate).append("k ");
+                            }
+                        } else if ("mov".equals(outExt)) {
+                            if ("libx265".equals(videoCodec) || "hevc".equals(videoCodec)) {
+                                cmd.append("-c:v libx265 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -tag:v hvc1 -pix_fmt yuv420p ");
+                            } else if ("prores".equals(videoCodec) || "prores_ks".equals(videoCodec)) {
+                                cmd.append("-c:v prores_ks -profile:v 3 -pix_fmt yuv422p10le ");
+                            } else {
+                                cmd.append("-c:v libx264 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -pix_fmt yuv420p ");
+                            }
+                            cmd.append("-map 0:v:0 -map 0:a? ");
+                            if ("copy".equals(audioCodec)) {
+                                cmd.append("-c:a copy ");
+                            } else {
+                                cmd.append("-c:a aac -b:a ").append(audioBitrate).append("k ");
+                            }
+                            if (faststart) cmd.append("-movflags +faststart ");
+                        } else if ("ts".equals(outExt)) {
+                            cmd.append("-c:v libx264 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a ").append(audioBitrate).append("k -f mpegts ");
+                        } else if ("flv".equals(outExt)) {
+                            cmd.append("-c:v libx264 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a aac -b:a 128k ");
+                        } else if ("wmv".equals(outExt)) {
+                            cmd.append("-c:v wmv2 -b:v 4M -map 0:v:0 -map 0:a? -c:a wmav2 -b:a 192k ");
+                        } else {
+                            // MP4 & Universal containers
+                            if ("libx265".equals(videoCodec) || "hevc".equals(videoCodec)) {
+                                cmd.append("-c:v libx265 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -tag:v hvc1 -pix_fmt yuv420p ");
+                            } else {
+                                cmd.append("-c:v libx264 -crf ").append(crf).append(" -preset ").append(speedPreset).append(" -pix_fmt yuv420p ");
+                            }
+                            cmd.append("-map 0:v:0 -map 0:a? ");
+                            if ("copy".equals(audioCodec)) {
+                                cmd.append("-c:a copy ");
+                            } else {
+                                cmd.append("-c:a aac -b:a ").append(audioBitrate).append("k ");
+                            }
+                            if (faststart && ("mp4".equals(outExt) || "m4v".equals(outExt))) {
+                                cmd.append("-movflags +faststart ");
+                            }
+                        }
+
+                        // Maximize multi-threading performance for high RAM & multi-core processors
+                        cmd.append("-threads 0 ");
+                        cmd.append("\"").append(out.getAbsolutePath()).append("\"");
                     }
                 }
 
