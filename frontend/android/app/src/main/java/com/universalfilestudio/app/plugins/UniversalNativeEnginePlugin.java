@@ -841,17 +841,24 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 } else if ("video_rotate".equals(operation) || "rotate".equals(operation)) {
                     int deg = params.optInt("degrees", params.optInt("rotation", params.optInt("angle", 90)));
                     boolean flipH = params.optBoolean("flip_h", false);
-                    String vf = "transpose=1";
-                    if (flipH) {
-                        vf = "hflip";
-                    } else if (deg == 180) {
-                        vf = "transpose=2,transpose=2";
-                    } else if (deg == 270) {
-                        vf = "transpose=2";
+                    boolean flipV = params.optBoolean("flip_v", false);
+                    boolean losslessMeta = params.optBoolean("lossless_metadata", false);
+
+                    if (losslessMeta) {
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -c copy -metadata:s:v:0 rotate=")
+                           .append(deg).append(" \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        List<String> filters = new ArrayList<>();
+                        if (flipH) filters.add("hflip");
+                        if (flipV) filters.add("vflip");
+                        if (deg == 90) filters.add("transpose=1");
+                        else if (deg == 180) filters.add("transpose=2,transpose=2");
+                        else if (deg == 270) filters.add("transpose=2");
+                        String vf = filters.isEmpty() ? "null" : String.join(",", filters);
+                        cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
+                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
+                           .append(out.getAbsolutePath()).append("\"");
                     }
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" -vf \"").append(vf).append("\" ")
-                       .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -map 0:v:0 -map 0:a? -c:a copy \"")
-                       .append(out.getAbsolutePath()).append("\"");
                 } else if ("video_resize".equals(operation) || "scale".equals(operation)) {
                     String fitMode = params.optString("fit_mode", "blurred_background");
                     String res = params.optString("preset", params.optString("resolution", "9:16")).toLowerCase();
@@ -1073,15 +1080,60 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     }
 
                     cmd.append("\"").append(out.getAbsolutePath()).append("\"");
-                } else if ("video_reverse".equals(operation) || "reverse".equals(operation)) {
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-vf \"reverse\" -af \"areverse\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 128k \"")
-                       .append(out.getAbsolutePath()).append("\"");
+                } else if ("video_reverse".equals(operation) || "reverse".equals(operation) || "boomerang".equals(operation)) {
+                    boolean boomerang = params.optBoolean("boomerang", false) || "boomerang".equalsIgnoreCase(params.optString("mode", ""));
+                    boolean reverseAudio = params.optBoolean("reverse_audio", true);
+                    double speed = params.optDouble("speed", 1.0);
+
+                    if (boomerang) {
+                        String vSpeed = (Math.abs(speed - 1.0) > 0.01 && speed > 0.05) ? String.format(java.util.Locale.US, "setpts=%.4f*PTS,", 1.0 / speed) : "";
+                        if (reverseAudio) {
+                            String aSpeed = (Math.abs(speed - 1.0) > 0.01 && speed > 0.05) ? String.format(java.util.Locale.US, "atempo=%.2f,", speed) : "";
+                            cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                               .append("-filter_complex \"[0:v]").append(vSpeed).append("split[vf][vr_in];[vr_in]reverse[vr];[vf][vr]concat=n=2:v=1:a=0[v];")
+                               .append("[0:a]").append(aSpeed).append("asplit[af][ar_in];[ar_in]areverse[ar];[af][ar]concat=n=2:v=0:a=1[a]\" ")
+                               .append("-map \"[v]\" -map \"[a]\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        } else {
+                            cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                               .append("-filter_complex \"[0:v]").append(vSpeed).append("split[vf][vr_in];[vr_in]reverse[vr];[vf][vr]concat=n=2:v=1:a=0[v]\" ")
+                               .append("-map \"[v]\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -an \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        }
+                    } else {
+                        StringBuilder vf = new StringBuilder();
+                        if (Math.abs(speed - 1.0) > 0.01 && speed > 0.05) {
+                            vf.append(String.format(java.util.Locale.US, "setpts=%.4f*PTS,", 1.0 / speed));
+                        }
+                        vf.append("reverse");
+
+                        if (reverseAudio) {
+                            StringBuilder af = new StringBuilder();
+                            if (Math.abs(speed - 1.0) > 0.01 && speed > 0.05) {
+                                af.append(String.format(java.util.Locale.US, "atempo=%.2f,", speed));
+                            }
+                            af.append("areverse");
+                            cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                               .append("-vf \"").append(vf.toString()).append("\" -af \"").append(af.toString()).append("\" ")
+                               .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        } else {
+                            cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
+                               .append("-vf \"").append(vf.toString()).append("\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -an \"")
+                               .append(out.getAbsolutePath()).append("\"");
+                        }
+                    }
                 } else if ("video_loop".equals(operation) || "loop".equals(operation)) {
                     int count = params.optInt("count", 3);
                     int streamLoop = Math.max(1, count - 1);
-                    cmd.append("-stream_loop ").append(streamLoop).append(" -i \"").append(in.getAbsolutePath())
-                       .append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                    boolean streamCopy = params.optBoolean("stream_copy", true);
+                    if (streamCopy) {
+                        cmd.append("-stream_loop ").append(streamLoop).append(" -i \"").append(in.getAbsolutePath())
+                           .append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
+                    } else {
+                        cmd.append("-stream_loop ").append(streamLoop).append(" -i \"").append(in.getAbsolutePath())
+                           .append("\" -c:v libx264 -crf 18 -preset fast -pix_fmt yuv420p -c:a aac -b:a 192k \"").append(out.getAbsolutePath()).append("\"");
+                    }
                 } else if ("video_adjust_volume".equals(operation) || "adjust_volume".equals(operation)) {
                     String vol = params.optString("volume", "150%");
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
@@ -1090,15 +1142,53 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 } else if ("video_to_gif".equals(operation) || "gif".equals(operation) || "gif".equals(outExt)) {
                     int fps = params.optInt("fps", 15);
                     int width = params.optInt("width", 480);
-                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-filter_complex \"[0:v]fps=").append(fps)
-                       .append(",scale=").append(width).append(":-2:flags=lanczos,split[s0][s1];")
-                       .append("[s0]palettegen=max_colors=256:stats_mode=diff[p];")
-                       .append("[s1][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle\" \"")
+                    String dither = params.optString("dither", "sierra2_4a").toLowerCase();
+                    String statsMode = params.optString("stats_mode", "diff").toLowerCase();
+                    String startTime = params.optString("start_time", params.optString("start", ""));
+                    String endTime = params.optString("end_time", params.optString("end", ""));
+                    double speed = params.optDouble("speed", 1.0);
+                    boolean infinite = params.optBoolean("infinite_loop", true);
+                    int loop = infinite ? 0 : -1;
+
+                    if (!startTime.isEmpty()) {
+                        cmd.append("-ss ").append(startTime).append(" ");
+                    }
+                    if (!endTime.isEmpty()) {
+                        cmd.append("-to ").append(endTime).append(" ");
+                    }
+                    cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ");
+
+                    StringBuilder vfChain = new StringBuilder();
+                    if (Math.abs(speed - 1.0) > 0.01 && speed > 0.05) {
+                        vfChain.append(String.format(java.util.Locale.US, "setpts=%.4f*PTS,", 1.0 / speed));
+                    }
+                    vfChain.append("fps=").append(fps).append(",scale=").append(width).append(":-2:flags=lanczos");
+
+                    String ditherParam = "sierra2_4a";
+                    if ("floyd_steinberg".equals(dither)) {
+                        ditherParam = "floyd_steinberg";
+                    } else if ("bayer".equals(dither)) {
+                        ditherParam = "bayer:bayer_scale=3";
+                    } else if ("none".equals(dither)) {
+                        ditherParam = "none";
+                    }
+
+                    String statsParam = "full".equals(statsMode) ? "full" : "diff";
+                    cmd.append("-filter_complex \"[0:v]").append(vfChain.toString()).append(",split[s0][s1];")
+                       .append("[s0]palettegen=max_colors=256:stats_mode=").append(statsParam).append("[p];")
+                       .append("[s1][p]paletteuse=dither=").append(ditherParam).append(":diff_mode=rectangle\" ")
+                       .append("-loop ").append(loop).append(" \"")
                        .append(out.getAbsolutePath()).append("\"");
-                } else if ("gif_to_video".equals(operation)) {
+                } else if ("gif_to_video".equals(operation) || "gif_convert_video".equals(operation)) {
+                    int fps = params.optInt("fps", 30);
+                    int loopCount = params.optInt("loop_count", 3);
+                    int crf = params.optInt("crf", 18);
+                    if (loopCount > 1) {
+                        cmd.append("-stream_loop ").append(loopCount - 1).append(" ");
+                    }
                     cmd.append("-i \"").append(in.getAbsolutePath()).append("\" ")
-                       .append("-vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2\" -c:v libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart \"")
+                       .append("-vf \"pad=ceil(iw/2)*2:ceil(ih/2)*2,fps=").append(fps).append("\" ")
+                       .append("-c:v libx264 -crf ").append(crf).append(" -preset fast -pix_fmt yuv420p -movflags +faststart \"")
                        .append(out.getAbsolutePath()).append("\"");
                 } else if ("extract_frame".equals(operation) || "video_thumbnail".equals(operation) || "storyboard".equals(operation)) {
                     String mode = params.optString("mode", "single").toLowerCase();

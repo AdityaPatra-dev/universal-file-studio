@@ -1,5 +1,6 @@
 import os
 import shutil
+import time
 from typing import List, Optional
 from pathlib import Path
 from app.engines.wrappers.base import BaseEngine, ProcessResult
@@ -455,19 +456,42 @@ class FFmpegEngine(BaseEngine):
     async def concat(
         self,
         input_paths: List[str],
-        output_path: str
+        output_path: str,
+        stream_copy: bool = True,
+        target_resolution: str = "1080p"
     ) -> ProcessResult:
-        concat_file = Path(output_path).parent / f"concat_{os.getpid()}.txt"
-        with open(concat_file, "w") as f:
+        concat_file = Path(output_path).parent / f"concat_{os.getpid()}_{int(time.time())}.txt"
+        with open(concat_file, "w", encoding="utf-8") as f:
             for p in input_paths:
-                f.write(f"file '{p}'\n")
+                safe_p = p.replace("'", "'\\''")
+                f.write(f"file '{safe_p}'\n")
 
         try:
-            cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c", "copy", output_path]
+            if stream_copy:
+                cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c", "copy", output_path]
+                res = await self.execute(cmd)
+                if res.success and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    return res
+
+            # Auto-conforming fallback or explicit conforming mode
+            dim = "1920:1080"
+            if target_resolution == "720p":
+                dim = "1280:720"
+            elif target_resolution == "4k":
+                dim = "3840:2160"
+
+            vf = f"scale={dim}:force_original_aspect_ratio=decrease,pad={dim}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+            cmd = [
+                "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),
+                "-vf", vf,
+                "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k",
+                output_path
+            ]
             return await self.execute(cmd)
         finally:
             if concat_file.exists():
-                concat_file.unlink()
+                concat_file.unlink(missing_ok=True)
 
     async def add_subtitles(
         self,
@@ -593,27 +617,221 @@ class FFmpegEngine(BaseEngine):
         self,
         input_path: str,
         output_path: str,
-        reverse_audio: bool = True
+        reverse_audio: bool = True,
+        boomerang: bool = False,
+        speed: float = 1.0
     ) -> ProcessResult:
         ext = Path(output_path).suffix
         v_codec = self.get_best_video_encoder(ext)
         a_codec = self.get_best_audio_encoder(ext)
+
+        # Handle Boomerang Mode (Play Forward then Backward)
+        if boomerang:
+            v_speed = f"setpts={(1.0/speed):.4f}*PTS," if speed and abs(speed - 1.0) > 0.01 else ""
+            if reverse_audio:
+                a_speed = f"atempo={speed}," if speed and abs(speed - 1.0) > 0.01 else ""
+                filter_complex = (
+                    f"[0:v]{v_speed}split[vf][vr_in];[vr_in]reverse[vr];[vf][vr]concat=n=2:v=1:a=0[v];"
+                    f"[0:a]{a_speed}asplit[af][ar_in];[ar_in]areverse[ar];[af][ar]concat=n=2:v=0:a=1[a]"
+                )
+                cmd = [
+                    "ffmpeg", "-y", "-i", input_path,
+                    "-filter_complex", filter_complex,
+                    "-map", "[v]", "-map", "[a]",
+                    "-c:v", v_codec, "-preset", "fast",
+                    "-c:a", a_codec, "-b:a", "192k",
+                    output_path
+                ]
+            else:
+                filter_complex = f"[0:v]{v_speed}split[vf][vr_in];[vr_in]reverse[vr];[vf][vr]concat=n=2:v=1:a=0[v]"
+                cmd = [
+                    "ffmpeg", "-y", "-i", input_path,
+                    "-filter_complex", filter_complex,
+                    "-map", "[v]",
+                    "-c:v", v_codec, "-preset", "fast",
+                    "-an",
+                    output_path
+                ]
+            return await self.execute(cmd)
+
+        # Standard Reverse Mode
+        v_filters = []
+        if speed and abs(speed - 1.0) > 0.01:
+            v_filters.append(f"setpts={(1.0/speed):.4f}*PTS")
+        v_filters.append("reverse")
+        vf = ",".join(v_filters)
+
         if reverse_audio:
+            a_filters = []
+            if speed and abs(speed - 1.0) > 0.01:
+                a_filters.append(f"atempo={speed}")
+            a_filters.append("areverse")
+            af = ",".join(a_filters)
             cmd = [
                 "ffmpeg", "-y", "-i", input_path,
-                "-vf", "reverse",
-                "-af", "areverse",
+                "-vf", vf,
+                "-af", af,
                 "-c:v", v_codec, "-c:a", a_codec,
                 output_path
             ]
         else:
             cmd = [
                 "ffmpeg", "-y", "-i", input_path,
-                "-vf", "reverse",
+                "-vf", vf,
                 "-c:v", v_codec,
-                "-c:a", "copy",
+                "-an",
                 output_path
             ]
+        return await self.execute(cmd)
+
+    async def rotate(
+        self,
+        input_path: str,
+        output_path: str,
+        degrees: int = 90,
+        flip_h: bool = False,
+        flip_v: bool = False,
+        lossless_metadata: bool = False
+    ) -> ProcessResult:
+        if lossless_metadata:
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-c", "copy",
+                "-metadata:s:v:0", f"rotate={degrees}",
+                output_path
+            ]
+            return await self.execute(cmd)
+
+        vf_parts = []
+        if flip_h:
+            vf_parts.append("hflip")
+        if flip_v:
+            vf_parts.append("vflip")
+
+        if degrees == 90:
+            vf_parts.append("transpose=1")
+        elif degrees == 180:
+            vf_parts.append("transpose=2,transpose=2")
+        elif degrees == 270:
+            vf_parts.append("transpose=2")
+
+        vf = ",".join(vf_parts) if vf_parts else "null"
+        ext = Path(output_path).suffix
+        v_codec = self.get_best_video_encoder(ext)
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-vf", vf,
+            "-c:v", v_codec, "-preset", "fast",
+            "-map", "0:v:0", "-map", "0:a?",
+            "-c:a", "copy",
+            output_path
+        ]
+        return await self.execute(cmd)
+
+    async def loop_video(
+        self,
+        input_path: str,
+        output_path: str,
+        count: int = 3,
+        stream_copy: bool = True
+    ) -> ProcessResult:
+        stream_loop = max(1, count - 1)
+        if stream_copy:
+            cmd = [
+                "ffmpeg", "-y",
+                "-stream_loop", str(stream_loop),
+                "-i", input_path,
+                "-c", "copy",
+                output_path
+            ]
+        else:
+            ext = Path(output_path).suffix
+            v_codec = self.get_best_video_encoder(ext)
+            a_codec = self.get_best_audio_encoder(ext)
+            cmd = [
+                "ffmpeg", "-y",
+                "-stream_loop", str(stream_loop),
+                "-i", input_path,
+                "-c:v", v_codec, "-crf", "18", "-preset", "fast",
+                "-c:a", a_codec,
+                output_path
+            ]
+        return await self.execute(cmd)
+
+    async def video_to_gif(
+        self,
+        input_path: str,
+        output_path: str,
+        fps: int = 15,
+        width: int = 480,
+        dither: str = "sierra2_4a",
+        stats_mode: str = "diff",
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        speed: float = 1.0,
+        loop: int = 0
+    ) -> ProcessResult:
+        cmd = ["ffmpeg", "-y"]
+        if start_time:
+            cmd.extend(["-ss", str(start_time)])
+        if end_time:
+            cmd.extend(["-to", str(end_time)])
+        cmd.extend(["-i", input_path])
+
+        # Build filter pipeline with speed adjustment, scaling, and 2-pass palette generation
+        filter_parts = []
+        if speed and abs(speed - 1.0) > 0.01:
+            pts_factor = 1.0 / speed
+            filter_parts.append(f"setpts={pts_factor:.4f}*PTS")
+        filter_parts.append(f"fps={fps}")
+        filter_parts.append(f"scale={width}:-2:flags=lanczos")
+        base_chain = ",".join(filter_parts)
+
+        # Handle dithering algorithms
+        dither_opt = "sierra2_4a"
+        if dither == "floyd_steinberg":
+            dither_opt = "floyd_steinberg"
+        elif dither == "bayer":
+            dither_opt = "bayer:bayer_scale=3"
+        elif dither == "none":
+            dither_opt = "none"
+
+        stats_mode_val = "diff" if stats_mode != "full" else "full"
+        palette_gen = f"palettegen=max_colors=256:stats_mode={stats_mode_val}"
+        palette_use = f"paletteuse=dither={dither_opt}:diff_mode=rectangle"
+
+        filter_complex = f"[0:v]{base_chain},split[s0][s1];[s0]{palette_gen}[p];[s1][p]{palette_use}"
+        cmd.extend([
+            "-filter_complex", filter_complex,
+            "-loop", str(loop),
+            output_path
+        ])
+        return await self.execute(cmd)
+
+    async def gif_to_video(
+        self,
+        input_path: str,
+        output_path: str,
+        fps: int = 30,
+        loop_count: int = 1,
+        crf: int = 18,
+        preset: str = "fast"
+    ) -> ProcessResult:
+        cmd = ["ffmpeg", "-y"]
+        if loop_count > 1:
+            cmd.extend(["-stream_loop", str(loop_count - 1)])
+        cmd.extend(["-i", input_path])
+        # Ensure even dimensions (required by H.264) and standard yuv420p
+        vf = f"pad=ceil(iw/2)*2:ceil(ih/2)*2,fps={fps}"
+        cmd.extend([
+            "-vf", vf,
+            "-c:v", "libx264",
+            "-crf", str(crf),
+            "-preset", preset,
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            output_path
+        ])
         return await self.execute(cmd)
 
     async def strip_metadata(self, input_path: str, output_path: str) -> ProcessResult:

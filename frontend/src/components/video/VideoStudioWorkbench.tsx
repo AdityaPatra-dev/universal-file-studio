@@ -5,7 +5,8 @@ import {
   Check, Sliders, Type, FileText, Smartphone, Monitor,
   Square, Film, Music, Sparkles, RefreshCw, Layers,
   Zap, Info, AlertTriangle, ShieldCheck, HardDrive, ArrowRight, Activity, Percent, Cpu,
-  Camera, Grid, LayoutGrid, Eye, Download, Shield, Copy, Settings2
+  Camera, Grid, LayoutGrid, Eye, Download, Shield, Copy, Settings2,
+  Repeat, RotateCcw, GitMerge, Plus, Trash2
 } from 'lucide-react';
 import { FileRecord } from '../../types/api';
 import { universalEngine } from '../../services/universalEngine';
@@ -298,7 +299,7 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
               style={{
                 transform:
                   toolId === 'video_rotate'
-                    ? `rotate(${parameters.degrees || 0}deg) scaleX(${parameters.flip_h ? -1 : 1})`
+                    ? `rotate(${parameters.degrees || 0}deg) scaleX(${parameters.flip_h ? -1 : 1}) scaleY(${parameters.flip_v ? -1 : 1})`
                     : 'none',
                 transition: 'transform 0.25s ease',
               }}
@@ -1525,57 +1526,262 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
         </div>
       )}
 
-      {/* D. VIDEO TO GIF APP WORKBENCH */}
+      {/* D. VIDEO TO GIF APP WORKBENCH (PRO PALETTEGEN STUDIO) */}
       {toolId === 'video_to_gif' && (
-        <div className="p-4 rounded-2xl bg-surface-900 border border-amber-500/30 space-y-3">
+        <div className="p-4 rounded-2xl bg-surface-900 border border-emerald-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-amber-400" />
-              <span className="text-xs font-bold text-white">Studio GIF Generator (2-Pass Palettegen)</span>
+              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Pro GIF Maker Studio (2-Pass PaletteGen)</span>
             </div>
-            <span className="text-[11px] text-amber-300 font-semibold">Crisp 256-Color Palette</span>
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded border border-emerald-500/30">
+              Desktop-Grade Color Fidelity
+            </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          {/* Time range trimming */}
+          <div className="p-3 bg-surface-950 rounded-xl border border-surface-800 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                <Scissors className="h-3.5 w-3.5 text-emerald-400" />
+                Clip Highlight Range (Optional)
+              </span>
+              <span className="text-[11px] text-slate-400">Leave blank to convert whole video</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-slate-400 uppercase font-semibold">Start Time</label>
+                  <button
+                    type="button"
+                    onClick={() => updateParam('start_time', formatSecondsToTime(currentTime))}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 underline font-mono"
+                  >
+                    Set Current ({formatSecondsToTime(currentTime)})
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="00:00:00"
+                  value={parameters.start_time || ''}
+                  onChange={(e) => updateParam('start_time', e.target.value)}
+                  className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-slate-400 uppercase font-semibold">End Time</label>
+                  <button
+                    type="button"
+                    onClick={() => updateParam('end_time', formatSecondsToTime(currentTime))}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 underline font-mono"
+                  >
+                    Set Current ({formatSecondsToTime(currentTime)})
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder={formatSecondsToTime(duration || 10)}
+                  value={parameters.end_time || ''}
+                  onChange={(e) => updateParam('end_time', e.target.value)}
+                  className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Width Resolution presets */}
+          <div>
+            <label className="block text-[11px] text-slate-400 font-semibold mb-1.5">Output Resolution Width</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: '320px', sub: 'Compact Sticker', val: 320 },
+                { label: '480px', sub: 'Standard Chat', val: 480 },
+                { label: '640px', sub: 'High Res', val: 640 },
+                { label: '800px', sub: 'HD Master', val: 800 }
+              ].map((res) => {
+                const active = (parameters.width || 480) === res.val;
+                return (
+                  <button
+                    key={res.val}
+                    type="button"
+                    onClick={() => updateParam('width', res.val)}
+                    className={`p-2 rounded-xl border text-center transition-all ${
+                      active
+                        ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-sm shadow-emerald-500/20'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{res.label}</div>
+                    <div className="text-[9px] text-slate-400">{res.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* FPS, Dither & Velocity */}
+          <div className="grid grid-cols-3 gap-2.5">
             <div>
-              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Frame Rate (FPS)</label>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Frame Rate</label>
               <select
                 value={parameters.fps || 15}
                 onChange={(e) => updateParam('fps', parseInt(e.target.value, 10))}
                 className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
               >
-                <option value={10}>10 FPS (Small size)</option>
-                <option value={15}>15 FPS (Standard smooth)</option>
-                <option value={24}>24 FPS (Cinematic)</option>
-                <option value={30}>30 FPS (Silky smooth)</option>
+                <option value={10}>10 FPS (Smallest)</option>
+                <option value={15}>15 FPS (Standard Smooth)</option>
+                <option value={24}>24 FPS (Cinema Cadence)</option>
+                <option value={30}>30 FPS (Silky Motion)</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Width (Scale)</label>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Dither Algorithm</label>
               <select
-                value={parameters.width || 480}
-                onChange={(e) => updateParam('width', parseInt(e.target.value, 10))}
-                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
-              >
-                <option value={320}>320px (Compact sticker)</option>
-                <option value={480}>480px (Standard web)</option>
-                <option value={640}>640px (High definition)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Color Dither</label>
-              <select
-                value={parameters.dither || 'bayer'}
+                value={parameters.dither || 'sierra2_4a'}
                 onChange={(e) => updateParam('dither', e.target.value)}
                 className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
               >
-                <option value="bayer">Bayer Matrix (Clean)</option>
+                <option value="sierra2_4a">Sierra-2 4A (Smoothest)</option>
                 <option value="floyd_steinberg">Floyd-Steinberg</option>
-                <option value="none">No Dither</option>
+                <option value="bayer">Bayer Matrix (Retro)</option>
+                <option value="none">No Dither (Clean Pixel)</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Speed Multiplier</label>
+              <select
+                value={parameters.speed !== undefined ? parameters.speed : 1.0}
+                onChange={(e) => updateParam('speed', parseFloat(e.target.value))}
+                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
+              >
+                <option value={0.5}>0.5x (Slow-Mo)</option>
+                <option value={1.0}>1.0x (Original)</option>
+                <option value={1.25}>1.25x (Crisp Snappy)</option>
+                <option value={1.5}>1.5x (Fast Meme)</option>
+                <option value={2.0}>2.0x (Double Speed)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Palette Mode & Infinite Loop */}
+          <div className="flex items-center justify-between p-3 bg-surface-950 rounded-xl border border-surface-800">
+            <div className="flex items-center gap-2">
+              <input
+                id="infinite_loop_toggle"
+                type="checkbox"
+                checked={parameters.infinite_loop !== false}
+                onChange={(e) => updateParam('infinite_loop', e.target.checked)}
+                className="w-4 h-4 rounded text-emerald-500 focus:ring-0 bg-surface-900 border-surface-700"
+              />
+              <label htmlFor="infinite_loop_toggle" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                Endless Continuous Loop
+              </label>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400 text-[11px]">Palette Analysis:</span>
+              <select
+                value={parameters.stats_mode || 'diff'}
+                onChange={(e) => updateParam('stats_mode', e.target.value)}
+                className="bg-surface-900 border border-surface-700 rounded-lg px-2 py-1 text-xs text-white"
+              >
+                <option value="diff">Diff (Action / Motion)</option>
+                <option value="full">Full (Static Brilliance)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Pro info badge */}
+          <div className="flex items-start gap-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[11px] text-emerald-200">
+            <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>
+              <strong>Dual-Pass Color Histogram:</strong> Analyzes all frames to generate a bespoke 256-color palette with Lanczos anti-aliasing, preventing color banding and gradient posterization common in standard mobile GIF makers.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* D2. GIF TO VIDEO (MP4) WORKBENCH */}
+      {(toolId === 'gif_to_video' || toolId === 'gif_convert_video') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-violet-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-violet-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">GIF to 60fps MP4 & Motion Upscaler</span>
+            </div>
+            <span className="text-[10px] bg-violet-500/20 text-violet-300 font-semibold px-2 py-0.5 rounded border border-violet-500/30">
+              Social Re-Pad & H.264
+            </span>
+          </div>
+
+          {/* Loop padder */}
+          <div>
+            <label className="block text-[11px] text-slate-400 font-semibold mb-1.5">
+              Duration Loop Padder (Fixes Social Platform Minimum Lengths)
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: '3x Loops', sub: 'Instagram & TikTok (Recommended)', val: 3 },
+                { label: '1x Loop', sub: 'Single Playthrough', val: 1 },
+                { label: '2x Loops', sub: 'Double Duration', val: 2 },
+                { label: '5x Loops', sub: 'Extended Story Reel', val: 5 }
+              ].map((lp) => {
+                const active = (parameters.loop_count || 3) === lp.val;
+                return (
+                  <button
+                    key={lp.val}
+                    type="button"
+                    onClick={() => updateParam('loop_count', lp.val)}
+                    className={`p-2 rounded-xl border text-center transition-all ${
+                      active
+                        ? 'bg-violet-500/20 border-violet-500 text-white shadow-sm shadow-violet-500/20'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{lp.label}</div>
+                    <div className="text-[9px] text-slate-400 line-clamp-1">{lp.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Frame Rate & CRF */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Target Frame Rate</label>
+              <select
+                value={parameters.fps || 30}
+                onChange={(e) => updateParam('fps', parseInt(e.target.value, 10))}
+                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
+              >
+                <option value={30}>30 FPS (Web & Social Standard)</option>
+                <option value={60}>60 FPS (Ultra Fluid Motion)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Quality Profile (CRF)</label>
+              <select
+                value={parameters.crf || 18}
+                onChange={(e) => updateParam('crf', parseInt(e.target.value, 10))}
+                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
+              >
+                <option value={18}>CRF 18 (Visually Lossless Studio)</option>
+                <option value={23}>CRF 23 (Balanced Standard)</option>
+                <option value={28}>CRF 28 (Ultra Compact File)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Compatibility guarantee note */}
+          <div className="flex items-start gap-2 p-2.5 bg-violet-500/10 border border-violet-500/20 rounded-xl text-[11px] text-violet-200">
+            <ShieldCheck className="h-4 w-4 text-violet-400 shrink-0 mt-0.5" />
+            <span>
+              <strong>Universal YUV420p Color Space:</strong> Conforms GIF dimensions to even pixel parity and re-encodes with faststart MP4 container flags to ensure flawless instant playback on Android Gallery, WhatsApp Status, Instagram Reels, and Discord without black screen errors.
+            </span>
           </div>
         </div>
       )}
@@ -2677,40 +2883,369 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
 
       {/* J. VIDEO ROTATE & MIRROR WORKBENCH */}
       {toolId === 'video_rotate' && (
-        <div className="p-4 rounded-2xl bg-surface-900 border border-sky-500/30 space-y-3">
+        <div className="p-4 rounded-2xl bg-surface-900 border border-sky-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <RotateCw className="h-4 w-4 text-sky-400" />
-              <span className="text-xs font-bold text-white">Orientation & Mirror Studio</span>
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Orientation & 3D Mirror Studio</span>
             </div>
+            <span className="text-[10px] bg-sky-500/20 text-sky-300 font-semibold px-2 py-0.5 rounded border border-sky-500/30">
+              Lossless & Orthogonal Matrix
+            </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { deg: 90, label: 'Rotate 90° CW' },
-              { deg: 180, label: 'Rotate 180°' },
-              { deg: 270, label: 'Rotate 270° (90° CCW)' },
-              { deg: 0, flip: true, label: 'Flip Horizontal (Mirror)' },
-            ].map((r, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => {
-                  if (r.flip) {
-                    updateParam('flip_h', !parameters.flip_h);
-                  } else {
-                    updateParam('degrees', r.deg);
-                  }
-                }}
-                className={`p-3 rounded-xl border text-center font-bold text-xs transition ${
-                  parameters.degrees === r.deg || (r.flip && parameters.flip_h)
-                    ? 'bg-sky-600/20 border-sky-500 text-white'
-                    : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
-                }`}
+              { deg: 90, label: '90° CW', sub: 'Turn Right' },
+              { deg: 180, label: '180° Invert', sub: 'Upside Down' },
+              { deg: 270, label: '270° CCW', sub: 'Turn Left' },
+              { deg: 0, label: '0° Normal', sub: 'Reset Angle' }
+            ].map((r) => {
+              const active = (parameters.degrees || 0) === r.deg;
+              return (
+                <button
+                  key={r.deg}
+                  type="button"
+                  onClick={() => updateParam('degrees', r.deg)}
+                  className={`p-3 rounded-xl border text-center transition ${
+                    active
+                      ? 'bg-sky-500/20 border-sky-500 text-white shadow-sm shadow-sky-500/20'
+                      : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                  }`}
+                >
+                  <div className="font-bold text-xs">{r.label}</div>
+                  <div className="text-[10px] text-slate-400">{r.sub}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mirror & Invert Toggles */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => updateParam('flip_h', !parameters.flip_h)}
+              className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition ${
+                parameters.flip_h
+                  ? 'bg-sky-500/20 border-sky-500 text-white'
+                  : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+              }`}
+            >
+              <div>
+                <div className="text-xs font-bold">Flip Horizontal</div>
+                <div className="text-[10px] text-slate-400">Mirror selfie / front-cam</div>
+              </div>
+              <div className={`w-3.5 h-3.5 rounded-full border ${parameters.flip_h ? 'bg-sky-400 border-sky-400' : 'border-surface-600'}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => updateParam('flip_v', !parameters.flip_v)}
+              className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition ${
+                parameters.flip_v
+                  ? 'bg-sky-500/20 border-sky-500 text-white'
+                  : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+              }`}
+            >
+              <div>
+                <div className="text-xs font-bold">Flip Vertical</div>
+                <div className="text-[10px] text-slate-400">Invert top to bottom</div>
+              </div>
+              <div className={`w-3.5 h-3.5 rounded-full border ${parameters.flip_v ? 'bg-sky-400 border-sky-400' : 'border-surface-600'}`} />
+            </button>
+          </div>
+
+          {/* Lossless Metadata Switch */}
+          <div className="flex items-center justify-between p-3 bg-surface-950 rounded-xl border border-surface-800">
+            <div className="flex items-center gap-2">
+              <input
+                id="lossless_metadata_toggle"
+                type="checkbox"
+                checked={Boolean(parameters.lossless_metadata)}
+                onChange={(e) => updateParam('lossless_metadata', e.target.checked)}
+                className="w-4 h-4 rounded text-sky-500 focus:ring-0 bg-surface-900 border-surface-700"
+              />
+              <label htmlFor="lossless_metadata_toggle" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                0-Second Lossless Metadata Tag Fix
+              </label>
+            </div>
+            <span className="text-[10px] text-sky-300">Instant (No Re-encoding)</span>
+          </div>
+        </div>
+      )}
+
+      {/* K. REWIND & BOOMERANG FX WORKBENCH */}
+      {(toolId === 'video_reverse' || toolId === 'boomerang') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-teal-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-teal-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Rewind & Boomerang FX Studio</span>
+            </div>
+            <span className="text-[10px] bg-teal-500/20 text-teal-300 font-semibold px-2 py-0.5 rounded border border-teal-500/30">
+              Bi-Directional Video Loop
+            </span>
+          </div>
+
+          {/* Mode Selector */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { mode: true, title: 'Boomerang FX', desc: 'Forward then Backward Loop (Instagram Style)' },
+              { mode: false, title: 'Full Reverse Only', desc: 'Rewind video from end to start' }
+            ].map((m) => {
+              const active = Boolean(parameters.boomerang !== false) === m.mode;
+              return (
+                <button
+                  key={String(m.mode)}
+                  type="button"
+                  onClick={() => updateParam('boomerang', m.mode)}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    active
+                      ? 'bg-teal-500/20 border-teal-500 text-white shadow-sm shadow-teal-500/20'
+                      : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">{m.title}</div>
+                  <div className="text-[10px] text-slate-400">{m.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Velocity Speed Multiplier */}
+          <div>
+            <label className="block text-[11px] text-slate-400 font-semibold mb-1.5">Playback Velocity</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { val: 0.5, label: '0.5x Slo-Mo' },
+                { val: 1.0, label: '1.0x Normal' },
+                { val: 1.5, label: '1.5x Snappy' },
+                { val: 2.0, label: '2.0x Hyper' }
+              ].map((sp) => {
+                const active = (parameters.speed || 1.0) === sp.val;
+                return (
+                  <button
+                    key={sp.val}
+                    type="button"
+                    onClick={() => updateParam('speed', sp.val)}
+                    className={`p-2 rounded-xl border text-center transition ${
+                      active
+                        ? 'bg-teal-500/20 border-teal-500 text-white'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{sp.label}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Audio Reverse Option */}
+          <div className="flex items-center justify-between p-3 bg-surface-950 rounded-xl border border-surface-800">
+            <div className="flex items-center gap-2">
+              <input
+                id="reverse_audio_toggle"
+                type="checkbox"
+                checked={parameters.reverse_audio !== false}
+                onChange={(e) => updateParam('reverse_audio', e.target.checked)}
+                className="w-4 h-4 rounded text-teal-500 focus:ring-0 bg-surface-900 border-surface-700"
+              />
+              <label htmlFor="reverse_audio_toggle" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                Synchronized Audio Reversal
+              </label>
+            </div>
+            <span className="text-[10px] text-slate-400">Uncheck to produce clean silent video</span>
+          </div>
+        </div>
+      )}
+
+      {/* L. INFINITE SEAMLESS LOOPER WORKBENCH */}
+      {(toolId === 'video_loop' || toolId === 'loop_video') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-cyan-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Repeat className="h-4 w-4 text-cyan-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Infinite Seamless Looper Studio</span>
+            </div>
+            <span className="text-[10px] bg-cyan-500/20 text-cyan-300 font-semibold px-2 py-0.5 rounded border border-cyan-500/30">
+              Instant Stream Copy Multiplex
+            </span>
+          </div>
+
+          {/* Loop Multiplier Selector */}
+          <div>
+            <label className="block text-[11px] text-slate-400 font-semibold mb-1.5">Loop Repeat Count</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { count: 2, label: '2x Loops', sub: 'Double Play' },
+                { count: 3, label: '3x Loops', sub: 'Social Reels' },
+                { count: 5, label: '5x Loops', sub: 'Extended Story' },
+                { count: 10, label: '10x Loops', sub: 'Long Loop' }
+              ].map((lp) => {
+                const active = (parameters.count || 3) === lp.count;
+                return (
+                  <button
+                    key={lp.count}
+                    type="button"
+                    onClick={() => updateParam('count', lp.count)}
+                    className={`p-2.5 rounded-xl border text-center transition ${
+                      active
+                        ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-sm shadow-cyan-500/20'
+                        : 'bg-surface-950 border-surface-800 text-slate-400 hover:border-surface-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{lp.label}</div>
+                    <div className="text-[9px] text-slate-400">{lp.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Calculated Output Duration Badge */}
+          {duration > 0 && (
+            <div className="flex items-center justify-between p-2.5 bg-surface-950 rounded-xl border border-surface-800 text-xs">
+              <span className="text-slate-400">Calculated Final Duration:</span>
+              <span className="font-mono font-bold text-cyan-300">
+                {formatSecondsToTime(duration * (parameters.count || 3))} ({parameters.count || 3}x of {formatSecondsToTime(duration)})
+              </span>
+            </div>
+          )}
+
+          {/* Stream copy toggle */}
+          <div className="flex items-center justify-between p-3 bg-surface-950 rounded-xl border border-surface-800">
+            <div className="flex items-center gap-2">
+              <input
+                id="stream_copy_loop"
+                type="checkbox"
+                checked={parameters.stream_copy !== false}
+                onChange={(e) => updateParam('stream_copy', e.target.checked)}
+                className="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-surface-900 border-surface-700"
+              />
+              <label htmlFor="stream_copy_loop" className="text-xs text-slate-300 font-semibold cursor-pointer">
+                Zero-Loss 0.1-Sec Stream Copy
+              </label>
+            </div>
+            <span className="text-[10px] text-cyan-300">Instant multiplexing</span>
+          </div>
+        </div>
+      )}
+
+      {/* M. MULTI-CLIP STITCHER & CONCAT WORKBENCH */}
+      {(toolId === 'video_concat' || toolId === 'concat_video') && (
+        <div className="p-4 rounded-2xl bg-surface-900 border border-indigo-500/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <GitMerge className="h-4 w-4 text-indigo-400" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Multi-Clip Stitcher & Timeline Joiner</span>
+            </div>
+            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-semibold px-2 py-0.5 rounded border border-indigo-500/30">
+              Conforming Timeline Engine
+            </span>
+          </div>
+
+          {/* Sequence list */}
+          <div className="space-y-2">
+            <label className="block text-[11px] text-slate-400 font-semibold">Timeline Sequence</label>
+            <div className="space-y-1.5 p-2 bg-surface-950 rounded-xl border border-surface-800">
+              {/* Primary clip */}
+              <div className="flex items-center justify-between p-2 bg-surface-900 rounded-lg text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                    1
+                  </span>
+                  <span className="text-white font-medium truncate">{file.original_filename}</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-2">Primary Clip</span>
+              </div>
+
+              {/* Additional clips */}
+              {(parameters.additional_file_ids || []).map((fid: any, idx: number) => {
+                const matchedFile = libraryFiles.find((f) => f.id === fid);
+                return (
+                  <div key={fid} className="flex items-center justify-between p-2 bg-surface-900 rounded-lg text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-5 h-5 rounded-full bg-surface-800 text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {idx + 2}
+                      </span>
+                      <span className="text-slate-200 font-medium truncate">
+                        {matchedFile ? matchedFile.original_filename : `Clip #${fid}`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextIds = (parameters.additional_file_ids || []).filter((id: any) => id !== fid);
+                        updateParam('additional_file_ids', nextIds);
+                      }}
+                      className="text-slate-500 hover:text-red-400 p-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Add clip picker from library */}
+              {libraryFiles.filter((f) => f.id !== file.id && f.mime_type?.startsWith('video/')).length > 0 && (
+                <div className="pt-1.5">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const selectedId = isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value);
+                      const current = parameters.additional_file_ids || [];
+                      if (!current.includes(selectedId)) {
+                        updateParam('additional_file_ids', [...current, selectedId]);
+                      }
+                    }}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-indigo-300"
+                  >
+                    <option value="">+ Append Next Clip From Library...</option>
+                    {libraryFiles
+                      .filter((f) => f.id !== file.id && f.mime_type?.startsWith('video/'))
+                      .map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.original_filename} ({formatBytes(f.size_bytes)})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Conforming resolution */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Target Conforming Resolution</label>
+              <select
+                value={parameters.resolution || '1080p'}
+                onChange={(e) => updateParam('resolution', e.target.value)}
+                className="w-full bg-surface-950 border border-surface-800 rounded-lg p-2 text-xs text-white"
               >
-                {r.label}
-              </button>
-            ))}
+                <option value="1080p">1080p Full HD (Standard)</option>
+                <option value="720p">720p HD (Fast Render)</option>
+                <option value="4k">4K Ultra HD (Cinema Master)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-slate-400 font-semibold mb-1">Stitching Strategy</label>
+              <div className="flex items-center h-9 px-3 bg-surface-950 rounded-lg border border-surface-800">
+                <input
+                  id="concat_stream_copy"
+                  type="checkbox"
+                  checked={parameters.stream_copy !== false}
+                  onChange={(e) => updateParam('stream_copy', e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-500 focus:ring-0 bg-surface-900 border-surface-700"
+                />
+                <label htmlFor="concat_stream_copy" className="ml-2 text-xs text-slate-300 font-medium cursor-pointer">
+                  Zero-Loss Stream Copy
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       )}

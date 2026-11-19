@@ -295,11 +295,11 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_to_gif',
-    name: 'Video to Animated GIF',
+    name: 'Pro GIF Maker Studio (PaletteGen)',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Transcode',
-    description: 'Convert any video clip into an animated GIF for memes, documentation, and chat.',
+    description: 'Transform video clips into ultra-sharp animated GIFs with 2-pass custom palette generation, 4 dither algorithms, and sub-second clip slicing.',
     iconName: 'Image',
     color: 'from-emerald-500 to-teal-600',
     badge: 'popular',
@@ -308,35 +308,93 @@ export const VIDEO_TOOLS: StudioTool[] = [
     operation: 'video_to_gif',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov', '.webm', '.avi'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.avi', '.mkv'],
     outputFormats: ['.gif'],
-    defaultParameters: { format: 'gif', fps: 15, width: 480 },
+    defaultParameters: { format: 'gif', fps: 15, width: 480, dither: 'sierra2_4a', stats_mode: 'diff', speed: 1.0, infinite_loop: true },
     parameters: [
+      {
+        name: 'width',
+        label: 'Resolution Width',
+        type: 'select',
+        default: 480,
+        options: [
+          { label: '320px (Compact Sticker / Fast Load)', value: 320 },
+          { label: '480px (Standard Social & Chat)', value: 480 },
+          { label: '640px (High-Res Detailed GIF)', value: 640 },
+          { label: '800px (HD Desktop Master)', value: 800 }
+        ]
+      },
       {
         name: 'fps',
         label: 'Frame Rate',
         type: 'select',
         default: 15,
         options: [
-          { label: '10 fps (Smallest file)', value: 10 },
-          { label: '15 fps (Smooth animation)', value: 15 },
-          { label: '24 fps (Cinema quality)', value: 24 }
+          { label: '10 fps (Compact Bandwidth)', value: 10 },
+          { label: '15 fps (Smooth Animation)', value: 15 },
+          { label: '24 fps (Cinema Motion)', value: 24 },
+          { label: '30 fps (Ultra Fluid Motion)', value: 30 }
         ]
       },
       {
-        name: 'width',
-        label: 'GIF Resolution Width',
+        name: 'dither',
+        label: 'Dithering Engine (Color Blending)',
         type: 'select',
-        default: 480,
+        default: 'sierra2_4a',
         options: [
-          { label: '320px (Compact sticker)', value: 320 },
-          { label: '480px (Standard GIF)', value: 480 },
-          { label: '640px (High Res)', value: 640 }
+          { label: 'Sierra-2 4A (Smoothest gradients & natural skin)', value: 'sierra2_4a' },
+          { label: 'Floyd-Steinberg (Classic balanced diffusion)', value: 'floyd_steinberg' },
+          { label: 'Bayer Matrix 3x3 (Retro ordered dithering)', value: 'bayer' },
+          { label: 'None (Clean flat solids / pixel art)', value: 'none' }
         ]
+      },
+      {
+        name: 'speed',
+        label: 'Playback Velocity',
+        type: 'select',
+        default: 1.0,
+        options: [
+          { label: '0.5x (Slow Motion FX)', value: 0.5 },
+          { label: '1.0x (Original Speed)', value: 1.0 },
+          { label: '1.25x (Crisp Snappy Motion)', value: 1.25 },
+          { label: '1.5x (Fast Meme Pacing)', value: 1.5 },
+          { label: '2.0x (Double Speed Warp)', value: 2.0 }
+        ]
+      },
+      {
+        name: 'stats_mode',
+        label: 'Palette Analysis Mode',
+        type: 'select',
+        default: 'diff',
+        options: [
+          { label: 'Diff (Motion-optimized palette per zone)', value: 'diff' },
+          { label: 'Full (Single global high-fidelity palette)', value: 'full' }
+        ]
+      },
+      {
+        name: 'infinite_loop',
+        label: 'Infinite Continuous Loop',
+        type: 'boolean',
+        default: true,
+        description: 'Enables endless repeating loop (standard for stickers and social reactions)'
+      },
+      {
+        name: 'start_time',
+        label: 'Clip Start Timestamp (optional, e.g. 00:00:02)',
+        type: 'text',
+        default: '',
+        description: 'Extract GIF directly from a specific moment without trimming first'
+      },
+      {
+        name: 'end_time',
+        label: 'Clip End Timestamp (optional, e.g. 00:00:07)',
+        type: 'text',
+        default: '',
+        description: 'End moment for the animated GIF highlight'
       }
     ],
-    keywords: ['video to gif', 'make gif from video', 'mp4 to gif', 'animated gif maker'],
-    examples: ['video to gif', 'mp4 to gif']
+    keywords: ['video to gif', 'make gif from video', 'mp4 to gif', 'animated gif maker', 'palettegen gif', 'hd gif maker'],
+    examples: ['video to gif', 'mp4 to gif', 'high quality gif']
   },
   {
     id: 'video_resize',
@@ -507,20 +565,20 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_rotate',
-    name: 'Rotate & Flip Video',
+    name: 'Orientation, 3D Horizon & Mirror Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Fix sideways or upside-down mobile phone video recordings (90°, 180°, 270°).',
+    description: 'Fix upside-down smartphone recordings with 0-sec lossless metadata flags, rotate 90°/180°/270°, or apply horizontal/vertical mirror reflection.',
     iconName: 'RotateCw',
     color: 'from-blue-500 to-cyan-600',
     rank: 9,
     operation: 'video_rotate',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov', '.webm'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv'],
     outputFormats: ['.mp4'],
-    defaultParameters: { degrees: 90 },
+    defaultParameters: { degrees: 90, flip_h: false, flip_v: false, lossless_metadata: false },
     parameters: [
       {
         name: 'degrees',
@@ -529,13 +587,34 @@ export const VIDEO_TOOLS: StudioTool[] = [
         default: 90,
         options: [
           { label: '90° Clockwise (Turn Right)', value: 90 },
-          { label: '180° Flip (Upside Down)', value: 180 },
+          { label: '180° Invert (Upside Down)', value: 180 },
           { label: '270° Counter-Clockwise (Turn Left)', value: 270 }
         ]
+      },
+      {
+        name: 'flip_h',
+        label: 'Horizontal Mirror (Selfie Reflection)',
+        type: 'boolean',
+        default: false,
+        description: 'Mirrors video left-to-right (useful for fixing inverted front camera selfies)'
+      },
+      {
+        name: 'flip_v',
+        label: 'Vertical Flip',
+        type: 'boolean',
+        default: false,
+        description: 'Flips video upside-down vertically'
+      },
+      {
+        name: 'lossless_metadata',
+        label: 'Lossless 0-Sec Metadata Tag Fix',
+        type: 'boolean',
+        default: false,
+        description: 'Updates orientation tag without re-encoding video frames (instant, zero quality loss)'
       }
     ],
-    keywords: ['rotate video', 'turn video', 'fix sideways video', 'flip video'],
-    examples: ['rotate video 90 degrees']
+    keywords: ['rotate video', 'turn video', 'fix sideways video', 'flip video', 'mirror video', 'lossless rotation'],
+    examples: ['rotate video 90 degrees', 'mirror video horizontally']
   },
   {
     id: 'video_speed',
@@ -603,84 +682,138 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_concat',
-    name: 'Merge & Concat Videos',
+    name: 'Multi-Clip Stitcher & Timeline Joiner',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Stitch multiple video clips together into a single continuous video file.',
+    description: 'Combine and stitch multiple video clips seamlessly with auto-conforming multi-resolution scaling (1080p, 720p, 4K) or zero-loss stream copy remuxing.',
     iconName: 'GitMerge',
     color: 'from-indigo-600 to-purple-700',
     rank: 11,
     operation: 'video_concat',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm'],
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.ts'],
     outputFormats: ['.mp4'],
     acceptsMultipleFiles: true,
-    defaultParameters: {},
-    parameters: [],
-    keywords: ['merge video', 'combine video', 'concat video', 'join video clips'],
-    examples: ['merge videos', 'combine video clips']
+    defaultParameters: { stream_copy: true, resolution: '1080p' },
+    parameters: [
+      {
+        name: 'stream_copy',
+        label: 'Zero-Loss Stream Copy (Fast Remux)',
+        type: 'boolean',
+        default: true,
+        description: 'Instant joining without re-encoding (requires identical codecs and resolutions)'
+      },
+      {
+        name: 'resolution',
+        label: 'Conforming Target Resolution',
+        type: 'select',
+        default: '1080p',
+        options: [
+          { label: 'Full HD 1080p (1920x1080 Standard)', value: '1080p' },
+          { label: 'HD 720p (1280x720 Fast)', value: '720p' },
+          { label: '4K Ultra HD (3840x2160 Master)', value: '4k' }
+        ]
+      }
+    ],
+    keywords: ['merge video', 'combine video', 'concat video', 'join video clips', 'stitch videos', 'video joiner'],
+    examples: ['merge videos', 'combine video clips', 'stitch clips together']
   },
   {
     id: 'video_reverse',
-    name: 'Reverse Video Playback',
+    name: 'Rewind & Boomerang FX Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Rewind video so it plays backwards from finish to start.',
+    description: 'Create viral bi-directional Boomerang clips (forward then backward) or full video rewind with synchronized reverse audio and velocity scaling.',
     iconName: 'RotateCcw',
     color: 'from-teal-600 to-emerald-700',
     rank: 12,
     operation: 'video_reverse',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov', '.webm'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv'],
     outputFormats: ['.mp4'],
-    defaultParameters: {},
-    parameters: [],
-    keywords: ['reverse video', 'play video backwards', 'rewind video effect'],
-    examples: ['reverse video']
+    defaultParameters: { boomerang: true, reverse_audio: true, speed: 1.0 },
+    parameters: [
+      {
+        name: 'boomerang',
+        label: 'Bi-Directional Boomerang Mode',
+        type: 'boolean',
+        default: true,
+        description: 'Plays clip forward then immediately plays backward in a seamless loop (Instagram/Snapchat style)'
+      },
+      {
+        name: 'reverse_audio',
+        label: 'Reverse Audio Soundtrack',
+        type: 'boolean',
+        default: true,
+        description: 'Plays audio backward in sync with the video frames (uncheck to mute)'
+      },
+      {
+        name: 'speed',
+        label: 'Velocity & Speed Multiplier',
+        type: 'select',
+        default: 1.0,
+        options: [
+          { label: '0.5x (Dramatic Slow-Mo Rewind)', value: 0.5 },
+          { label: '1.0x (Original Speed)', value: 1.0 },
+          { label: '1.5x (Snappy Quick Rewind)', value: 1.5 },
+          { label: '2.0x (Hyper Reverse Warp)', value: 2.0 }
+        ]
+      }
+    ],
+    keywords: ['reverse video', 'play video backwards', 'rewind video effect', 'boomerang maker', 'boomerang video'],
+    examples: ['reverse video', 'make boomerang video']
   },
   {
     id: 'video_loop',
-    name: 'Video Loop Maker',
+    name: 'Infinite Seamless Looper Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Repeat a video clip seamlessly 2x, 3x, or 5x times.',
+    description: 'Repeat and multiplex video clips seamlessly by target count (2x, 3x, 5x, 10x) with 0.1s stream copy passthrough.',
     iconName: 'Repeat',
     color: 'from-cyan-600 to-blue-700',
     rank: 13,
     operation: 'video_loop',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.webm'],
+    inputFormats: ['.mp4', '.webm', '.mov', '.mkv'],
     outputFormats: ['.mp4'],
-    defaultParameters: { count: 3 },
+    defaultParameters: { count: 3, stream_copy: true },
     parameters: [
       {
         name: 'count',
-        label: 'Loop Count',
+        label: 'Loop Repeat Multiplier',
         type: 'select',
         default: 3,
         options: [
-          { label: 'Loop 2 times', value: 2 },
-          { label: 'Loop 3 times', value: 3 },
-          { label: 'Loop 5 times', value: 5 }
+          { label: '2x (Play Twice)', value: 2 },
+          { label: '3x (Social Standard - Instagram/Reels)', value: 3 },
+          { label: '5x (Extended Story Loop)', value: 5 },
+          { label: '10x (Long Showcase Loop)', value: 10 }
         ]
+      },
+      {
+        name: 'stream_copy',
+        label: 'Zero-Loss Stream Copy (0.1s Fast Loop)',
+        type: 'boolean',
+        default: true,
+        description: 'Uses stream multiplexing for instant generation without re-encoding quality loss'
       }
     ],
-    keywords: ['loop video', 'repeat video', 'boomerang video maker', 'video loop'],
-    examples: ['loop video 3 times']
+    keywords: ['loop video', 'repeat video', 'boomerang video maker', 'video loop', 'endless video loop'],
+    examples: ['loop video 3 times', 'repeat video 5 times']
   },
   {
     id: 'gif_to_video',
-    name: 'Animated GIF to Video (MP4)',
+    name: 'GIF to 60fps MP4 & Motion Upscaler',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Transcode',
-    description: 'Convert heavy animated GIFs into lightweight, fast-loading MP4 video files.',
+    description: 'Convert animated GIFs into smooth MP4 videos with auto-pad duration looping (bypasses Instagram/TikTok <3s rejection) and 60fps motion.',
     iconName: 'FileVideo',
     color: 'from-violet-600 to-indigo-700',
     rank: 14,
@@ -689,10 +822,44 @@ export const VIDEO_TOOLS: StudioTool[] = [
     mobileEngine: 'ffmpeg',
     inputFormats: ['.gif'],
     outputFormats: ['.mp4'],
-    defaultParameters: { format: 'mp4' },
-    parameters: [],
-    keywords: ['gif to video', 'gif to mp4', 'convert gif to video', 'turn gif into mp4'],
-    examples: ['gif to mp4', 'gif to video']
+    defaultParameters: { format: 'mp4', fps: 30, loop_count: 3, crf: 18 },
+    parameters: [
+      {
+        name: 'loop_count',
+        label: 'Duration Padder & Multi-Loop',
+        type: 'select',
+        default: 3,
+        options: [
+          { label: '3x Loops (Recommended for Instagram / TikTok / WhatsApp)', value: 3 },
+          { label: '1x Loop (Original Single Playthrough)', value: 1 },
+          { label: '2x Loops (Double Duration)', value: 2 },
+          { label: '5x Loops (Extended Story Reel)', value: 5 }
+        ]
+      },
+      {
+        name: 'fps',
+        label: 'Target Motion Frame Rate',
+        type: 'select',
+        default: 30,
+        options: [
+          { label: '30 fps (Web & Social Standard)', value: 30 },
+          { label: '60 fps (Ultra Fluid Motion)', value: 60 }
+        ]
+      },
+      {
+        name: 'crf',
+        label: 'Quality Profile (CRF)',
+        type: 'select',
+        default: 18,
+        options: [
+          { label: 'CRF 18 (Visually Lossless Studio Master)', value: 18 },
+          { label: 'CRF 23 (Balanced Standard)', value: 23 },
+          { label: 'CRF 28 (Ultra Compact File Size)', value: 28 }
+        ]
+      }
+    ],
+    keywords: ['gif to video', 'gif to mp4', 'convert gif to video', 'turn gif into mp4', 'gif 60fps', 'pad gif duration'],
+    examples: ['gif to mp4', 'gif to video', 'loop gif into video']
   },
   {
     id: 'video_adjust_volume',
