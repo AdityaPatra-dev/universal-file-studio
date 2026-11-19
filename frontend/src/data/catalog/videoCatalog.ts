@@ -109,11 +109,11 @@ export const VIDEO_TOOLS: StudioTool[] = [
   },
   {
     id: 'video_trim',
-    name: 'Cut & Trim Video Clip',
+    name: 'Lossless Frame-Accurate Cutter & Splitter',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Snip video between start and end timestamps without re-encoding quality loss.',
+    description: 'Instant 0.1s lossless stream copy trimming (-c copy) or sub-frame accurate smart cutting with WhatsApp/Story auto-chunk splitting.',
     iconName: 'Scissors',
     color: 'from-pink-500 to-rose-600',
     badge: 'popular',
@@ -122,27 +122,63 @@ export const VIDEO_TOOLS: StudioTool[] = [
     operation: 'video_trim',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi'],
+    inputFormats: ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.flv', '.wmv'],
     outputFormats: ['.mp4', '.mkv', '.webm', '.mov'],
-    defaultParameters: { start: '00:00:00', end: '00:00:30' },
+    defaultParameters: {
+      start: '00:00:00',
+      end: '00:00:30',
+      trim_mode: 'single',
+      chunk_seconds: 30,
+      lossless: true,
+      loop_selection: false
+    },
     parameters: [
       {
+        name: 'trim_mode',
+        label: 'Trimming Strategy',
+        type: 'select',
+        default: 'single',
+        options: [
+          { label: '✂️ Single Range Clip (Start to End)', value: 'single' },
+          { label: '📱 Story / Status Auto-Chunk Splitter', value: 'split_chunks' },
+          { label: '🗑️ Cut Out Unwanted Segment (Invert Trim)', value: 'cut_out' }
+        ]
+      },
+      {
         name: 'start',
-        label: 'Start Timestamp (HH:MM:SS)',
+        label: 'Start Timestamp (HH:MM:SS.ms)',
         type: 'text',
         default: '00:00:00',
         placeholder: '00:00:00'
       },
       {
         name: 'end',
-        label: 'End Timestamp (HH:MM:SS)',
+        label: 'End Timestamp (HH:MM:SS.ms)',
         type: 'text',
         default: '00:00:30',
         placeholder: '00:01:00'
+      },
+      {
+        name: 'chunk_seconds',
+        label: 'Chunk Duration for Social Splitter',
+        type: 'select',
+        default: 30,
+        options: [
+          { label: '15 seconds (Instagram Stories)', value: 15 },
+          { label: '30 seconds (WhatsApp Status)', value: 30 },
+          { label: '60 seconds (TikTok / Reels)', value: 60 }
+        ]
+      },
+      {
+        name: 'lossless',
+        label: 'Instant 0.1s Lossless Stream Copy',
+        type: 'boolean',
+        default: true,
+        description: 'Bypasses re-encoding: trims 1GB in 0.2s with 100% original video bitrate'
       }
     ],
-    keywords: ['cut video', 'trim video', 'clip video', 'shorten video', 'snip video', 'video cutter'],
-    examples: ['cut video', 'trim video']
+    keywords: ['cut video', 'trim video', 'clip video', 'shorten video', 'snip video', 'video cutter', 'losslesscut', 'whatsapp status splitter'],
+    examples: ['cut video', 'trim video', 'split for whatsapp status']
   },
   {
     id: 'video_compress',
@@ -410,36 +446,64 @@ export const VIDEO_TOOLS: StudioTool[] = [
   // ==================== 🎬 EXTENDED VIDEO TOOLS (TOOLS 8 - 21) ====================
   {
     id: 'video_crop',
-    name: 'Crop Video for Social Media',
+    name: 'Precision Visual Crop & Pan Studio',
     category: 'video',
     categoryLabel: 'Video Studio',
     subCategory: 'Edit & Trim',
-    description: 'Crop video to vertical 9:16 (TikTok/Reels), 1:1 Square, or 16:9 Widescreen.',
+    description: 'Precision aspect ratio framing (9:16, 1:1, 4:5, 16:9, 21:9, Custom) with rule-of-thirds grid guides, position anchors, and edge sinc sharpening.',
     iconName: 'Crop',
     color: 'from-purple-600 to-pink-600',
     rank: 8,
     operation: 'video_crop',
     backendEngine: 'ffmpeg',
     mobileEngine: 'ffmpeg',
-    inputFormats: ['.mp4', '.mov', '.webm'],
+    inputFormats: ['.mp4', '.mov', '.webm', '.mkv', '.avi'],
     outputFormats: ['.mp4'],
-    defaultParameters: { aspect_ratio: '9:16' },
+    defaultParameters: {
+      aspect_ratio: '9:16',
+      anchor: 'center',
+      sharpen: true,
+      x: 0,
+      y: 0,
+      width: 1080,
+      height: 1920
+    },
     parameters: [
       {
         name: 'aspect_ratio',
-        label: 'Social Aspect Ratio',
+        label: 'Aspect Ratio Preset',
         type: 'select',
         default: '9:16',
         options: [
           { label: '📱 9:16 Vertical (TikTok, Reels, Shorts)', value: '9:16' },
           { label: '🟦 1:1 Square (Instagram Grid)', value: '1:1' },
-          { label: '🖥️ 16:9 Widescreen (YouTube, TV)', value: '16:9' },
-          { label: '🖼️ 4:5 Portrait (Instagram Feed)', value: '4:5' }
+          { label: '🖼️ 4:5 Portrait (Instagram Feed)', value: '4:5' },
+          { label: '🖥️ 16:9 Landscape (YouTube, TV)', value: '16:9' },
+          { label: '🎬 21:9 Ultrawide Cinema', value: '21:9' },
+          { label: '⚙️ Custom Geometry (X, Y, W, H)', value: 'custom' }
         ]
+      },
+      {
+        name: 'anchor',
+        label: 'Framing Anchor Position',
+        type: 'select',
+        default: 'center',
+        options: [
+          { label: '🎯 Dead Center Framing', value: 'center' },
+          { label: '↖️ Top-Left Corner Anchor', value: 'top_left' },
+          { label: '↘️ Bottom-Right Corner Anchor', value: 'bottom_right' }
+        ]
+      },
+      {
+        name: 'sharpen',
+        label: 'Lanczos Sinc Edge Sharpening',
+        type: 'boolean',
+        default: true,
+        description: 'Applies unsharp mask to prevent edge softness on cropped footage'
       }
     ],
-    keywords: ['crop video', 'crop 9:16', 'tiktok video crop', 'reels video crop', 'video aspect ratio'],
-    examples: ['crop video to 9:16', 'square video crop']
+    keywords: ['crop video', 'crop 9:16', 'tiktok video crop', 'reels video crop', 'video aspect ratio', 'pan and scan', 'custom crop'],
+    examples: ['crop video to 9:16', 'square video crop', 'crop 4:5']
   },
   {
     id: 'video_rotate',

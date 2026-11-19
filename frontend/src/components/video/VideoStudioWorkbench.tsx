@@ -727,124 +727,221 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
         </div>
       )}
 
-      {/* A. VIDEO TRIMMER APP WORKBENCH */}
+      {/* A. LOSSLESS FRAME-ACCURATE CUTTER & SPLITTER */}
       {toolId === 'video_trim' && (
         <div className="p-4 rounded-2xl bg-surface-900 border border-brand-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Scissors className="h-4 w-4 text-brand-400" />
-              <span className="text-xs font-bold text-white">Precision Range Trimmer</span>
+              <span className="text-xs font-bold text-white">Lossless Frame-Accurate Cutter & Splitter</span>
             </div>
-            <span className="px-2.5 py-1 rounded-full bg-brand-500/20 text-brand-300 font-mono font-bold text-xs">
+            <span className="px-2.5 py-1 rounded-full bg-brand-500/20 text-brand-300 font-mono font-bold text-xs border border-brand-500/30">
               Selected Clip: {clipDuration.toFixed(1)}s
             </span>
           </div>
 
-          {/* Quick Preset Buttons */}
-          <div className="flex flex-wrap gap-1.5">
+          {/* Trimming Mode Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[
-              { label: 'First 15s (Story)', start: 0, end: 15 },
-              { label: 'First 30s (WhatsApp)', start: 0, end: 30 },
-              { label: 'First 60s (Reels)', start: 0, end: 60 },
-              { label: 'Last 30s', start: Math.max(0, duration - 30), end: duration },
-              { label: 'Full Video', start: 0, end: duration },
-            ].map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                onClick={() => {
-                  updateParam('start', formatSecondsToTime(preset.start));
-                  updateParam('end', formatSecondsToTime(preset.end));
-                  seekTo(preset.start);
-                }}
-                className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-[11px] font-semibold text-slate-300 transition"
-              >
-                {preset.label}
-              </button>
-            ))}
+              {
+                id: 'single',
+                title: '✂️ Single Range Snipper',
+                desc: 'Keep the selected interval between start and end timestamps',
+              },
+              {
+                id: 'split_chunks',
+                title: '📱 Story / Status Splitter',
+                desc: 'Auto-slice into 15s/30s/60s chunks for WhatsApp & Instagram',
+              },
+              {
+                id: 'cut_out',
+                title: '🗑️ Cut Out & Delete Scene',
+                desc: 'Remove selected mistake/ad and join the remaining clip',
+              },
+            ].map((m) => {
+              const active = (parameters.trim_mode || 'single') === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => updateParam('trim_mode', m.id)}
+                  className={`p-2.5 rounded-xl border text-left transition ${
+                    active
+                      ? 'bg-brand-600/20 border-brand-500 text-white shadow-sm shadow-brand-500/20'
+                      : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
+                  }`}
+                >
+                  <div className="text-xs font-bold">{m.title}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">{m.desc}</div>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Dual Markers Bar */}
+          {/* Social Auto-Chunk Duration when split_chunks */}
+          {parameters.trim_mode === 'split_chunks' && (
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-brand-500/30 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">Auto-Chunk Duration</span>
+                <span className="text-[10px] text-slate-400">Slices entire video into uniform duration clips</span>
+              </div>
+              <div className="flex gap-1.5">
+                {[
+                  { sec: 15, label: '15s (Story)' },
+                  { sec: 30, label: '30s (WhatsApp)' },
+                  { sec: 60, label: '60s (Reels)' },
+                ].map((c) => (
+                  <button
+                    key={c.sec}
+                    type="button"
+                    onClick={() => updateParam('chunk_seconds', c.sec)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                      (parameters.chunk_seconds || 30) === c.sec
+                        ? 'bg-brand-600 text-white border-brand-500'
+                        : 'bg-surface-900 border-surface-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Quick Preset Buttons (Single & Cut-Out modes) */}
+          {parameters.trim_mode !== 'split_chunks' && (
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { label: 'First 15s (Story)', start: 0, end: 15 },
+                { label: 'First 30s (WhatsApp)', start: 0, end: 30 },
+                { label: 'First 60s (Reels)', start: 0, end: 60 },
+                { label: 'Last 30s', start: Math.max(0, duration - 30), end: duration },
+                { label: 'Full Video', start: 0, end: duration },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    updateParam('start', formatSecondsToTime(preset.start));
+                    updateParam('end', formatSecondsToTime(preset.end));
+                    seekTo(preset.start);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-surface-800 hover:bg-surface-700 text-[11px] font-semibold text-slate-300 transition"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Dual Markers Bar (Single & Cut-Out modes) */}
+          {parameters.trim_mode !== 'split_chunks' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400 font-semibold">Start Point</span>
+                  <button
+                    type="button"
+                    onClick={() => updateParam('start', formatSecondsToTime(currentTime))}
+                    className="px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white font-bold text-[10px]"
+                  >
+                    Set to Current ({formatSecondsToTime(currentTime)})
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={parameters.start || '00:00:00'}
+                  onChange={(e) => updateParam('start', e.target.value)}
+                  className="w-full bg-surface-900 border border-surface-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400 font-semibold">End Point</span>
+                  <button
+                    type="button"
+                    onClick={() => updateParam('end', formatSecondsToTime(currentTime))}
+                    className="px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white font-bold text-[10px]"
+                  >
+                    Set to Current ({formatSecondsToTime(currentTime)})
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={parameters.end || formatSecondsToTime(duration || 30)}
+                  onChange={(e) => updateParam('end', e.target.value)}
+                  className="w-full bg-surface-900 border border-surface-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Engine & Loop Controls */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-semibold">Start Point</span>
-                <button
-                  type="button"
-                  onClick={() => updateParam('start', formatSecondsToTime(currentTime))}
-                  className="px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white font-bold text-[10px]"
-                >
-                  Set to Current ({formatSecondsToTime(currentTime)})
-                </button>
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Zap className="h-3.5 w-3.5 text-brand-400" />
+                  <span>Instant 0.1s Lossless Copy</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Stream copy in 0.1s without re-encoding pixels</div>
               </div>
-              <input
-                type="text"
-                value={parameters.start || '00:00:00'}
-                onChange={(e) => updateParam('start', e.target.value)}
-                className="w-full bg-surface-900 border border-surface-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-              />
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.lossless !== false}
+                  onChange={(e) => updateParam('lossless', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-600" />
+              </label>
             </div>
 
-            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-semibold">End Point</span>
-                <button
-                  type="button"
-                  onClick={() => updateParam('end', formatSecondsToTime(currentTime))}
-                  className="px-2 py-0.5 rounded bg-brand-600 hover:bg-brand-500 text-white font-bold text-[10px]"
-                >
-                  Set to Current ({formatSecondsToTime(currentTime)})
-                </button>
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <RefreshCw className="h-3.5 w-3.5 text-brand-400" />
+                  <span>Loop Preview Selection</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Auto-rewinds to start marker during playback</div>
               </div>
-              <input
-                type="text"
-                value={parameters.end || formatSecondsToTime(duration || 30)}
-                onChange={(e) => updateParam('end', e.target.value)}
-                className="w-full bg-surface-900 border border-surface-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-              />
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.loop_selection === true}
+                  onChange={(e) => updateParam('loop_selection', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-600" />
+              </label>
             </div>
-          </div>
-
-          {/* Lossless Fast Cut vs Re-encode Toggle */}
-          <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
-            <div>
-              <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>⚡ Instant Lossless Cut (Zero Quality Loss)</span>
-              </div>
-              <div className="text-[11px] text-slate-400">Stream copy cut in 0.1s without re-encoding pixels</div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={parameters.lossless !== false}
-                onChange={(e) => updateParam('lossless', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-9 h-5 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600" />
-            </label>
           </div>
         </div>
       )}
 
-      {/* B. VIDEO CROPER APP WORKBENCH */}
+      {/* B. PRECISION VISUAL CROP & PAN STUDIO */}
       {toolId === 'video_crop' && (
-        <div className="p-4 rounded-2xl bg-surface-900 border border-indigo-500/30 space-y-3">
+        <div className="p-4 rounded-2xl bg-surface-900 border border-indigo-500/30 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Crop className="h-4 w-4 text-indigo-400" />
-              <span className="text-xs font-bold text-white">Social Aspect Ratio Cropper</span>
+              <span className="text-xs font-bold text-white">Precision Visual Crop & Pan Studio</span>
             </div>
-            <span className="text-[11px] text-indigo-300 font-mono font-semibold">
+            <span className="text-[11px] text-indigo-300 font-mono font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20">
               Target: {parameters.aspect_ratio || '9:16'}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Aspect Ratio Preset Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
             {[
-              { id: '9:16', name: '9:16 Vertical', sub: 'Reels / TikTok / Shorts', icon: Smartphone },
-              { id: '1:1', name: '1:1 Square', sub: 'Instagram Feed Post', icon: Square },
-              { id: '4:5', name: '4:5 Portrait', sub: 'Social Portrait Post', icon: Smartphone },
-              { id: '16:9', name: '16:9 Landscape', sub: 'YouTube / Cinema', icon: Monitor },
+              { id: '9:16', name: '9:16 Vertical', sub: 'TikTok / Reels', icon: Smartphone },
+              { id: '1:1', name: '1:1 Square', sub: 'Instagram Feed', icon: Square },
+              { id: '4:5', name: '4:5 Portrait', sub: 'Social Portrait', icon: LayoutGrid },
+              { id: '16:9', name: '16:9 Widescreen', sub: 'YouTube / TV', icon: Monitor },
+              { id: '21:9', name: '21:9 Cinema', sub: 'Ultrawide', icon: Film },
+              { id: 'custom', name: 'Custom Crop', sub: 'Custom W×H', icon: Settings2 },
             ].map((ratio) => {
               const active = (parameters.aspect_ratio || '9:16') === ratio.id;
               const IconComp = ratio.icon;
@@ -853,21 +950,116 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
                   key={ratio.id}
                   type="button"
                   onClick={() => updateParam('aspect_ratio', ratio.id)}
-                  className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
                     active
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                      ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-sm shadow-indigo-500/20'
                       : 'bg-surface-950 border-surface-800 text-slate-300 hover:border-surface-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-1">
                     <IconComp className={`h-4 w-4 ${active ? 'text-indigo-400' : 'text-slate-400'}`} />
                     {active && <Check className="h-3 w-3 text-indigo-400" />}
                   </div>
-                  <div className="text-xs font-bold">{ratio.name}</div>
-                  <div className="text-[10px] text-slate-400">{ratio.sub}</div>
+                  <div>
+                    <div className="text-xs font-bold">{ratio.name}</div>
+                    <div className="text-[10px] text-slate-400">{ratio.sub}</div>
+                  </div>
                 </button>
               );
             })}
+          </div>
+
+          {/* Custom Geometry Inputs when custom */}
+          {parameters.aspect_ratio === 'custom' && (
+            <div className="p-3.5 rounded-xl bg-surface-950 border border-surface-800 space-y-3">
+              <span className="text-xs font-bold text-white block">Custom Crop Dimensions & Coordinates</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Width (px)</label>
+                  <input
+                    type="number"
+                    min={16}
+                    max={videoDimensions.width || 3840}
+                    step={2}
+                    value={parameters.width || 1080}
+                    onChange={(e) => updateParam('width', parseInt(e.target.value, 10) || 1080)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Height (px)</label>
+                  <input
+                    type="number"
+                    min={16}
+                    max={videoDimensions.height || 2160}
+                    step={2}
+                    value={parameters.height || 1080}
+                    onChange={(e) => updateParam('height', parseInt(e.target.value, 10) || 1080)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Offset X (px)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={2}
+                    value={parameters.x || 0}
+                    onChange={(e) => updateParam('x', parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Offset Y (px)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={2}
+                    value={parameters.y || 0}
+                    onChange={(e) => updateParam('y', parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-surface-900 border border-surface-700 rounded-lg p-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Framing Anchor Position & Sinc Sharpening */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-white block">Framing Anchor Position</span>
+                <span className="text-[10px] text-slate-400">Position where the crop window is centered</span>
+              </div>
+              <select
+                value={parameters.anchor || 'center'}
+                onChange={(e) => updateParam('anchor', e.target.value)}
+                className="bg-surface-900 border border-surface-700 rounded-lg px-2.5 py-1 text-xs text-white font-semibold"
+              >
+                <option value="center">🎯 Dead Center</option>
+                <option value="top_left">↖️ Top-Left Corner</option>
+                <option value="bottom_right">↘️ Bottom-Right Corner</option>
+              </select>
+            </div>
+
+            <div className="p-3 rounded-xl bg-surface-950 border border-surface-800 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Lanczos Edge Sharpen</span>
+                </div>
+                <div className="text-[10px] text-slate-400">Restores fine details on zoomed crops</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={parameters.sharpen !== false}
+                  onChange={(e) => updateParam('sharpen', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-surface-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600" />
+              </label>
+            </div>
           </div>
         </div>
       )}

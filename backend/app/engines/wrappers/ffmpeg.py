@@ -187,32 +187,104 @@ class FFmpegEngine(BaseEngine):
         output_path: str,
         start_time: str,
         end_time: Optional[str] = None,
-        duration: Optional[str] = None
+        duration: Optional[str] = None,
+        lossless: bool = True,
+        trim_mode: str = "single",
+        chunk_seconds: int = 30
     ) -> ProcessResult:
-        cmd = ["ffmpeg", "-y", "-ss", str(start_time), "-i", input_path]
-        if end_time:
-            cmd.extend(["-to", str(end_time)])
-        elif duration:
-            cmd.extend(["-t", str(duration)])
-        cmd.extend(["-c", "copy", output_path])
-        return await self.execute(cmd)
+        if trim_mode == "split_chunks":
+            chunk_sec = max(5, min(3600, int(chunk_seconds)))
+            out_pattern = str(Path(output_path).with_name(f"{Path(output_path).stem}_chunk_%03d{Path(output_path).suffix}"))
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-c", "copy", "-map", "0",
+                "-f", "segment", "-segment_time", str(chunk_sec),
+                "-reset_timestamps", "1",
+                out_pattern
+            ]
+            return await self.execute(cmd)
+
+        if trim_mode == "cut_out" and end_time:
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-filter_complex",
+                f"[0:v]select='not(between(t\\,{start_time}\\,{end_time}))',setpts=N/FRAME_RATE/TB[v];"
+                f"[0:a]aselect='not(between(t\\,{start_time}\\,{end_time}))',asetpts=N/SR/TB[a]",
+                "-map", "[v]", "-map", "[a]",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                "-c:a", "aac", "-b:a", "192k",
+                output_path
+            ]
+            return await self.execute(cmd)
+
+        if lossless:
+            cmd = ["ffmpeg", "-y", "-ss", str(start_time), "-i", input_path]
+            if end_time:
+                cmd.extend(["-to", str(end_time)])
+            elif duration:
+                cmd.extend(["-t", str(duration)])
+            cmd.extend(["-c", "copy", "-map", "0", output_path])
+            return await self.execute(cmd)
+        else:
+            cmd = ["ffmpeg", "-y", "-ss", str(start_time)]
+            if end_time:
+                cmd.extend(["-to", str(end_time)])
+            elif duration:
+                cmd.extend(["-t", str(duration)])
+            cmd.extend([
+                "-i", input_path,
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+                "-map", "0:v:0", "-map", "0:a?", "-c:a", "aac", "-b:a", "192k",
+                output_path
+            ])
+            return await self.execute(cmd)
 
     async def crop(
         self,
         input_path: str,
         output_path: str,
-        width: int,
-        height: int,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
         x: int = 0,
-        y: int = 0
+        y: int = 0,
+        aspect_ratio: Optional[str] = None,
+        anchor: str = "center",
+        sharpen: bool = True
     ) -> ProcessResult:
         ext = Path(output_path).suffix
         v_codec = self.get_best_video_encoder(ext)
+
+        if aspect_ratio == "9:16":
+            vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)"
+        elif aspect_ratio == "1:1":
+            vf = "crop=min(iw\\,ih):min(iw\\,ih)"
+        elif aspect_ratio == "4:5":
+            vf = "crop=min(iw\\,ih*4/5):min(ih\\,iw*5/4)"
+        elif aspect_ratio == "16:9":
+            vf = "crop=min(iw\\,ih*16/9):min(ih\\,iw*9/16)"
+        elif aspect_ratio == "21:9":
+            vf = "crop=min(iw\\,ih*21/9):min(ih\\,iw*9/21)"
+        elif width and height:
+            if anchor == "center":
+                vf = f"crop={width}:{height}:(in_w-{width})/2:(in_h-{height})/2"
+            elif anchor == "top_left":
+                vf = f"crop={width}:{height}:0:0"
+            elif anchor == "bottom_right":
+                vf = f"crop={width}:{height}:(in_w-{width}):(in_h-{height})"
+            else:
+                vf = f"crop={width}:{height}:{x}:{y}"
+        else:
+            vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)"
+
+        if sharpen:
+            vf += ",unsharp=5:5:0.8:3:3:0.4"
+
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
-            "-vf", f"crop={width}:{height}:{x}:{y}",
-            "-c:v", v_codec,
-            "-c:a", "copy",
+            "-vf", vf,
+            "-c:v", v_codec, "-preset", "veryfast", "-crf", "18",
+            "-pix_fmt", "yuv420p",
+            "-map", "0:v:0", "-map", "0:a?", "-c:a", "copy",
             output_path
         ]
         return await self.execute(cmd)

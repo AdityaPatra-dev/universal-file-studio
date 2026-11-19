@@ -160,7 +160,19 @@ class VideoProcessor(BaseProcessor):
             start = str(parameters.get("start", "00:00:00"))
             end = parameters.get("end")
             duration = parameters.get("duration")
-            res = await ffmpeg_engine.trim(input_path, out_file, start_time=start, end_time=end, duration=duration)
+            lossless = bool(parameters.get("lossless", True))
+            trim_mode = str(parameters.get("trim_mode", "single")).lower()
+            chunk_seconds = _safe_int(parameters.get("chunk_seconds", 30), 30, min_val=5, max_val=3600)
+            res = await ffmpeg_engine.trim(
+                input_path,
+                out_file,
+                start_time=start,
+                end_time=end,
+                duration=duration,
+                lossless=lossless,
+                trim_mode=trim_mode,
+                chunk_seconds=chunk_seconds
+            )
             return out_file, res
 
         # 4. Video Resize
@@ -203,11 +215,24 @@ class VideoProcessor(BaseProcessor):
         # 5. Video Crop
         elif operation in ["video_crop", "crop_video"]:
             out_file = str(out_d / f"{in_p.stem}_cropped_{job_id[:8]}.mp4")
-            w = _safe_int(parameters.get("width", 640), 640, min_val=16, max_val=7680)
-            h = _safe_int(parameters.get("height", 480), 480, min_val=16, max_val=4320)
+            aspect = str(parameters.get("aspect_ratio", parameters.get("ratio", "9:16"))).lower()
+            anchor = str(parameters.get("anchor", "center")).lower()
+            sharpen = bool(parameters.get("sharpen", True))
+            w = _safe_int(parameters.get("width"), 0, min_val=0, max_val=7680) if parameters.get("width") else None
+            h = _safe_int(parameters.get("height"), 0, min_val=0, max_val=4320) if parameters.get("height") else None
             x = _safe_int(parameters.get("x", 0), 0, min_val=0)
             y = _safe_int(parameters.get("y", 0), 0, min_val=0)
-            res = await ffmpeg_engine.crop(input_path, out_file, width=w, height=h, x=x, y=y)
+            res = await ffmpeg_engine.crop(
+                input_path,
+                out_file,
+                width=w,
+                height=h,
+                x=x,
+                y=y,
+                aspect_ratio=aspect,
+                anchor=anchor,
+                sharpen=sharpen
+            )
             return out_file, res
 
         # 6. Video Rotate / Flip
