@@ -21,6 +21,10 @@ import { ResizeCanvasStudio } from './studios/ResizeCanvasStudio';
 import { RotateFlipStudio } from './studios/RotateFlipStudio';
 import { SubtitleBurnStudio } from './studios/SubtitleBurnStudio';
 import { StoryboardConcatStudio } from './studios/StoryboardConcatStudio';
+import { ReverseBoomerangStudio } from './studios/ReverseBoomerangStudio';
+import { SeamlessLooperStudio } from './studios/SeamlessLooperStudio';
+import { VolumeBoosterStudio } from './studios/VolumeBoosterStudio';
+import { StabilizeStudio } from './studios/StabilizeStudio';
 
 interface VideoStudioWorkbenchProps {
   toolId: string;
@@ -384,6 +388,52 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
           filename: f.filename,
           original_filename: f.original_filename,
         }))}
+      />
+    );
+  }
+
+  if (toolId === 'video_reverse' || toolId === 'boomerang' || toolId === 'reverse_video') {
+    return (
+      <ReverseBoomerangStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_loop' || toolId === 'loop_video') {
+    return (
+      <SeamlessLooperStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (
+    toolId === 'video_adjust_volume' ||
+    toolId === 'adjust_volume' ||
+    toolId === 'video_remove_audio' ||
+    toolId === 'remove_audio'
+  ) {
+    return (
+      <VolumeBoosterStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+        isMuteTool={toolId === 'video_remove_audio' || toolId === 'remove_audio'}
+      />
+    );
+  }
+
+  if (toolId === 'video_stabilize' || toolId === 'stabilize' || toolId === 'deshake') {
+    return (
+      <StabilizeStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
       />
     );
   }
