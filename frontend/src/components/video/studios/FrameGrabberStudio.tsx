@@ -39,10 +39,11 @@ export const FrameGrabberStudio: React.FC<FrameGrabberStudioProps> = ({
 
   const formatSeconds = (sec: number): string => {
     if (isNaN(sec) || sec < 0) sec = 0;
-    const m = Math.floor(sec / 60);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
     const s = Math.floor(sec % 60);
     const ms = Math.floor((sec % 1) * 1000);
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0').slice(0, 2)}`;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
   };
 
   const updateParent = (updates: Partial<{

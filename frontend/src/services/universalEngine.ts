@@ -524,8 +524,12 @@ class UniversalEngineService {
             } else {
               // Multi-file support for video_concat, video_add_audio, video_burn_subtitles
               if (op === 'video_concat' || op === 'video_add_audio' || op === 'video_burn_subtitles') {
-                const additionalIds: any[] = payload.parameters?.additional_file_ids || 
-                  (payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []);
+                const rawSecondary = payload.parameters?.secondary_file_id;
+                const additionalIds: any[] = [
+                  ...(rawSecondary ? [rawSecondary] : []),
+                  ...(payload.parameters?.additional_file_ids || []),
+                  ...(payload.parameters?.all_file_ids ? payload.parameters.all_file_ids.filter((id: any) => String(id) !== String(fileRecord.id)) : []),
+                ];
                 if (Array.isArray(additionalIds) && additionalIds.length > 0) {
                   for (const addId of additionalIds) {
                     try {

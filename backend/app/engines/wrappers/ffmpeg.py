@@ -255,7 +255,17 @@ class FFmpegEngine(BaseEngine):
         ext = Path(output_path).suffix
         v_codec = self.get_best_video_encoder(ext)
 
-        if aspect_ratio == "9:16":
+        # Prioritize explicit pixel coordinates if width and height are provided
+        if width and height and width > 0 and height > 0:
+            if anchor == "center":
+                vf = f"crop={width}:{height}:(in_w-{width})/2:(in_h-{height})/2"
+            elif anchor == "top_left":
+                vf = f"crop={width}:{height}:0:0"
+            elif anchor == "bottom_right":
+                vf = f"crop={width}:{height}:(in_w-{width}):(in_h-{height})"
+            else:
+                vf = f"crop={width}:{height}:{x}:{y}"
+        elif aspect_ratio == "9:16":
             vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)"
         elif aspect_ratio == "1:1":
             vf = "crop=min(iw\\,ih):min(iw\\,ih)"
@@ -265,15 +275,6 @@ class FFmpegEngine(BaseEngine):
             vf = "crop=min(iw\\,ih*16/9):min(ih\\,iw*9/16)"
         elif aspect_ratio == "21:9":
             vf = "crop=min(iw\\,ih*21/9):min(ih\\,iw*9/21)"
-        elif width and height:
-            if anchor == "center":
-                vf = f"crop={width}:{height}:(in_w-{width})/2:(in_h-{height})/2"
-            elif anchor == "top_left":
-                vf = f"crop={width}:{height}:0:0"
-            elif anchor == "bottom_right":
-                vf = f"crop={width}:{height}:(in_w-{width}):(in_h-{height})"
-            else:
-                vf = f"crop={width}:{height}:{x}:{y}"
         else:
             vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)"
 
@@ -579,7 +580,9 @@ class FFmpegEngine(BaseEngine):
         position: str = "bottom-right",
         opacity: int = 85,
         font_size: int = 36,
-        box_bg: bool = True
+        box_bg: bool = True,
+        x_pct: Optional[float] = None,
+        y_pct: Optional[float] = None
     ) -> ProcessResult:
         pos_map = {
             "top-left": ("30", "30"),
@@ -592,7 +595,13 @@ class FFmpegEngine(BaseEngine):
             "bottom-center": ("(w-tw)/2", "h-th-30"),
             "bottom-right": ("w-tw-30", "h-th-30"),
         }
-        x_pos, y_pos = pos_map.get(position, ("w-tw-30", "h-th-30"))
+        if position == "custom" and x_pct is not None and y_pct is not None:
+            x_ratio = max(0.0, min(1.0, float(x_pct) / 100.0))
+            y_ratio = max(0.0, min(1.0, float(y_pct) / 100.0))
+            x_pos = f"(w-tw)*{x_ratio:.4f}"
+            y_pos = f"(h-th)*{y_ratio:.4f}"
+        else:
+            x_pos, y_pos = pos_map.get(position, ("w-tw-30", "h-th-30"))
         alpha = max(0.1, min(1.0, opacity / 100.0))
         clean_text = text.replace("'", "").replace(":", "")
 

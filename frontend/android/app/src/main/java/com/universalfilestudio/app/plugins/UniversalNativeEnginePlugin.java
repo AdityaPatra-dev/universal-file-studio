@@ -932,8 +932,15 @@ public class UniversalNativeEnginePlugin extends Plugin {
                 } else if ("video_crop".equals(operation) || "crop".equals(operation)) {
                     String aspect = params.optString("aspect_ratio", params.optString("ratio", params.optString("aspect", "9:16")));
                     boolean sharpen = params.optBoolean("sharpen", true);
-                    String vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)";
-                    if ("1:1".equals(aspect)) {
+                    int w = params.optInt("width", 0);
+                    int h = params.optInt("height", 0);
+                    int x = params.optInt("x", 0);
+                    int y = params.optInt("y", 0);
+
+                    String vf;
+                    if (w > 0 && h > 0) {
+                        vf = "crop=" + w + ":" + h + ":" + x + ":" + y;
+                    } else if ("1:1".equals(aspect)) {
                         vf = "crop=min(iw\\,ih):min(iw\\,ih)";
                     } else if ("16:9".equals(aspect)) {
                         vf = "crop=min(iw\\,ih*16/9):min(ih\\,iw*9/16)";
@@ -941,12 +948,8 @@ public class UniversalNativeEnginePlugin extends Plugin {
                         vf = "crop=min(iw\\,ih*4/5):min(ih\\,iw*5/4)";
                     } else if ("21:9".equals(aspect)) {
                         vf = "crop=min(iw\\,ih*21/9):min(ih\\,iw*9/21)";
-                    } else if ("custom".equals(aspect) && params.has("width") && params.has("height")) {
-                        int w = params.optInt("width", 1080);
-                        int h = params.optInt("height", 1080);
-                        int x = params.optInt("x", 0);
-                        int y = params.optInt("y", 0);
-                        vf = "crop=" + w + ":" + h + ":" + x + ":" + y;
+                    } else {
+                        vf = "crop=min(iw\\,ih*9/16):min(ih\\,iw*16/9)";
                     }
                     if (sharpen) {
                         vf += ",unsharp=5:5:0.8:3:3:0.4";
@@ -1230,7 +1233,12 @@ public class UniversalNativeEnginePlugin extends Plugin {
                     String pos = params.optString("position", "bottom-right");
                     String xPos = "w-tw-30";
                     String yPos = "h-th-30";
-                    if ("top-left".equals(pos)) {
+                    if ("custom".equals(pos) && params.has("x_pct") && params.has("y_pct")) {
+                        double xRatio = Math.max(0.0, Math.min(100.0, params.optDouble("x_pct", 50.0))) / 100.0;
+                        double yRatio = Math.max(0.0, Math.min(100.0, params.optDouble("y_pct", 50.0))) / 100.0;
+                        xPos = String.format(Locale.US, "(w-tw)*%.4f", xRatio);
+                        yPos = String.format(Locale.US, "(h-th)*%.4f", yRatio);
+                    } else if ("top-left".equals(pos)) {
                         xPos = "30";
                         yPos = "30";
                     } else if ("top-right".equals(pos)) {
@@ -1279,10 +1287,7 @@ public class UniversalNativeEnginePlugin extends Plugin {
                            .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a copy \"")
                            .append(out.getAbsolutePath()).append("\"");
                     } else {
-                        cmd.append("-i \"").append(videoPath).append("\" ")
-                           .append("-vf \"subtitles='").append(videoPath.replace("'", "'\\''").replace(":", "\\:")).append("'\" ")
-                           .append("-c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a copy \"")
-                           .append(out.getAbsolutePath()).append("\"");
+                        cmd.append("-i \"").append(videoPath).append("\" -c copy \"").append(out.getAbsolutePath()).append("\"");
                     }
                 } else if ("video_add_audio".equals(operation) || "add_audio".equals(operation)) {
                     String videoPath = in.getAbsolutePath();

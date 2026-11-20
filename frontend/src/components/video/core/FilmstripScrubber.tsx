@@ -68,10 +68,12 @@ export const FilmstripScrubber: React.FC<FilmstripScrubberProps> = ({
 
     const step = duration / numThumbnails;
     let currentIndex = 0;
+    let seekTimeout: any = null;
 
     const captureNextFrame = () => {
       if (!active) return;
       if (currentIndex >= numThumbnails) {
+        if (seekTimeout) clearTimeout(seekTimeout);
         setThumbnails(thumbs);
         setIsExtracting(false);
         hiddenVideo.removeAttribute('src');
@@ -79,13 +81,30 @@ export const FilmstripScrubber: React.FC<FilmstripScrubberProps> = ({
         return;
       }
 
-      hiddenVideo.currentTime = Math.min(duration - 0.05, currentIndex * step + step / 2);
+      if (seekTimeout) clearTimeout(seekTimeout);
+      seekTimeout = setTimeout(() => {
+        if (!active) return;
+        currentIndex++;
+        captureNextFrame();
+      }, 450);
+
+      try {
+        hiddenVideo.currentTime = Math.min(Math.max(0, duration - 0.05), currentIndex * step + step / 2);
+      } catch {
+        currentIndex++;
+        captureNextFrame();
+      }
     };
 
     hiddenVideo.addEventListener('seeked', () => {
       if (!active || !ctx) return;
-      ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
-      thumbs.push(canvas.toDataURL('image/jpeg', 0.65));
+      if (seekTimeout) clearTimeout(seekTimeout);
+      try {
+        ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+        thumbs.push(canvas.toDataURL('image/jpeg', 0.65));
+      } catch {
+        // ignore canvas drawing errors
+      }
       currentIndex++;
       captureNextFrame();
     });
@@ -95,11 +114,13 @@ export const FilmstripScrubber: React.FC<FilmstripScrubberProps> = ({
     });
 
     hiddenVideo.addEventListener('error', () => {
+      if (seekTimeout) clearTimeout(seekTimeout);
       if (active) setIsExtracting(false);
     });
 
     return () => {
       active = false;
+      if (seekTimeout) clearTimeout(seekTimeout);
       hiddenVideo.removeAttribute('src');
       hiddenVideo.load();
     };
@@ -130,9 +151,13 @@ export const FilmstripScrubber: React.FC<FilmstripScrubberProps> = ({
   };
 
   const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
     const s = Math.floor(secs % 60);
     const ms = Math.floor((secs % 1) * 100);
+    if (h > 0) {
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+    }
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
   };
 

@@ -45,18 +45,24 @@ export const WatermarkStudio: React.FC<WatermarkStudioProps> = ({
     opacity: number;
     font_size: number;
     box_bg: boolean;
+    x_pct: number;
+    y_pct: number;
   }>) => {
     const nextText = updates.text !== undefined ? updates.text : text;
     const nextPos = updates.position !== undefined ? updates.position : position;
     const nextOpacity = updates.opacity !== undefined ? updates.opacity : opacity;
     const nextFontSize = updates.font_size !== undefined ? updates.font_size : fontSize;
     const nextBoxBg = updates.box_bg !== undefined ? updates.box_bg : boxBg;
+    const nextXPct = updates.x_pct !== undefined ? updates.x_pct : coords.x;
+    const nextYPct = updates.y_pct !== undefined ? updates.y_pct : coords.y;
 
     onParametersChange({
       ...parameters,
       text: nextText,
       watermark_text: nextText,
       position: nextPos,
+      x_pct: nextXPct,
+      y_pct: nextYPct,
       opacity: nextOpacity,
       font_size: nextFontSize,
       box_bg: nextBoxBg,
@@ -66,7 +72,7 @@ export const WatermarkStudio: React.FC<WatermarkStudioProps> = ({
   const handlePositionPreset = (posKey: string, xPct: number, yPct: number) => {
     setPosition(posKey);
     setCoords({ x: xPct, y: yPct });
-    updateParent({ position: posKey });
+    updateParent({ position: posKey, x_pct: xPct, y_pct: yPct });
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -95,6 +101,7 @@ export const WatermarkStudio: React.FC<WatermarkStudioProps> = ({
       } catch {
         // pointer capture release ignore
       }
+      updateParent({ position: 'custom', x_pct: coords.x, y_pct: coords.y });
     }
   };
 

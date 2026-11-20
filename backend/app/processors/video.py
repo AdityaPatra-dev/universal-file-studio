@@ -216,12 +216,12 @@ class VideoProcessor(BaseProcessor):
         elif operation in ["video_crop", "crop_video"]:
             out_file = str(out_d / f"{in_p.stem}_cropped_{job_id[:8]}.mp4")
             aspect = str(parameters.get("aspect_ratio", parameters.get("ratio", "9:16"))).lower()
-            anchor = str(parameters.get("anchor", "center")).lower()
             sharpen = bool(parameters.get("sharpen", True))
             w = _safe_int(parameters.get("width"), 0, min_val=0, max_val=7680) if parameters.get("width") else None
             h = _safe_int(parameters.get("height"), 0, min_val=0, max_val=4320) if parameters.get("height") else None
             x = _safe_int(parameters.get("x", 0), 0, min_val=0)
             y = _safe_int(parameters.get("y", 0), 0, min_val=0)
+            anchor = str(parameters.get("anchor", "custom" if (w is not None and h is not None) else "center")).lower()
             res = await ffmpeg_engine.crop(
                 input_path,
                 out_file,
@@ -569,6 +569,8 @@ class VideoProcessor(BaseProcessor):
             opacity = _safe_int(parameters.get("opacity", 85), 85, min_val=10, max_val=100)
             font_size = _safe_int(parameters.get("font_size", 36), 36, min_val=12, max_val=120)
             box_bg = bool(parameters.get("box_bg", True))
+            x_pct = parameters.get("x_pct")
+            y_pct = parameters.get("y_pct")
             out_file = str(out_d / f"{in_p.stem}_watermarked_{job_id[:8]}.mp4")
             res = await ffmpeg_engine.watermark(
                 input_path,
@@ -577,7 +579,9 @@ class VideoProcessor(BaseProcessor):
                 position=position,
                 opacity=opacity,
                 font_size=font_size,
-                box_bg=box_bg
+                box_bg=box_bg,
+                x_pct=float(x_pct) if x_pct is not None else None,
+                y_pct=float(y_pct) if y_pct is not None else None
             )
             return out_file, res
 

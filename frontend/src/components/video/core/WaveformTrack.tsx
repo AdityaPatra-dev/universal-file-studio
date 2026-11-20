@@ -47,7 +47,19 @@ export const WaveformTrack: React.FC<WaveformTrackProps> = ({
 
   const numBars = 120;
 
-  // Extract real audio peaks using Web Audio API decodeAudioData
+  const generateSyntheticEnvelope = useCallback(() => {
+    const synth: number[] = [];
+    for (let i = 0; i < numBars; i++) {
+      const t = i / numBars;
+      const rhythm = Math.sin(i * 0.45) * Math.cos(i * 0.18);
+      const envelope = 0.25 + 0.65 * Math.abs(rhythm * Math.sin(t * Math.PI));
+      const microDynamics = Math.sin(i * 1.7) * 0.15;
+      synth.push(Math.max(0.08, Math.min(1.0, envelope + microDynamics)));
+    }
+    return synth;
+  }, [numBars]);
+
+  // Extract real audio peaks using Web Audio API decodeAudioData with memory-safe bounds
   useEffect(() => {
     if (!mediaUrl) return;
 
@@ -56,49 +68,77 @@ export const WaveformTrack: React.FC<WaveformTrackProps> = ({
 
     const extractPeaks = async () => {
       try {
-        const response = await fetch(mediaUrl);
-        const arrayBuffer = await response.arrayBuffer();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-        // AudioContext decoding
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const response = await fetch(mediaUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
 
-        if (!active) {
-          audioCtx.close();
+        const contentLength = Number(response.headers.get('content-length') || 0);
+        // Safety guard: files over 35MB will OOM mobile WebViews if fully decoded in JS heap
+        if (contentLength > 35 * 1024 * 1024) {
+          if (!active) return;
+          setPeaks(generateSyntheticEnvelope());
+          setIsLoading(false);
           return;
         }
 
-        const channelData = audioBuffer.getChannelData(0);
-        const step = Math.floor(channelData.length / numBars);
-        const rawPeaks: number[] = [];
-
-        for (let i = 0; i < numBars; i++) {
-          let max = 0;
-          const start = i * step;
-          const end = Math.min(channelData.length, start + step);
-          for (let j = start; j < end; j += 4) {
-            const val = Math.abs(channelData[j]);
-            if (val > max) max = val;
-          }
-          rawPeaks.push(max);
-        }
-
-        // Normalize peaks 0.05 to 1.0
-        const maxPeak = Math.max(...rawPeaks, 0.01);
-        const normalized = rawPeaks.map((p) => Math.max(0.06, p / maxPeak));
-
-        setPeaks(normalized);
-        setIsLoading(false);
-        audioCtx.close();
-      } catch (err) {
-        // Fallback: Generate synthetic organic speech-like envelope if decodeAudioData fails (e.g. video container codec)
+        const arrayBuffer = await response.arrayBuffer();
         if (!active) return;
-        const synth: number[] = [];
-        for (let i = 0; i < numBars; i++) {
-          const noise = 0.2 + 0.7 * Math.abs(Math.sin(i * 0.15) * Math.cos(i * 0.3));
-          synth.push(noise);
+
+        if (arrayBuffer.byteLength > 35 * 1024 * 1024) {
+          setPeaks(generateSyntheticEnvelope());
+          setIsLoading(false);
+          return;
         }
-        setPeaks(synth);
+
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) {
+          setPeaks(generateSyntheticEnvelope());
+          setIsLoading(false);
+          return;
+        }
+
+        const audioCtx = new AudioContextClass();
+        try {
+          const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+          if (!active) {
+            audioCtx.close();
+            return;
+          }
+
+          const channelData = audioBuffer.getChannelData(0);
+          const step = Math.floor(channelData.length / numBars);
+          const rawPeaks: number[] = [];
+
+          for (let i = 0; i < numBars; i++) {
+            let max = 0;
+            const start = i * step;
+            const end = Math.min(channelData.length, start + step);
+            for (let j = start; j < end; j += 4) {
+              const val = Math.abs(channelData[j]);
+              if (val > max) max = val;
+            }
+            rawPeaks.push(max);
+          }
+
+          // Normalize peaks 0.05 to 1.0
+          const maxPeak = Math.max(...rawPeaks, 0.01);
+          const normalized = rawPeaks.map((p) => Math.max(0.06, p / maxPeak));
+
+          setPeaks(normalized);
+          setIsLoading(false);
+          audioCtx.close();
+        } catch {
+          audioCtx.close();
+          if (!active) return;
+          setPeaks(generateSyntheticEnvelope());
+          setIsLoading(false);
+        }
+      } catch {
+        // Fallback: Generate synthetic organic speech-like envelope if decodeAudioData fails or aborts
+        if (!active) return;
+        setPeaks(generateSyntheticEnvelope());
         setIsLoading(false);
       }
     };
@@ -108,7 +148,7 @@ export const WaveformTrack: React.FC<WaveformTrackProps> = ({
     return () => {
       active = false;
     };
-  }, [mediaUrl]);
+  }, [mediaUrl, generateSyntheticEnvelope]);
 
   // Render canvas waveform
   const drawWaveform = useCallback(() => {
