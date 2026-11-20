@@ -25,6 +25,12 @@ import { ReverseBoomerangStudio } from './studios/ReverseBoomerangStudio';
 import { SeamlessLooperStudio } from './studios/SeamlessLooperStudio';
 import { VolumeBoosterStudio } from './studios/VolumeBoosterStudio';
 import { StabilizeStudio } from './studios/StabilizeStudio';
+import { CompressStudio } from './studios/CompressStudio';
+import { TranscodeStudio } from './studios/TranscodeStudio';
+import { FrameGrabberStudio } from './studios/FrameGrabberStudio';
+import { FrameRateStudio } from './studios/FrameRateStudio';
+import { GifToVideoStudio } from './studios/GifToVideoStudio';
+import { AudioExtractorStudio } from './studios/AudioExtractorStudio';
 
 interface VideoStudioWorkbenchProps {
   toolId: string;
@@ -431,6 +437,75 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
   if (toolId === 'video_stabilize' || toolId === 'stabilize' || toolId === 'deshake') {
     return (
       <StabilizeStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_compress' || toolId === 'compress_video') {
+    return (
+      <CompressStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+        fileSizeBytes={file.size_bytes}
+      />
+    );
+  }
+
+  if (toolId === 'video_convert' || toolId === 'convert_video') {
+    return (
+      <TranscodeStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+        sourceFormat={file.filename.split('.').pop() || 'mp4'}
+      />
+    );
+  }
+
+  if (
+    toolId === 'video_thumbnail' ||
+    toolId === 'extract_frame' ||
+    toolId === 'thumbnail_video' ||
+    toolId === 'storyboard' ||
+    toolId === 'extract_frames' ||
+    toolId === 'video_extract_frames'
+  ) {
+    return (
+      <FrameGrabberStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_change_fps' || toolId === 'change_fps') {
+    return (
+      <FrameRateStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'gif_to_video' || toolId === 'gif_convert_video') {
+    return (
+      <GifToVideoStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'extract_audio' || toolId === 'video_extract_audio') {
+    return (
+      <AudioExtractorStudio
         videoUrl={videoUrl}
         parameters={parameters}
         onParametersChange={onParametersChange}
