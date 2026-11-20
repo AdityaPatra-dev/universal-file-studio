@@ -75,6 +75,8 @@ dependencies {
     // Desktop-Grade Native Engines for Android:
     // 1. FFmpeg Full GPL (Full C++ video/audio codecs: H.264, H.265/HEVC, VP8/VP9, AV1, MP3, AAC, FLAC, Opus)
     implementation 'dev.ffmpegkit-maintained:ffmpeg-kit-full-gpl:8.1.7'
+    implementation 'com.arthenica:smart-exception-java:0.2.1'
+    implementation 'com.arthenica:smart-exception-common:0.2.1'
 
     // 2. Tesseract OCR C++ Native Engine (Tesseract 5 + Leptonica for Android)
     implementation 'cz.adaptech.tesseract4android:tesseract4android:4.9.0'
