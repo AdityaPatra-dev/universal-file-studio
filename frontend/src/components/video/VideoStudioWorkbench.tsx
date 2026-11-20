@@ -17,6 +17,10 @@ import { WatermarkStudio } from './studios/WatermarkStudio';
 import { SpeedVelocityStudio } from './studios/SpeedVelocityStudio';
 import { AudioMixerStudio } from './studios/AudioMixerStudio';
 import { GifMakerStudio } from './studios/GifMakerStudio';
+import { ResizeCanvasStudio } from './studios/ResizeCanvasStudio';
+import { RotateFlipStudio } from './studios/RotateFlipStudio';
+import { SubtitleBurnStudio } from './studios/SubtitleBurnStudio';
+import { StoryboardConcatStudio } from './studios/StoryboardConcatStudio';
 
 interface VideoStudioWorkbenchProps {
   toolId: string;
@@ -329,6 +333,57 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
         videoUrl={videoUrl}
         parameters={parameters}
         onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_resize') {
+    return (
+      <ResizeCanvasStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_rotate' || toolId === 'video_flip' || toolId === 'rotate_video') {
+    return (
+      <RotateFlipStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_burn_subtitles' || toolId === 'burn_subtitles') {
+    return (
+      <SubtitleBurnStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+        availableFiles={libraryFiles.map((f) => ({
+          id: typeof f.id === 'string' ? parseInt(f.id, 10) : f.id,
+          filename: f.filename,
+          original_filename: f.original_filename,
+        }))}
+      />
+    );
+  }
+
+  if (toolId === 'video_concat' || toolId === 'concat_video') {
+    return (
+      <StoryboardConcatStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+        primaryFileName={file.original_filename || file.filename}
+        availableFiles={libraryFiles.map((f) => ({
+          id: typeof f.id === 'string' ? parseInt(f.id, 10) : f.id,
+          filename: f.filename,
+          original_filename: f.original_filename,
+        }))}
       />
     );
   }
