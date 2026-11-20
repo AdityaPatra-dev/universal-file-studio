@@ -11,6 +11,12 @@ import {
 import { FileRecord } from '../../types/api';
 import { universalEngine } from '../../services/universalEngine';
 import { formatBytes } from '../../utils/format';
+import { CropStudio } from './studios/CropStudio';
+import { TrimStudio } from './studios/TrimStudio';
+import { WatermarkStudio } from './studios/WatermarkStudio';
+import { SpeedVelocityStudio } from './studios/SpeedVelocityStudio';
+import { AudioMixerStudio } from './studios/AudioMixerStudio';
+import { GifMakerStudio } from './studios/GifMakerStudio';
 
 interface VideoStudioWorkbenchProps {
   toolId: string;
@@ -259,6 +265,72 @@ export const VideoStudioWorkbench: React.FC<VideoStudioWorkbenchProps> = ({
       desc: 'Smooth playback with crisp visuals and high space savings.',
       isWarning: false,
     };
+  }
+
+  // FLAGSHIP DEDICATED STUDIOS: Route directly to bespoke, app-grade studio components
+  if (toolId === 'video_crop') {
+    return (
+      <CropStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_trim') {
+    return (
+      <TrimStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_watermark') {
+    return (
+      <WatermarkStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_speed' || toolId === 'video_change_speed') {
+    return (
+      <SpeedVelocityStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
+  }
+
+  if (toolId === 'video_add_audio' || toolId === 'add_audio') {
+    return (
+      <AudioMixerStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+        availableFiles={libraryFiles.map((f) => ({
+          id: typeof f.id === 'string' ? parseInt(f.id, 10) : f.id,
+          filename: f.filename,
+          original_filename: f.original_filename,
+        }))}
+      />
+    );
+  }
+
+  if (toolId === 'video_to_gif') {
+    return (
+      <GifMakerStudio
+        videoUrl={videoUrl}
+        parameters={parameters}
+        onParametersChange={onParametersChange}
+      />
+    );
   }
 
   return (
